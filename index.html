@@ -2172,8 +2172,17 @@ function showConflict(){
 /* ---------- versions ---------- */
 async function openVersions(id){
   const h=$('printDlgHost'); h.innerHTML=`<div class="pdlg" id="pdlg" style="z-index:80"><div class="box" style="width:min(620px,100%)"><h2>היסטוריית גרסאות</h2><div id="v_list" class="hint">טוען…</div>
-    <div class="row" style="justify-content:space-between">${CUR&&CUR.id===id?'<span class="row"><input id="v_note" placeholder="הערה לגרסה (למשל: לפני הגשה)" style="border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:220px"><button class="btn small primary" id="v_save">שמור גרסה עכשיו</button></span>':'<span></span>'}<button class="btn" id="v_close">סגור</button></div></div></div>`;
+    <div class="row" style="justify-content:space-between">${CUR&&CUR.id===id?'<span class="row"><input id="v_note" placeholder="הערה לגרסה (למשל: לפני הגשה)" style="border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:220px"><button class="btn small primary" id="v_save">שמור גרסה עכשיו</button><button class="btn small" id="v_json" title="טוען קובץ גיבוי (JSON) לתוך הפרויקט הזה. המצב הנוכחי נשמר קודם כגרסה">טעינת גיבוי לפרויקט</button><input type="file" id="v_jfile" accept=".json" hidden></span>':'<span></span>'}<button class="btn" id="v_close">סגור</button></div></div></div>`;
   $('v_close').onclick=()=>h.innerHTML='';
+  if($('v_json')){ $('v_json').onclick=()=>$('v_jfile').click();
+    $('v_jfile').onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return;
+      let st; try{ st=JSON.parse(await f.text()); if(!st||!Array.isArray(st.tree)) throw new Error('קובץ לא תקין'); }catch(err){ toast('הקובץ לא נקרא: '+err.message); return; }
+      if(!confirm(`לטעון את "${f.name}" לתוך הפרויקט "${CUR.name}"?\n\nהמצב הנוכחי יישמר קודם כגרסה ("לפני טעינת גיבוי"), כך שאפשר לחזור אליו מכאן. כל השינויים יירשמו ביומן.`)) return;
+      cloudDirty=true; await pushCloud(false,'לפני טעינת גיבוי '+f.name); if(CONFLICT) return;
+      st.project=state.project||CUR.name; if(!st.lists) st.lists=state.lists;
+      setState(st); cloudDirty=true; await pushCloud(false,'שוחזר מקובץ גיבוי '+f.name);
+      h.innerHTML=''; toast('הגיבוי נטען לפרויקט'); };
+  }
   if($('v_save')) $('v_save').onclick=async()=>{ await pushCloud(false,$('v_note').value.trim()||'גרסה ידנית'); toast('גרסה נשמרה'); openVersions(id); };
   try{
     const vs=await DB.listVersions(id);
