@@ -103,8 +103,13 @@ main{padding-block:16px 60px;padding-inline:clamp(6px,1.2vw,1.5cm);max-width:non
 
 /* BOQ table */
 .tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+/* main BOQ table: header row stays visible while the page scrolls (sticky under the top bar) */
+#view-boq .boq thead th{box-shadow:0 1px 0 var(--line)}
+@media (min-width:1100px){ #view-boq .tablewrap{overflow:clip;overflow-clip-margin:0} #view-boq .boq thead th{top:var(--toph,0px)} }
+@media (max-width:1099.98px){ .top{position:static} #view-boq .tablewrap{overflow:auto;max-height:calc(100dvh - 130px)} }
+@media print{ #view-boq .boq thead th{position:static} }
 table.boq{border-collapse:collapse;width:100%;min-width:980px;table-layout:fixed}
-.boq th{position:sticky;top:0;background:var(--surface);font-size:12px;letter-spacing:.04em;color:var(--muted);font-weight:600;text-align:start;padding:8px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.boq th{position:sticky;top:0;z-index:6;background:var(--surface);font-size:12px;letter-spacing:.04em;color:var(--muted);font-weight:600;text-align:start;padding:8px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 .boq td{padding:4px 8px;border-bottom:1px solid var(--line2);vertical-align:middle}
 .boq th.n,.boq td.n{text-align:end}
 .boq td.code{white-space:nowrap}
@@ -315,10 +320,13 @@ table.boq.plist{min-width:0!important;width:100%}
     <div class="dash">
       <div class="chips" id="dashFilter"></div>
       <div class="kpis" id="kpis"></div>
+      <div class="panel" id="areaPanel"></div>
       <div class="panels">
         <div class="panel"><h3>לפי מבנה</h3><div class="bars" id="byB"></div></div>
         <div class="panel"><h3>לפי פרק</h3><div class="bars" id="byC"></div></div>
         <div class="panel"><h3>לפי סוג משאב</h3><div class="bars" id="byT"></div></div>
+        <div class="panel"><h3>15 המשאבים היקרים <small class="hint" style="font-weight:400">(כולל המק"טים שתחתם)</small></h3><div class="bars" id="byR"></div></div>
+        <div class="panel"><h3>15 המק"טים היקרים</h3><div class="bars" id="byK"></div></div>
         <div class="panel"><h3>10 הסעיפים היקרים</h3><div class="bars" id="byI"></div></div>
       </div>
     </div>
@@ -726,7 +734,7 @@ tb.addEventListener('change',e=>{
   if(f==='code'&&n.t==='s'){ // renumber child sections that still carry an old prefix
     for(const c of n.ch){ if(!c.code||!c.code.startsWith(n.code+'.')) c.code=nextSecCode({code:n.code,ch:n.ch.filter(x=>x!==c&&x.code&&x.code.startsWith(n.code+'.'))}); }
   }
-  if(f==='code'&&(n.t==='c'||n.t==='s')){ const pl=parentList(n.id); if(pl) sortByCode(pl); }
+  if(f==='code'&&(n.t==='c'||n.t==='s'||n.t==='b')){ const pl=parentList(n.id); if(pl) sortByCode(pl); }
   save(); render();
 });
 
@@ -758,6 +766,7 @@ function moveSection(n,subCode,bld,keepCode){
   PMAP=null; return true;
 }
 /* ---------- copy / paste (works across projects – clipboard kept in this browser) ---------- */
+(function(){ const t=document.querySelector('.top'); if(!t) return; const set=()=>document.documentElement.style.setProperty('--toph',Math.ceil(t.getBoundingClientRect().height)+'px'); set(); if(window.ResizeObserver) new ResizeObserver(set).observe(t); window.addEventListener('resize',set); })();
 let CLIP=null; try{ CLIP=JSON.parse(localStorage.getItem('ybnir-boq-clip')||'null'); if(CLIP&&!CLIP.nodes) CLIP.nodes=[CLIP.node]; }catch(e){}
 function setClip(c){ CLIP=c; try{ c?localStorage.setItem('ybnir-boq-clip',JSON.stringify(c)):localStorage.removeItem('ybnir-boq-clip'); }catch(e){} updClipBar(); }
 function updClipBar(){ let b=document.getElementById('clipBar'); if(!b){ b=document.createElement('div'); b.id='clipBar'; b.style.cssText='position:fixed;bottom:14px;inset-inline-start:14px;z-index:50;background:var(--lv1);color:var(--lv1-ink);padding:8px 12px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.25);font-size:13px;display:flex;gap:8px;align-items:center'; document.body.appendChild(b); }
@@ -1074,30 +1083,50 @@ function buildResList(){
 function renderDash(){
   const bs=state.tree;
   document.getElementById('dashFilter').innerHTML='<span class="label">סינון מבנה</span>'+
-    [`<button class="chip" data-b="all" aria-pressed="${dashB==='all'}">הכל</button>`,...bs.map(b=>`<button class="chip" data-b="${b.id}" aria-pressed="${String(dashB)===String(b.id)}">${esc(b.code)} ${esc(b.name)}</button>`)].join('');
+    [`<button class="chip" data-b="all" aria-pressed="${dashB==='all'}">הכל</button>`,...bs.slice().sort((a,b)=>(a.code||'').localeCompare(b.code||'',undefined,{numeric:true})).map(b=>`<button class="chip" data-b="${b.id}" aria-pressed="${String(dashB)===String(b.id)}">${esc(b.code)} ${esc(b.name)}</button>`)].join('');
   const scope=dashB==='all'?bs:bs.filter(b=>String(b.id)===String(dashB));
-  const byC={}, byT={}, secs=[]; let nR=0, nS=0, noPrice=0;
+  const byC={}, byT={}, byR={}, byK={}, secs=[]; let nR=0, nS=0, nK=0, noPrice=0;
+  const RM=resMap();
   walk(scope,(n,p)=>{
     if(n.t==='c'){ byC[n.code]=(byC[n.code]||0)+total(n); }
-    if(n.t==='i'){ nS++; secs.push({k:n.code+' '+(n.name||''),v:total(n)}); }
-    if(n.t==='r'){ nR++; const k=resType(n.code); byT[k]=(byT[k]||0)+total(n); if(!hasItems(n)&&!evalExpr(n.price)) noPrice++; }
-    if(n.t==='k'){ if(!evalExpr(n.price)) noPrice++; }
+    if(n.t==='i'){ nS++; secs.push({k:(scope.length>1&&p[0]?'['+p[0].code+'] ':'')+n.code+' '+(n.name||''),v:total(n)}); }
+    if(n.t==='r'){ nR++; const k=resType(n.code); byT[k]=(byT[k]||0)+total(n); const rk=n.code||'—'; byR[rk]=(byR[rk]||0)+total(n); if(!hasItems(n)&&!evalExpr(n.price)) noPrice++; }
+    if(n.t==='k'){ nK++; const kk=n.code||'—'; byK[kk]=byK[kk]||{v:0,nm:nodeName(n)}; byK[kk].v+=total(n); if(!evalExpr(n.price)) noPrice++; }
   });
-  const T=scope.reduce((a,b)=>a+total(b),0);
+  const T=scope.reduce((a,b)=>a+total(b),0), TM=scope.reduce((a,b)=>a+totalMk(b),0);
+  const A=scope.reduce((a,b)=>a+(+b.area||0),0), U=scope.reduce((a,b)=>a+(+b.units||0),0);
+  const sA=scope.filter(b=>+b.area>0), sU=scope.filter(b=>+b.units>0);
+  const TA=sA.reduce((a,b)=>a+total(b),0), TMA=sA.reduce((a,b)=>a+totalMk(b),0), TU=sU.reduce((a,b)=>a+total(b),0), TMU=sU.reduce((a,b)=>a+totalMk(b),0);
+  const partA=sA.length&&sA.length<scope.length?`<small style="display:block;font-size:11px;font-weight:400;color:var(--warn)">רק ${sA.length} מתוך ${scope.length} מבנים עם שטח</small>`:'';
+  const partU=sU.length&&sU.length<scope.length?`<small style="display:block;font-size:11px;font-weight:400;color:var(--warn)">רק ${sU.length} מתוך ${scope.length} מבנים עם יח"ד</small>`:'';
   document.getElementById('kpis').innerHTML=[
-    ['עלות','₪ '+fmt(T)],['כולל תוספות','₪ '+fmt(scope.reduce((a,b)=>a+totalMk(b),0))],['סעיפים',fmt(nS)],['שורות משאב',fmt(nR)],['משאבים ללא מחיר',fmt(noPrice)]
+    ['עלות','₪ '+fmt(T)],['כולל תוספות','₪ '+fmt(TM)],
+    ['עלות למ"ר',A?'₪ '+fmt(TA/A)+(TMA!==TA?`<small style="display:block;font-size:12px;font-weight:400">כולל תוספות ₪ ${fmt(TMA/A)}</small>`:'')+partA:'<small style="font-size:12px;font-weight:400">הזן שטח למטה</small>'],
+    ['עלות ליח"ד',U?'₪ '+fmt(TU/U)+(TMU!==TU?`<small style="display:block;font-size:12px;font-weight:400">כולל תוספות ₪ ${fmt(TMU/U)}</small>`:'')+partU:'<small style="font-size:12px;font-weight:400">הזן יח"ד למטה</small>'],
+    ['סעיפים',fmt(nS)],['שורות משאב',fmt(nR)],['שורות מק"ט',fmt(nK)],['ללא מחיר (משאב/מק"ט)',fmt(noPrice)]
   ].map(([k,v])=>`<div class="kpi"><small>${k}</small><b>${v}</b></div>`).join('');
-  const bars=(el,items)=>{
-    items=items.filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
+  // area / units per building
+  document.getElementById('areaPanel').innerHTML=`<h3>שטחים ויחידות דיור <small class="hint" style="font-weight:400">– לחישוב עלות למ"ר וליח"ד</small></h3>
+    <table class="boq plist" style="min-width:0;table-layout:auto"><thead><tr><th>מבנה</th><th class="n">שטח בנוי מ"ר</th><th class="n">יח"ד</th><th class="n">עלות</th><th class="n">₪ למ"ר</th><th class="n">₪ ליח"ד</th></tr></thead><tbody>
+    ${scope.map(b=>{ const t=total(b); return `<tr><td>${esc(b.code+' '+(b.name||''))}</td><td class="n"><input class="cell-in n" style="width:110px;border:1px solid var(--line)" data-ba="${b.id}" value="${esc(b.area??'')}" inputmode="decimal"></td><td class="n"><input class="cell-in n" style="width:80px;border:1px solid var(--line)" data-bu="${b.id}" value="${esc(b.units??'')}" inputmode="numeric"></td><td class="n num">${fmt(t)}</td><td class="n num">${+b.area?fmt(t/+b.area):''}</td><td class="n num">${+b.units?fmt(t/+b.units):''}</td></tr>`; }).join('')}
+    ${scope.length>1?`<tr style="font-weight:700"><td>סה"כ</td><td class="n num">${fmt(A)}</td><td class="n num">${fmt(U)}</td><td class="n num">${fmt(T)}</td><td class="n num">${A?fmt(TA/A):''}</td><td class="n num">${U?fmt(TU/U):''}</td></tr>`:''}
+    </tbody></table>`;
+  const bars=(el,items,keepOrder)=>{
+    items=items.filter(x=>x.v>0); if(!keepOrder) items.sort((a,b)=>b.v-a.v);
     const max=Math.max(...items.map(x=>x.v),0);
     document.getElementById(el).innerHTML= items.length? items.map(x=>`<div class="barrow" title="${esc(x.k)}: ₪ ${fmt(x.v)} (${T?fmt(x.v/T*100,1):0}%)"><span class="nm">${esc(x.k)}</span><span class="track"><span class="fill" style="width:${max?x.v/max*100:0}%"></span></span><span class="v">₪ ${fmt(x.v)}</span></div>`).join('') : '<div class="none">אין עדיין סכומים. הזן כמויות ומחירים בכתב הכמויות.</div>';
   };
-  bars('byB', scope.map(b=>({k:b.code+' '+(b.name||''),v:total(b)})));
+  bars('byB', scope.slice().sort((a,b)=>(a.code||'').localeCompare(b.code||'',undefined,{numeric:true})).map(b=>({k:b.code+' '+(b.name||''),v:total(b)})),true);
   const cm=chMap(); bars('byC', Object.entries(byC).map(([c,v])=>({k:c+' '+(cm[c]||''),v})));
+  document.querySelector('#byC').previousElementSibling.innerHTML='לפי פרק <small class="hint" style="font-weight:400">'+(scope.length>1?'(סכום כל המבנים)':'(מבנה '+esc(scope[0]?scope[0].code:'')+')')+'</small>';
+  bars('byR', Object.entries(byR).map(([c,v])=>({k:c+' '+(RM[c]||''),v})).sort((a,b)=>b.v-a.v).slice(0,15));
+  bars('byK', Object.entries(byK).map(([c,o])=>({k:c+' '+o.nm,v:o.v})).sort((a,b)=>b.v-a.v).slice(0,15));
   bars('byT', Object.entries(byT).map(([k,v])=>({k:TYPES[k],v})));
   bars('byI', secs.sort((a,b)=>b.v-a.v).slice(0,10));
 }
 document.getElementById('dashFilter').onclick=e=>{ const c=e.target.closest('[data-b]'); if(c){ dashB=c.dataset.b; renderDash(); } };
+document.getElementById('areaPanel').addEventListener('change',e=>{ const el=e.target; const id=el.dataset.ba||el.dataset.bu; if(!id) return; const b=state.tree.find(x=>String(x.id)===id); if(!b) return;
+  const v=String(el.value).replace(/,/g,'').trim(); if(v!==''&&!Number.isFinite(+v)){ toast('מספר לא תקין'); return; } if(el.dataset.ba) b.area=v; else b.units=v; save(); renderDash(); });
 
 /* ---------- lists view ---------- */
 function renderLists(){
@@ -1526,7 +1555,7 @@ async function openProject(id){
 function setState(st){
   state=st; if(!state.lists) state.lists=LISTS; if(!state.collapsed) state.collapsed={};
   if(mergeCatalog(state)) setTimeout(()=>scheduleCloud(),0);
-  { const before=JSON.stringify(state.tree.map(b=>(b.ch||[]).map(c=>[c.id,(c.ch||[]).map(x=>x.id)]))); state.tree.forEach(b=>{ if(b.t==='b'){ b.ch.sort((x,y)=>(x.code||'\uffff').localeCompare(y.code||'\uffff',undefined,{numeric:true})); b.ch.forEach(c=>{ if(c.t==='c') c.ch.sort((x,y)=>(x.code||'\uffff').localeCompare(y.code||'\uffff',undefined,{numeric:true})); }); } });
+  { const before=JSON.stringify(state.tree.map(b=>(b.ch||[]).map(c=>[c.id,(c.ch||[]).map(x=>x.id)]))); state.tree.sort((x,y)=>(x.code||'\uffff').localeCompare(y.code||'\uffff',undefined,{numeric:true})); state.tree.forEach(b=>{ if(b.t==='b'){ b.ch.sort((x,y)=>(x.code||'\uffff').localeCompare(y.code||'\uffff',undefined,{numeric:true})); b.ch.forEach(c=>{ if(c.t==='c') c.ch.sort((x,y)=>(x.code||'\uffff').localeCompare(y.code||'\uffff',undefined,{numeric:true})); }); } });
     if(JSON.stringify(state.tree.map(b=>(b.ch||[]).map(c=>[c.id,(c.ch||[]).map(x=>x.id)])))!==before) setTimeout(()=>scheduleCloud(),0); }
   SUGG=state.sugg||{}; PMAP=null; pendingDel=null; query=''; $('q').value='';
   pn.value=state.project||''; sn.checked=!!state.showNotes;
@@ -1781,30 +1810,71 @@ document.getElementById('listTables').addEventListener('click',e=>{
 /* ---------- round-trip Excel editing ---------- */
 const EX_H=['מזהה','רמה','מבנה','פרק','תת-פרק','קוד סעיף','תאור סעיף','מק"ט משאב','שם משאב (מהרשימה)','יח\'','כמות','מחיר יח\'','הערות','פעולה','סה"כ ₪ (מידע)'];   // רמה: סעיף / משאב / מק"ט (בשורת מק"ט – עמודת "מק"ט משאב" = מק"ט הפריט)
 $('btnEditX').onclick=()=>{
-  const aoa=[EX_H];
+  const H=EX_H.concat(['כמות מחושבת (נוסחה)']);
+  const aoa=[H], meta=[];   // meta[i] = {n, sec, res} per data row (excel row = i+2)
+  const V=v=>v===''||v==null?'':(Number.isFinite(+v)?+v:String(v));
   walk(state.tree,(n,p)=>{
     const [b,c,s]=p;
-    if(n.t==='i'){ const calc=n.calc&&n.calc.length; aoa.push([n.id,'סעיף',b?.code||'',c?.code||'',s?.code||'',n.code||'',n.name||'','','',n.unit||'',calc?R2(calcQty(n)):(n.qty===''||n.qty==null?'':(Number.isFinite(+n.qty)?+n.qty:String(n.qty))),'',n.note||'','',R2(total(n))]); }
-    if(n.t==='r'){ const i=p[p.length-1]; const qe=n.calc&&n.calc.length?R2(calcQty(n)):(n.qexpr===''||n.qexpr==null?'':(Number.isFinite(+n.qexpr)?+n.qexpr:String(n.qexpr)));
-      aoa.push([n.id,'משאב',b?.code||'',c?.code||'',s?.code||'',i?.code||'','',n.code||'',nodeName(n),n.unit||'',qe,hasItems(n)?'':(n.price===''||n.price==null?'':(Number.isFinite(+n.price)?+n.price:String(n.price))),'','',R2(total(n))]); }
-    if(n.t==='k'){ const i=p[p.length-2]; const qe=n.calc&&n.calc.length?R2(calcQty(n)):(n.qexpr===''||n.qexpr==null?'':(Number.isFinite(+n.qexpr)?+n.qexpr:String(n.qexpr)));
-      aoa.push([n.id,'מק"ט',b?.code||'',c?.code||'',s?.code||'',i?.code||'','',n.code||'',nodeName(n),n.unit||'',qe,n.price===''||n.price==null?'':(Number.isFinite(+n.price)?+n.price:String(n.price)),'',n.pdate||'',R2(total(n))]); }
+    if(n.t==='i'){ const calc=n.calc&&n.calc.length; aoa.push([n.id,'סעיף',b?.code||'',c?.code||'',s?.code||'',n.code||'',n.name||'','','',n.unit||'',calc?R2(calcQty(n)):V(n.qty),secPriced(n)?V(n.sp):'',n.note||'','',R2(total(n)),'']); meta.push({n}); }
+    if(n.t==='r'){ const i=p[p.length-1]; const qe=n.calc&&n.calc.length?R2(calcQty(n)):V(n.qexpr);
+      aoa.push([n.id,'משאב',b?.code||'',c?.code||'',s?.code||'',i?.code||'','',n.code||'',nodeName(n),n.unit||'',qe,hasItems(n)?'':V(n.price),'','',R2(total(n)),'']); meta.push({n,sec:i}); }
+    if(n.t==='k'){ const i=p[p.length-2], r=p[p.length-1]; const qe=n.calc&&n.calc.length?R2(calcQty(n)):V(n.qexpr);
+      aoa.push([n.id,'מק"ט',b?.code||'',c?.code||'',s?.code||'',i?.code||'','',n.code||'',nodeName(n),n.unit||'',qe,V(n.price),'',n.pdate||'',R2(total(n)),'']); meta.push({n,sec:i,res:r}); }
   });
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:7},{wch:7},{wch:6},{wch:5},{wch:7},{wch:14},{wch:55},{wch:10},{wch:34},{wch:7},{wch:10},{wch:10},{wch:40},{wch:7},{wch:12}];
-  ws['!autofilter']={ref:'A1:O'+aoa.length};
+  // live Excel formulas: P = quantity used for the calc (Q→section qty, R→resource qty), O = total
+  const rowOf=new Map(); meta.forEach((m,i)=>rowOf.set(m.n.id,i+2));
+  const kids=new Map(); meta.forEach((m,i)=>{ const par=m.n.t==='k'?m.res:(m.n.t==='r'?m.sec:null); if(par){ if(!kids.has(par.id)) kids.set(par.id,[]); kids.get(par.id).push(i+2); } });
+  const fx=(expr,secRow,resRow)=>{ let e=String(expr).trim().replace(/^=/,'').replace(/,/g,''); if(!/^[0-9+\-*/().\sQqRr]+$/.test(e)) return null;
+    e=e.replace(/[Qq]/g,secRow?'P'+secRow:'0').replace(/[Rr]/g,resRow?'P'+resRow:'0'); return e; };
+  const setF=(addr,f,v)=>{ ws[addr]={t:'n',f,v:Number.isFinite(v)?v:0}; };
+  meta.forEach((m,i)=>{ const r=i+2, n=m.n, calc=n.calc&&n.calc.length;
+    const q=n.t==='i'?secQty(n):n.t==='r'?rQty(n):kQty(n);
+    const src=n.t==='i'?n.qty:n.qexpr; const sr=m.sec?rowOf.get(m.sec.id):null, rr=m.res?rowOf.get(m.res.id):null;
+    let f=null; if(!calc&&src!==''&&src!=null){ f=Number.isFinite(+src)?'K'+r:fx(src,sr,rr); }
+    if(f) setF('P'+r,f,q); else ws['P'+r]={t:'n',v:Number.isFinite(q)?R2(q):0};
+    let tf; const ks=kids.get(n.id)||[];
+    if(n.t==='k') tf=`P${r}*N(L${r})`;
+    else if(n.t==='r') tf=hasItems(n)?(ks.length?ks.map(x=>'O'+x).join('+'):'0'):`P${r}*N(L${r})`;
+    else if(secPriced(n)) tf=`P${r}*N(L${r})`;
+    else { // section priced by its resources: show derived unit price so the row reads qty × price = total
+      let sum=ks.length?ks.map(x=>'O'+x).join('+'):'0'; if(sum.length>8000) sum=`SUM(${ks.map(x=>'O'+x).join(',')})`;
+      const t=total(n); setF('L'+r,`IF(N(P${r})=0,0,(${sum})/P${r})`,q?t/q:0); ws['L'+r].z='#,##0.00';
+      tf=`IF(N(P${r})=0,${sum},P${r}*L${r})`; }
+    if(tf.length>8000) tf=`SUM(${ks.map(x=>'O'+x).join(',')})`;
+    setF('O'+r,tf,total(n));
+  });
+  ws['!ref']='A1:P'+aoa.length;
+  ws['!cols']=[{wch:7},{wch:7},{wch:6},{wch:5},{wch:7},{wch:14},{wch:55},{wch:10},{wch:34},{wch:7},{wch:10},{wch:10},{wch:40},{wch:7},{wch:12},{wch:12}];
+  ws['!autofilter']={ref:'A1:P'+aoa.length};
+  // summary sheet: building × chapter, live
+  const N=aoa.length, keys=[]; const seenK=new Set();
+  meta.forEach((m,i)=>{ if(m.n.t!=='i') return; const k=aoa[i+1][2]+'|'+aoa[i+1][3]; if(!seenK.has(k)){ seenK.add(k); keys.push([aoa[i+1][2],aoa[i+1][3]]); } });
+  const bname={}; state.tree.forEach(b=>bname[b.code]=b.name||'');
+  const sm=[['מבנה','שם מבנה','פרק','סה"כ ₪']]; const sws=XLSX.utils.aoa_to_sheet(sm);
+  let r=2; const bStart={};
+  const rng=c=>`'עריכה'!$${c}$2:$${c}$${N}`;
+  keys.forEach(([bc,cc])=>{ XLSX.utils.sheet_add_aoa(sws,[[bc,bname[bc]||'',cc]],{origin:'A'+r});
+    sws['D'+r]={t:'n',f:`SUMPRODUCT((${rng('B')}="סעיף")*(${rng('C')}="${bc}")*(${rng('D')}="${cc}")*${rng('O')})`,v:0}; r++; });
+  XLSX.utils.sheet_add_aoa(sws,[['','סה"כ פרויקט','']],{origin:'A'+r}); sws['D'+r]={t:'n',f:`SUM(D2:D${r-1})`,v:0};
+  // fill cached values
+  let tot=0; keys.forEach(([bc,cc],j)=>{ let v=0; meta.forEach((m,i)=>{ if(m.n.t==='i'&&aoa[i+1][2]===bc&&aoa[i+1][3]===cc) v+=total(m.n); }); sws['D'+(j+2)].v=R2(v); tot+=v; }); sws['D'+r].v=R2(tot);
+  sws['!ref']='A1:D'+r; sws['!cols']=[{wch:7},{wch:28},{wch:6},{wch:16}];
   const help=[['איך עורכים'],['• לשנות: תאור סעיף, קוד סעיף, יח\', כמות, מחיר יח\', הערות, מק"ט משאב.'],['• למחוק שורה: לכתוב "מחק" בעמודה פעולה (או למחוק את השורה – בטעינה תתבקש לאשר).'],
-    ['• סעיף חדש: שורה בלי מזהה, רמה = סעיף, תת-פרק (למשל 60.90) ותאור. קוד סעיף אפשר להשאיר ריק.'],['• משאב חדש: שורה בלי מזהה, רמה = משאב, מתחת לסעיף שלו, עם מק"ט, יח\' וכמות.'],['• מק"ט חדש: שורה בלי מזהה, רמה = מק"ט, מתחת למשאב שלו. קוד הפריט בעמודה "מק"ט משאב". מחיר ריק = נלקח מטבלת המק"טים. כמות ברירת מחדל =R (כמות המשאב).'],
-    ['• כמות משאב יכולה להיות נוסחה של האפליקציה, למשל =Q*0.15 (Q = כמות הסעיף). לא לשנות את עמודת המזהה.'],['• סעיף עם פירוט כמויות (∑) – הכמות מחושבת ולא תתעדכן מהקובץ.'],['• "סה"כ" ו"שם משאב" – למידע בלבד.']];
-  const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]};
-  XLSX.utils.book_append_sheet(wb,ws,'עריכה'); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(help),'הוראות');
+    ['• סעיף חדש: שורה בלי מזהה, רמה = סעיף, תת-פרק (למשל 60.90) ותאור. קוד סעיף אפשר להשאיר ריק.'],['• משאב חדש: שורה בלי מזהה, רמה = משאב, מתחת לסעיף שלו, עם מק"ט, יח\' וכמות.'],['• מק"ט חדש: שורה בלי מזהה, רמה = מק"ט, מתחת למשאב שלו. קוד הפריט בעמודה "מק"ט משאב". מחיר ריק = נלקח מטבלת המק"טים.'],
+    ['• כמות משאב יכולה להיות נוסחה של האפליקציה, למשל =Q*0.15 (Q = כמות הסעיף, R = כמות המשאב). לא לשנות את עמודת המזהה.'],['• סעיף עם פירוט כמויות (∑) – הכמות מחושבת ולא תתעדכן מהקובץ.'],
+    ['• עמודות "סה"כ ₪" ו"כמות מחושבת" הן נוסחאות אקסל חיות – משנים כמות/מחיר ורואים מיד את ההשפעה. הן למידע בלבד ולא נטענות חזרה.'],
+    ['• בשורת סעיף, "מחיר יח\'" = עלות ליחידת סעיף מחושבת מהמשאבים (נוסחה), כך שהשורה היא כמות × מחיר = סה"כ. הקלדת מספר במקום הנוסחה = תמחור ברמת סעיף (המשאבים לא נספרים).'],
+    ['• גיליון "סיכום" – סה"כ לפי מבנה ופרק, מתעדכן אוטומטית.'],['• שורות חדשות שמוסיפים באקסל לא מקבלות נוסחאות – הן יחושבו באפליקציה אחרי הטעינה.']];
+  const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}],CalcPr:{fullCalcOnLoad:true}};
+  XLSX.utils.book_append_sheet(wb,ws,'עריכה'); XLSX.utils.book_append_sheet(wb,sws,'סיכום'); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(help),'הוראות');
   XLSX.writeFile(wb,`${(state.project||'כתב כמויות').replace(/[\\/:*?"<>|]/g,'')} - לעריכה ${new Date().toLocaleDateString('he-IL').replace(/\./g,'-')}.xlsx`);
 };
 $('btnEditImp').onclick=()=>$('fileEditImp').click();
 $('fileEditImp').onchange=async e=>{
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
   try{ const wb=XLSX.read(await f.arrayBuffer()); const ws=wb.Sheets['עריכה']||wb.Sheets[wb.SheetNames[0]];
-    const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true}); editImportPreview(rows,f.name); }
+    const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true}); rows.forEach(r=>{ const c=ws['L'+(r.__rowNum__+1)]; r.__Lf=!!(c&&c.f); }); editImportPreview(rows,f.name); }
   catch(err){ toast('הטעינה נכשלה: '+err.message); }
 };
 function editPlan(rows){
@@ -1828,6 +1898,7 @@ function editPlan(rows){
         if(!same(normUnit(S(r["יח'"])),n.unit||'')) ch.unit=normUnit(S(r["יח'"]));
         if(!same(r['כמות'],n.qty??'')){ if(n.calc&&n.calc.length){ if(!same(r['כמות'],R2(calcQty(n)))) warn.push(`שורה ${line}: סעיף ${n.code} – כמות מחושבת מפירוט, לא עודכנה`); } else ch.qty=S(r['כמות']); }
         if(!same(r['הערות'],n.note||'')) ch.note=S(r['הערות']);
+        if(!r.__Lf&&S(r["מחיר יח'"])!==''&&!same(r["מחיר יח'"],n.sp??'')) ch.sp=S(r["מחיר יח'"]);   // formula = derived price (info); typed number = section pricing
       } else if(n.t==='k'){
         const code=S(r['מק"ט משאב']);
         if(code&&code!==n.code){ const it=ITEMS.it&&ITEMS.it[code]; if(!it) warn.push(`שורה ${line}: מק"ט ${code} לא בטבלת המק"טים`); ch.code=code; if(it) ch.name=it[0]; }
@@ -1841,7 +1912,7 @@ function editPlan(rows){
         if(!same(r['כמות'],n.qexpr??'')){ if(n.calc&&n.calc.length){ if(!same(r['כמות'],R2(calcQty(n)))) warn.push(`שורה ${line}: משאב ${n.code} – כמות מחושבת מפירוט, לא עודכנה`); } else ch.qexpr=S(r['כמות']); }
         if(!hasItems(n)&&!same(r["מחיר יח'"],n.price??'')){ ch.price=S(r["מחיר יח'"]); }
       }
-      if(Object.keys(ch).length) ops.push({k:'upd',n,ch,line,txt:`${{i:'סעיף',r:'משאב',k:'מק"ט'}[n.t]} ${n.code}: `+Object.entries(ch).map(([k,v])=>({code:'קוד',name:'תאור',unit:'יח\'',qty:'כמות',qexpr:'כמות',note:'הערה',price:'מחיר'}[k]+' → '+(String(v).length>40?String(v).slice(0,40)+'…':v||'(ריק)'))).join(' · ')});
+      if(Object.keys(ch).length) ops.push({k:'upd',n,ch,line,txt:`${{i:'סעיף',r:'משאב',k:'מק"ט'}[n.t]} ${n.code}: `+Object.entries(ch).map(([k,v])=>({code:'קוד',name:'תאור',unit:'יח\'',qty:'כמות',qexpr:'כמות',note:'הערה',price:'מחיר',sp:'מחיר סעיף'}[k]+' → '+(String(v).length>40?String(v).slice(0,40)+'…':v||'(ריק)'))).join(' · ')});
       return;
     }
     if(id&&!idMap[id]){ warn.push(`שורה ${line}: מזהה ${id} לא נמצא בפרויקט – דולגה`); return; }
@@ -2025,12 +2096,51 @@ async function openVersions(id){
 }
 $('btnVersions').onclick=()=>CUR&&openVersions(CUR.id);
 $('btnLog').onclick=()=>CUR&&logDlg().catch(e=>toast(e.message));
+function undoLogRow(x){
+  const f=find(x.node_id);
+  if(x.action==='del'){
+    if(f){ toast('השורה כבר קיימת בפרויקט'); return null; }
+    const i=(state.trash||[]).findIndex(t=>t.node&&t.node.id===x.node_id);
+    if(i<0){ alert('השורה לא נמצאה בסל המחזור (אולי הסל רוקן). אפשר לשחזר דרך "גרסאות".'); return null; }
+    const t=state.trash[i]; if(t.parentId!==null&&!find(t.parentId)){ alert('הרמה שמעל נמחקה גם היא – בטל קודם את המחיקה שלה.'); return null; }
+    restoreTrash(i); return 'המחיקה בוטלה – השורה שוחזרה';
+  }
+  if(!f){ alert('השורה כבר לא קיימת בפרויקט (נמחקה מאז). אם צריך – שחזר אותה קודם מסל המחזור.'); return null; }
+  const n=f.n;
+  if(x.action==='add'){
+    let c=0; walk(n.ch||[],()=>c++);
+    if(!confirm(`לבטל את ההוספה ולמחוק את ${NAMES[n.t]} ${n.code||''}${c?` (כולל ${c} שורות מתחת)`:''}? (יישמר בסל המחזור)`)) return null;
+    trashNode(n,f.path); const l=parentList(n.id); l.splice(l.indexOf(n),1); return 'ההוספה בוטלה – השורה הועברה לסל המחזור';
+  }
+  if(x.action==='edit'){
+    const rev={'קוד':'code','תאור':'name','יח\'':'unit','מחיר':'price','מחיר סעיף':'sp','הערה':'note','תוספת %':'mk'};
+    let key=rev[x.field]; if(x.field==='כמות') key=n.t==='i'?'qty':'qexpr'; if(!key){ alert('לא ניתן לבטל שדה זה'); return null; }
+    const cur=n[key]===undefined||n[key]===null?'':String(n[key]);
+    if(cur===String(x.old_val||'')){ toast('הערך כבר זהה לערך הקודם'); return null; }
+    if(cur!==String(x.new_val||'')&&!confirm(`הערך השתנה שוב מאז.\nכעת: ${cur||'(ריק)'}\nלהחזיר ל: ${x.old_val||'(ריק)'}?`)) return null;
+    n[key]=x.old_val||''; if(key==='price'&&n.t==='k'){ n.pdate=new Date().toISOString().slice(0,10); n.psrc='שחזור מהיומן'; }
+    if(key==='code'&&(n.t==='c'||n.t==='s'||n.t==='b')){ const pl=parentList(n.id); if(pl) sortByCode(pl); }
+    return `${x.field} הוחזר ל-${x.old_val||'(ריק)'}`;
+  }
+  if(x.action==='move'){
+    const codes=String(x.old_val||'').split(' › ').map(s=>s.trim()).filter(Boolean);
+    let list=state.tree, par=null;
+    for(const c of codes){ par=(list||[]).find(z=>z.code===c&&z.t!=='k'&&z.t!=='r'&&z.t!=='i'); if(!par) break; list=par.ch; }
+    if(!par||par.code!==codes[codes.length-1]){ alert('המיקום הקודם ('+(x.old_val||'')+') כבר לא קיים. אפשר להעביר ידנית עם "העבר".'); return null; }
+    if(par===f.path[f.path.length-1]){ toast('השורה כבר נמצאת במיקום הקודם'); return null; }
+    const l=parentList(n.id); l.splice(l.indexOf(n),1); par.ch.push(n); state.collapsed[par.id]=false;
+    return 'ההעברה בוטלה – הוחזר ל-'+x.old_val+(n.t==='i'?' (הקוד לא שונה – אפשר לבטל גם את שינוי הקוד ביומן)':'');
+  }
+  return null;
+}
 async function logDlg(){
   if(cloudDirty) await flushCloud();
   const h=$('printDlgHost'); h.innerHTML=`<div class="pdlg" style="z-index:9999"><div class="box" style="width:min(1100px,100%);max-height:92vh;overflow:auto"><h2>יומן שינויים – ${esc(CUR.name)}</h2><p id="lg_st" class="hint">טוען…</p></div></div>`;
   let L=[]; try{ L=await DB.listLog(CUR.id); }catch(e){ $('lg_st').textContent=/boq_log|relation|schema cache/i.test(e.message)?'היומן עוד לא הופעל – צריך להריץ פעם אחת את הסקריפט boq_supabase_log.sql ב-Supabase.':'שגיאה: '+e.message; h.querySelector('.box').insertAdjacentHTML('beforeend','<div class="row" style="justify-content:flex-end"><button class="btn" onclick="document.getElementById(\'printDlgHost\').innerHTML=\'\'">סגור</button></div>'); return; }
   const users=[...new Set(L.map(x=>x.user_email||''))];
-  const AN={add:'הוספה',del:'מחיקה',edit:'שינוי',move:'העברה',restore:'שחזור גרסה',import:'עדכון/ייבוא'}, AC={add:'pl',del:'err',edit:'',move:'pw',restore:'pw',import:'pw'};
+  const AN={add:'הוספה',del:'מחיקה',edit:'שינוי',move:'העברה',restore:'שחזור גרסה',import:'עדכון/ייבוא',undo:'ביטול'}, AC={add:'pl',del:'err',edit:'',move:'pw',restore:'pw',import:'pw',undo:'pw'};
+  const undone=new Set(); L.forEach(x=>{ if(x.action==='undo'){ const m=/#(\d+)/.exec(x.label||''); if(m) undone.add(+m[1]); } });
+  const canEdit=!ME||ME.role!=='viewer';
   const TN={b:'מבנה',c:'פרק',s:'תת-פרק',i:'סעיף',r:'משאב',k:'מק"ט'};
   const box=h.querySelector('.box');
   box.innerHTML=`<h2>יומן שינויים – ${esc(CUR.name)}</h2>
@@ -2040,7 +2150,7 @@ async function logDlg(){
       <select id="lg_a"><option value="">כל הפעולות</option>${Object.entries(AN).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>
       <input id="lg_d" type="date" title="מתאריך">
       <span class="hint" id="lg_n" style="margin:0"></span></div>
-    <div class="scroll" style="max-height:66vh;overflow:auto;margin-top:8px"><table class="boq plist" style="table-layout:auto"><thead><tr><th>מתי</th><th>מי</th><th>פעולה</th><th>רמה</th><th>קוד</th><th>תאור</th><th>שדה</th><th>היה</th><th>נהיה</th></tr></thead><tbody id="lg_tb"></tbody></table></div>
+    <div class="scroll" style="max-height:66vh;overflow:auto;margin-top:8px"><table class="boq plist" style="table-layout:auto"><thead><tr><th>מתי</th><th>מי</th><th>פעולה</th><th>רמה</th><th>קוד</th><th>תאור</th><th>שדה</th><th>היה</th><th>נהיה</th><th></th></tr></thead><tbody id="lg_tb"></tbody></table></div>
     <div class="row" style="justify-content:flex-end"><button class="btn" id="lg_x">ייצוא לאקסל</button><button class="btn" id="lg_c">סגור</button></div>`;
   const cut=v=>{ v=String(v||''); return v.length>90?v.slice(0,40)+' … '+v.slice(-40):v; };
   const filt=()=>{ const q=$('lg_q').value.trim().toLowerCase(), u=$('lg_u').value, a=$('lg_a').value, d=$('lg_d').value;
@@ -2048,8 +2158,14 @@ async function logDlg(){
   const draw=()=>{ const F=filt(); $('lg_n').textContent=`${F.length} רשומות`+(L.length>=3000?' (3000 אחרונות)':'');
     $('lg_tb').innerHTML=F.slice(0,1500).map(x=>`<tr><td class="num" style="white-space:nowrap">${new Date(x.at).toLocaleString('he-IL',{dateStyle:'short',timeStyle:'short'})}</td><td dir="ltr" style="font-size:12px">${esc((x.user_email||'').split('@')[0])}</td>
       <td><span class="pill ${AC[x.action]||''}">${AN[x.action]||x.action}</span></td><td>${TN[x.node_type]||''}</td><td class="mono">${esc(x.code||'')}</td><td title="${esc(x.path||'')}">${esc(x.label||'')}</td><td>${esc(x.field||'')}</td>
-      <td style="color:var(--bad);max-width:220px" title="${esc(x.old_val||'')}">${esc(cut(x.old_val))}</td><td style="color:var(--accent);max-width:220px" title="${esc(x.new_val||'')}">${esc(cut(x.new_val))}</td></tr>`).join('')||'<tr><td colspan="9" class="empty">אין רשומות</td></tr>'; };
+      <td style="color:var(--bad);max-width:220px" title="${esc(x.old_val||'')}">${esc(cut(x.old_val))}</td><td style="color:var(--accent);max-width:220px" title="${esc(x.new_val||'')}">${esc(cut(x.new_val))}</td>
+      <td>${undone.has(x.id)?'<span class="hint" style="margin:0">בוטל</span>':(canEdit&&x.node_id&&['add','del','edit','move'].includes(x.action)?`<button class="btn small" data-undo="${x.id}" title="בטל את הפעולה הזו">בטל</button>`:'')}</td></tr>`).join('')||'<tr><td colspan="10" class="empty">אין רשומות</td></tr>'; };
   ['lg_q','lg_u','lg_a','lg_d'].forEach(i=>$(i).oninput=draw); draw();
+  $('lg_tb').onclick=async e=>{ const b=e.target.closest('[data-undo]'); if(!b) return; const x=L.find(r=>r.id===+b.dataset.undo); if(!x) return;
+    const r=undoLogRow(x); if(!r) return;
+    PMAP=null; save(); render(); await flushCloud();
+    if(DB.addLog&&!LOG_OFF) await DB.addLog([{project_id:CUR.id,user_id:USER.id,user_email:USER.email,action:'undo',node_type:x.node_type,node_id:x.node_id,code:x.code,label:`ביטול רשומה #${x.id}: ${AN[x.action]} ${x.field||''} ${x.code||''}`.trim(),old_val:x.new_val,new_val:x.old_val,rev:CUR.rev}]).catch(()=>{});
+    toast(r); logDlg(); };
   $('lg_c').onclick=()=>h.innerHTML='';
   $('lg_x').onclick=()=>{ const F=filt().map(x=>({'מתי':new Date(x.at).toLocaleString('he-IL'),'מי':x.user_email,'פעולה':AN[x.action]||x.action,'רמה':TN[x.node_type]||'','קוד':x.code,'תאור':x.label,'מיקום':x.path,'שדה':x.field,'היה':x.old_val,'נהיה':x.new_val,'גרסה':x.rev}));
     const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(F),'יומן'); XLSX.writeFile(wb,`יומן שינויים ${CUR.name} ${new Date().toLocaleDateString('he-IL').replace(/\./g,'-')}.xlsx`); };
