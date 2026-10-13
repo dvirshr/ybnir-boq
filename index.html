@@ -538,16 +538,19 @@ function mkCell(n){
   const own=mkVal(n.mk); const p=parentOf(n.id); const inh=p?effMk(p):0;
   return `<td class="n"><input class="cell-in n" style="width:100%" data-f="mk" data-id="${n.id}" value="${own===null?'':esc(n.mk)}" placeholder="${own===null&&inh?fmt(inh,1):''}" title="${own===null?(inh?'בירושה מרמה עליונה: '+fmt(inh,1)+'%':'ללא תוספת'):'תוספת שהוגדרה ברמה זו'}"></td>`;
 }
-const leadOf=n=>n&&n.t==='i'&&n.ch?n.ch.find(c=>c.t==='r'&&c.lead):null;   // משאב מוביל: הסעיף לוקח ממנו את הכמות
+function leadOf(n){ if(!n||n.t!=='i'||!n.ch) return null; for(const r of n.ch){ if(r.t!=='r') continue; if(r.lead) return r; for(const k of (r.ch||[])) if(k.t==='k'&&k.lead) return k; } return null; }   // משאב / מק"ט מוביל: הסעיף לוקח ממנו את הכמות
+const secOfLead=x=>{ const p=parentOf(x.id); return x.t==='k'?(p?parentOf(p.id):null):p; };
+const leadQ=x=>x.t==='k'?kQty(x):rQty(x);
 const _qg=new Set();
-function secQty(n){ const r=leadOf(n); if(r){ if(_qg.has(n.id)) return NaN; _qg.add(n.id); try{ return rQty(r); } finally{ _qg.delete(n.id); } }
+function secQty(n){ const r=leadOf(n); if(r){ if(_qg.has(n.id)) return NaN; _qg.add(n.id); try{ return leadQ(r); } finally{ _qg.delete(n.id); } }
   if(n.calc&&n.calc.length) return calcQty(n); return evalExpr(n.qty); }
-const usesQ=r=>!(r.calc&&r.calc.length)&&/q/i.test(String(r.qexpr||''));
+const usesQ=r=>!(r.calc&&r.calc.length)&&(r.t==='k'?/[qr]/i:/q/i).test(String(r.qexpr||''));   // מק"ט עם R תלוי במשאב – לא מוביל
+const canLead=x=>{ if(usesQ(x)) return false; const q=leadQ(x); return !!q&&!Number.isNaN(q); };
 const UNORM=u=>{ u=String(u||'').replace(/\s/g,''); return ({'קוב':'מ"ק','קו"ב':'מ"ק','מ3':'מ"ק','מק':'מ"ק','מ2':'מ"ר','מר':'מ"ר','מ\'':'מ"א','מא':'מ"א','יח':'יח\'','יח"ד':'יח\'','קומפלט':'קומפ\''})[u]||u; };
-function setLead(r,on){ const sec=parentOf(r.id); if(!sec||sec.t!=='i') return false;
-  if(on){ if(usesQ(r)){ toast('המשאב מחושב מכמות הסעיף (Q) – אי אפשר לקחת ממנו את כמות הסעיף'); return false; }
-    sec.ch.forEach(c=>{ if(c.t==='r'&&c.lead&&c!==r) delete c.lead; }); r.lead=true; if(!sec.unit&&r.unit) sec.unit=UNORM(r.unit); }
-  else { const q=rQty(r); delete r.lead; if(!(sec.calc&&sec.calc.length)) sec.qty=Number.isFinite(q)?String(+q.toFixed(4)):''; }
+function setLead(r,on){ const sec=secOfLead(r); if(!sec||sec.t!=='i') return false;
+  if(on){ if(usesQ(r)){ toast(r.t==='k'?'המק"ט מחושב מכמות הסעיף/המשאב (Q/R) – אי אפשר לקחת ממנו את כמות הסעיף':'המשאב מחושב מכמות הסעיף (Q) – אי אפשר לקחת ממנו את כמות הסעיף'); return false; }
+    sec.ch.forEach(c=>{ if(c.t!=='r') return; if(c.lead&&c!==r) delete c.lead; (c.ch||[]).forEach(k=>{ if(k.lead&&k!==r) delete k.lead; }); }); r.lead=true; if(!sec.unit&&r.unit) sec.unit=UNORM(r.unit); }
+  else { const q=leadQ(r); delete r.lead; if(!(sec.calc&&sec.calc.length)) sec.qty=Number.isFinite(q)?String(+q.toFixed(4)):''; }
   return true; }
 function total(n){
   if(n.t==='k'){ const q=kQty(n), p=evalExpr(n.price); return (Number.isNaN(q)||Number.isNaN(p))?0:(q||0)*(p||0); }
@@ -679,7 +682,7 @@ function rowHtml(n,G){
   }
   const del = pendingDel===n.id
     ? `<span class="confirm">למחוק${n.ch&&n.ch.length?' כולל '+countDesc(n)+' שורות':''}? <button class="btn small" data-act="delyes" data-id="${n.id}">מחק</button><button class="btn small" data-act="delno">ביטול</button></span>`
-    : `${n.t==='r'&&(parentOf(n.id)||{}).t==='i'?(n.lead?`<button class="ib" data-act="qunlink" data-id="${n.id}" title="משאב מוביל – כמות הסעיף נלקחת ממנו. לחיצה = ניתוק" style="color:var(--accent);font-weight:700">★ מוביל</button>`:(usesQ(n)?'':`<button class="ib" data-act="qlink" data-id="${n.id}" title="קבע את כמות המשאב ככמות הסעיף (משאב מוביל)">☆ לסעיף</button>`)):''}${n.t==='r'&&!hasItems(n)?`<button class="ib" data-act="add" data-id="${n.id}" title="פירוק המשאב למק&quot;טים" style="color:var(--accent);font-weight:600">+ מק"ט</button>`:''}${(n.t==='i'||n.t==='r'||n.t==='k')?`<button class="ib" data-act="form" data-id="${n.id}">טופס</button>`:''}${n.t==='i'?`<button class="ib" data-act="addafter" data-id="${n.id}" title="הוסף סעיף חדש מיד אחרי הסעיף הזה" style="color:var(--accent);font-weight:600">+ אחרי</button><button class="ib" data-act="move" data-id="${n.id}" title="העבר סעיף לתת-פרק / פרק / מבנה אחר">העבר</button>`:''}${n.t==='c'&&n.ch.length?`<button class="ib" data-act="movec" data-id="${n.id}" title="העבר או העתק את הפרק למבנה אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length?`<button class="ib" data-act="move" data-id="${n.id}" title="העבר את כל הסעיפים של תת-הפרק לתת-פרק / פרק אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length>1?`<button class="ib" data-act="renum" data-id="${n.id}" title="מספור מחדש של הסעיפים בתת-פרק לפי הסדר המוצג">מספור</button>`:''}${pasteBtns(n)}<button class="ib" data-act="copy" data-id="${n.id}" title="העתק ${NAMES[n.t]} (כולל כל מה שמתחת)">העתק</button><button class="ib" data-act="up" data-id="${n.id}" aria-label="הזז למעלה">▲</button><button class="ib" data-act="down" data-id="${n.id}" aria-label="הזז למטה">▼</button><button class="ib del" data-act="del" data-id="${n.id}" aria-label="מחק">✕</button>`;
+    : `${(n.t==='r'&&(parentOf(n.id)||{}).t==='i')||n.t==='k'?(n.lead?`<button class="ib" data-act="qunlink" data-id="${n.id}" title="מוביל – כמות הסעיף נלקחת מכאן. לחיצה = ניתוק" style="color:var(--accent);font-weight:700">★ מוביל</button>`:(!canLead(n)?'':`<button class="ib" data-act="qlink" data-id="${n.id}" title="קבע את הכמות בשורה הזו ככמות הסעיף (מוביל)">☆ לסעיף</button>`)):''}${n.t==='r'&&!hasItems(n)?`<button class="ib" data-act="add" data-id="${n.id}" title="פירוק המשאב למק&quot;טים" style="color:var(--accent);font-weight:600">+ מק"ט</button>`:''}${(n.t==='i'||n.t==='r'||n.t==='k')?`<button class="ib" data-act="form" data-id="${n.id}">טופס</button>`:''}${n.t==='i'?`<button class="ib" data-act="addafter" data-id="${n.id}" title="הוסף סעיף חדש מיד אחרי הסעיף הזה" style="color:var(--accent);font-weight:600">+ אחרי</button><button class="ib" data-act="move" data-id="${n.id}" title="העבר סעיף לתת-פרק / פרק / מבנה אחר">העבר</button>`:''}${n.t==='c'&&n.ch.length?`<button class="ib" data-act="movec" data-id="${n.id}" title="העבר או העתק את הפרק למבנה אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length?`<button class="ib" data-act="move" data-id="${n.id}" title="העבר את כל הסעיפים של תת-הפרק לתת-פרק / פרק אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length>1?`<button class="ib" data-act="renum" data-id="${n.id}" title="מספור מחדש של הסעיפים בתת-פרק לפי הסדר המוצג">מספור</button>`:''}${pasteBtns(n)}<button class="ib" data-act="copy" data-id="${n.id}" title="העתק ${NAMES[n.t]} (כולל כל מה שמתחת)">העתק</button><button class="ib" data-act="up" data-id="${n.id}" aria-label="הזז למעלה">▲</button><button class="ib" data-act="down" data-id="${n.id}" aria-label="הזז למטה">▼</button><button class="ib del" data-act="del" data-id="${n.id}" aria-label="מחק">✕</button>`;
   return `<tr class="L${L}" data-id="${n.id}">${codeCell(n)}${nameCell(n)}${unit}${qty}${price}<td class="n num tot">${t?fmt(t):''}</td>${mkCell(n)}${share}<td><div class="rowact">${del}</div></td></tr>`;
 }
 function countDesc(n){ let c=0; walk(n.ch,()=>c++); return c; }
@@ -699,7 +702,7 @@ tb.addEventListener('click',e=>{
     if(A.t==='i'&&B.t==='i'&&A.code&&B.code){ const pre=x=>x.replace(/\.\d+$/,''); if(pre(A.code)===pre(B.code)){ (A.oldCodes=A.oldCodes||[]).push(A.code); (B.oldCodes=B.oldCodes||[]).push(B.code); [A.code,B.code]=[B.code,A.code]; } }
     [l[i],l[j]]=[l[j],l[i]]; save(); render(); } }
   if(act==='form') openDrawer(id);
-  if(act==='qlink'||act==='qunlink'){ const f=find(id); if(f&&setLead(f.n,act==='qlink')){ save(); render(); toast(act==='qlink'?'כמות הסעיף נלקחת עכשיו מהמשאב '+(f.n.code||''):'נותק – הכמות נשארה כמספר בסעיף'); } }
+  if(act==='qlink'||act==='qunlink'){ const f=find(id); if(f&&setLead(f.n,act==='qlink')){ save(); render(); toast(act==='qlink'?'כמות הסעיף נלקחת עכשיו מ-'+(f.n.code||''):'נותק – הכמות נשארה כמספר בסעיף'); } }
   if(act==='move') moveDlg(id);
   if(act==='movec') moveChDlg(id);
   if(act==='copy') copyNode(id);
@@ -1262,7 +1265,7 @@ document.getElementById('btnTrash').onclick=trashDlg;
 function qCheck(){
   const out=[]; const near=(a,b)=>Math.abs(a-b)<=Math.max(0.01,Math.abs(b)*0.005);
   walk(state.tree,(n,p)=>{ if(n.t!=='i'||leadOf(n)||(n.calc&&n.calc.length&&false)) return;
-    const cands=n.ch.filter(r=>r.t==='r'&&!usesQ(r)).map(r=>({r,q:rQty(r)})).filter(x=>x.q&&!Number.isNaN(x.q));
+    const cands=[]; n.ch.forEach(r=>{ if(r.t!=='r') return; if(!usesQ(r)) cands.push({r,q:rQty(r)}); (r.ch||[]).forEach(k=>{ if(k.t==='k'&&!usesQ(k)) cands.push({r:k,q:kQty(k)}); }); }); for(let i=cands.length-1;i>=0;i--){ const x=cands[i]; if(!x.q||Number.isNaN(x.q)) cands.splice(i,1); }
     if(!cands.length) return; const su=UNORM(n.unit); const same=cands.filter(x=>su&&UNORM(x.r.unit)===su);
     const q=secQty(n); const has=q&&!Number.isNaN(q);
     if(!has){ const pick=same.length===1?same[0]:(!su&&cands.length===1?cands[0]:(same.length>1?null:(cands.length===1?cands[0]:null)));
@@ -1288,7 +1291,7 @@ function qChkDlg(){
     <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" id="qc_cancel">סגור</button>${L.length?'<button class="btn primary" id="qc_go">החל</button>':''}</div></div></div>`;
   document.getElementById('qc_cancel').onclick=()=>h.innerHTML='';
   const go=document.getElementById('qc_go'); if(go) go.onclick=()=>{ let c=0; const LL=A.concat(B);
-    h.querySelectorAll('select[data-qi]').forEach(s=>{ if(!s.value) return; const o=LL[+s.dataset.qi]; const r=o.n.ch.find(x=>String(x.id)===s.value); if(r&&setLead(r,true)) c++; });
+    h.querySelectorAll('select[data-qi]').forEach(s=>{ if(!s.value) return; const o=LL[+s.dataset.qi]; const r=o.cands.map(x=>x.r).find(x=>String(x.id)===s.value); if(r&&setLead(r,true)) c++; });
     h.innerHTML=''; save(); render(); toast(c?`${c} סעיפים מקבלים עכשיו כמות ממשאב מוביל`:'לא בוצעו שינויים'); };
 }
 document.getElementById('btnQchk').onclick=qChkDlg;
