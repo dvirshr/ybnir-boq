@@ -297,10 +297,12 @@ table.boq.plist{min-width:0!important;width:100%}
         <button data-lv="1">מבנה</button><button data-lv="2">פרק</button><button data-lv="3">תת-פרק</button><button data-lv="4">סעיף</button><button data-lv="5">משאב</button><button data-lv="6">מק"ט</button>
       </div>
       <input class="search" id="q" type="search" placeholder="חיפוש: תאור, קוד, מק&quot;ט, הערה">
+      <select id="qf" class="search" style="width:auto;min-width:170px" title="סינון שורות"><option value="">סינון: הכל</option></select>
       <label class="label" style="display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="showNotes"> הצג הערות</label>
       <button class="btn" id="btnAddB">+ מבנה</button>
       <button class="btn" id="btnTrash" title="שחזור שורות שנמחקו">סל מחזור</button>
-      <button class="btn" id="btnQchk" title="סעיפים בלי כמות / כמות סעיף שונה מהמשאב">בדיקת כמויות</button>
+      <button class="btn" id="btnQchk" title="סעיפים בלי כמות / כמות סעיף שונה מהמשאב – בחירת משאב מוביל ★">כמות סעיף ★</button>
+      <button class="btn" id="btnQC" title="בקרת כמויות: שאיבה מול בטון, ריצוף מול שטח, פחת, יחידות, סעיפים בלי עלות">בקרה</button>
       <button class="btn" id="btnSugg" hidden>הצעת משאבים לסעיפים</button>
       <span id="suggState"></span>
     </div>
@@ -586,10 +588,25 @@ const caretSvg='<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="tru
 function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 function selfMatch(n){ const q=query.toLowerCase(); return [n.code,nodeName(n),n.note||'',wVal(n)?'פחת':''].join(' ').toLowerCase().includes(q); }
-function matches(n){
-  if(!query) return true;
-  return selfMatch(n) || (n.ch||[]).some(matches);
+let qf='';
+const QF={noq:'סעיפים ללא כמות',nop:'סעיפים ללא מחיר (0 ₪)',resnop:'משאבים / מק"טים ללא מחיר',w:'שורות עם פחת',lead:'סעיפים עם משאב מוביל ★'};
+function fMatch(n){
+  if(qf==='noq') return n.t==='i'&&!(secQty(n)>0);
+  if(qf==='nop') return n.t==='i'&&!total(n);
+  if(qf==='resnop'){ if(!(n.t==='k'||(n.t==='r'&&!hasItems(n)))) return false; const q=n.t==='k'?kQty(n):rQty(n); const p=evalExpr(n.price); return !!q&&!p; }
+  if(qf==='w') return (n.t==='i'||n.t==='r'||n.t==='k')&&wVal(n)>0;
+  if(qf==='lead') return n.t==='i'&&!!leadOf(n);
+  return true;
 }
+const selfOK=n=>(!query||selfMatch(n))&&(!qf||fMatch(n));
+function matches(n){
+  if(!query&&!qf) return true;
+  return selfOK(n) || (n.ch||[]).some(matches);
+}
+function qfOptions(){ const sel=document.getElementById('qf'); if(!sel) return; const c={}; Object.keys(QF).forEach(k=>c[k]=0);
+  const prev=qf; walk(state.tree,n=>{ for(const k of Object.keys(QF)){ qf=k; if(fMatch(n)) c[k]++; } }); qf=prev;
+  sel.innerHTML='<option value="">סינון: הכל</option>'+Object.entries(QF).map(([k,l])=>`<option value="${k}" ${k===qf?'selected':''}>${l} (${c[k]})</option>`).join('');
+  sel.style.borderColor=qf?'#d92d20':''; sel.style.fontWeight=qf?'700':''; }
 
 function render(){
   const G=state.tree.reduce((a,n)=>a+total(n),0);
@@ -601,13 +618,15 @@ function render(){
       if(!pm && !matches(n)) continue;
       rows.push(rowHtml(n,G,parent));
       if(n.t==='i' && n.note && state.showNotes) rows.push(`<tr class="noterow"><td></td><td colspan="8">${esc(n.note)}</td></tr>`);
-      const open=!state.collapsed[n.id] || query;
-      if(n.ch && open) addRows(n.ch,n,pm||(query&&(n.t==='r'||n.t==='i')&&selfMatch(n)));
-      if(n.t!=='k' && open && !query && (n.t!=='r'||hasItems(n))) rows.push(addRowHtml(n));
+      const act=query||qf; const open=!state.collapsed[n.id] || act;
+      if(n.ch && open) addRows(n.ch,n,pm||(act&&(n.t==='r'||n.t==='i')&&selfOK(n)));
+      if(n.t!=='k' && open && !act && (n.t!=='r'||hasItems(n))) rows.push(addRowHtml(n));
     }
   };
   addRows(state.tree,null);
-  document.getElementById('tb').innerHTML = rows.join('') || '<tr><td colspan="9" class="empty">אין שורות. הוסף מבנה ראשון.</td></tr>';
+  document.getElementById('tb').innerHTML = rows.join('') || '<tr><td colspan="9" class="empty">'+((query||qf)?'אין שורות שתואמות לחיפוש / לסינון.':'אין שורות. הוסף מבנה ראשון.')+'</td></tr>';
+  if(typeof qcSoon==='function') qcSoon();
+  qfOptions();
 }
 
 function addRowHtml(n){
@@ -976,6 +995,7 @@ document.getElementById('levelSeg').onclick=e=>{
   save(); render();
 };
 document.getElementById('q').oninput=e=>{ query=e.target.value.trim(); render(); };
+document.getElementById('qf').onchange=e=>{ qf=e.target.value; render(); };
 const sn=document.getElementById('showNotes'); sn.checked=!!state.showNotes; sn.onchange=()=>{ state.showNotes=sn.checked; save(); render(); };
 const pn=document.getElementById('projName'); pn.value=state.project||''; pn.oninput=()=>{ state.project=pn.value; save(); };
 
@@ -1010,6 +1030,8 @@ function drawBody(n){
         <div class="field"><label for="d_q">כמות סעיף${leadOf(n)?' (★ מהמשאב '+esc(leadOf(n).code||'')+')':n.calc.length?' (מהפירוט)':''}</label><input id="d_q" class="mono" value="${leadOf(n)?fmtQ(secQtyNet(n)):n.calc.length?fmtQ(calcQty(n)):esc(n.qty??'')}" ${n.calc.length||leadOf(n)?'readonly':''}></div>
         <div class="field"><label for="d_w">פחת %</label><input id="d_w" class="mono" value="${esc(n.w??'')}" placeholder="0" inputmode="decimal"><div class="hint" id="d_wl" style="margin:2px 0 0"></div></div>
       </div>
+      <div class="grid2"><div class="field"><label for="d_serves">משרת מבנים (לבקרה, למשל 01,05)</label><input id="d_serves" class="mono" value="${esc(n.serves??'')}" placeholder="ריק = המבנה של הסעיף"></div>
+        <div class="field"><label style="display:flex;gap:6px;align-items:center;margin-top:22px"><input type="checkbox" id="d_isw" ${n.isW?'checked':''}> סעיף פחת (נספר כסבולת בבקרה)</label></div></div>
       <div class="field"><label for="d_sp">מחיר יחידה לסעיף (תמחור ברמת סעיף – אופציונלי)</label><input id="d_sp" class="mono" value="${esc(n.sp??'')}" placeholder="ריק = לפי משאבים"></div>
       <div class="field"><label for="d_note">הערות / מקור הכמות</label><textarea id="d_note" rows="3" style="border:1px solid var(--line);border-radius:6px;padding:7px 10px;background:var(--surface);font:inherit;color:inherit;resize:vertical">${esc(n.note||'')}</textarea></div>
       ${calcBlock(n)}
@@ -1020,7 +1042,8 @@ function drawBody(n){
       </div>
       <button class="btn" id="d_addr">+ משאב לסעיף</button>`;
     const bind=(id,k)=>document.getElementById(id).oninput=e=>{ n[k]=e.target.value; save(); updTot(n); };
-    bind('d_name','name'); bind('d_code','code'); bind('d_note','note'); bind('d_sp','sp');
+    bind('d_name','name'); bind('d_code','code'); bind('d_note','note'); bind('d_sp','sp'); bind('d_serves','serves');
+    document.getElementById('d_isw').onchange=e=>{ if(e.target.checked) n.isW=true; else delete n.isW; save(); };
     if(!n.calc.length&&!leadOf(n)) bind('d_q','qty');
     document.getElementById('d_unit').onchange=e=>{ n.unit=e.target.value; save(); };
     document.getElementById('d_addr').onclick=()=>{ const r=mk('r',{code:'',unit:'',qexpr:'',price:'',calc:[]}); n.ch.push(r); save(); openDrawer(r.id); };
@@ -1316,6 +1339,120 @@ function qChkDlg(){
     h.innerHTML=''; save(); render(); toast(c?`${c} סעיפים מקבלים עכשיו כמות ממשאב מוביל`:'לא בוצעו שינויים'); };
 }
 document.getElementById('btnQchk').onclick=qChkDlg;
+/* ---------- בקרת כמויות (שלב 1): סיווג משאבים + כללים 1, 2, 12, 13, 14 ---------- */
+const QC_CATS=['בטון','שאיבה','ברזל','טפסנות','ריצוף','חיפוי','טיח','צבע','איטום','בלוקים','אחר'];
+const QC_DEF={pumpTol:3,tileTol:10,wConc:3,wTile:10,wSteel:5,wDef:15};
+const qcSet=()=>Object.assign({},QC_DEF,state.qc||{});
+function qcAutoCat(code,name){
+  const s=String(name||'')+' '+String(code||'');
+  if(/משאב(ת|ות)\s*(חום|ביוב|ניקוז|ספרינקלר|מים|הגברת|ג'?וקי|כיבוי|טבולות|שקועות)|ספרינקלר|מתזים|ביוב|ניקוז/.test(s)) return 'אחר';
+  if(/משאב(ת|ות)\s*בטון|שאיבת\s*בטון|שכירות\s*משאב|משאבה\s*סטטית|ק\.מ\s*-\s*משאבות/.test(s)) return 'שאיבה';
+  if(/פלדת?\s*זיון|ברזל|פלדה\s*מצולעת|מצולע|רשת(ות)?\s*(פלדה|ברזל|מרותכ)|^5605/.test(s)) return 'ברזל';
+  if(/טפסנ|תבני(ת|ות)|קופסאות/.test(s)) return 'טפסנות';
+  if(/בלוק/.test(s)) return 'בלוקים';
+  if(/ריצוף|אריח|גרניט\s*פורצלן|פורצלן|קרמיק|פנלים/.test(s)) return 'ריצוף';
+  if(/חיפוי/.test(s)) return 'חיפוי';
+  if(/איטום|ביטומן|יריע/.test(s)) return 'איטום';
+  if(/טיח|שליכט|שפכטל/.test(s)) return 'טיח';
+  if(/צבע|צביעה/.test(s)) return 'צבע';
+  if(/בטון/.test(s)&&!/ק\.מ|קבלן|טרומ|ציפוי/.test(s)) return 'בטון';
+  return 'אחר';
+}
+const qcCat=x=>(state.cats&&state.cats[x.code])||qcAutoCat(x.code,nodeName(x));
+const qcQ=x=>x.t==='i'?secQty(x):x.t==='r'?rQty(x):kQty(x);
+// נפח שאיבה במ"ק לשורת שאיבה: "10 קו"ב ראשונים" = כמות × 10
+function qcPumpVol(x){ const nm=nodeName(x)||'', q=qcQ(x); if(!q||Number.isNaN(q)) return 0;
+  const m=nm.match(/(\d+)\s*(קו"?ב|מ"ק|קוב)\s*ראשונים/); if(m) return q*(+m[1]);
+  if(/נוסף|לקו"?ב|למ"ק/.test(nm)||UNORM(x.unit)==='מ"ק') return q;
+  return null; }
+function qcServes(sec,bld){ // מבנים שהסעיף משרת: שדה "משרת מבנים", או מהשם ("מבנים 01 + 05"), אחרת המבנה שלו
+  const raw=String(sec.serves||'').trim(); let L=raw?raw.split(/[^0-9]+/).filter(Boolean):[];
+  if(!L.length){ const m=(sec.name||'').match(/מבנ(ה|ים)\s*([0-9]{2}(\s*[+,ו&]\s*[0-9]{2})*)/); if(m) L=m[2].split(/[^0-9]+/).filter(Boolean); }
+  return L.length?L.map(c=>c.padStart(2,'0')):[bld.code];
+}
+function qcRun(){
+  const S=qcSet(), F=[]; const add=(o)=>F.push(o);
+  const secs=[]; walk(state.tree,(n,p)=>{ if(n.t==='i') secs.push({n,b:p[0],p}); });
+  // ---- כלל 1: שאיבה ≤ בטון (לפי קבוצת מבנים) ----
+  const conc={}, concSrc={}, allow={}; const pumps=[]; const unq=[];
+  for(const {n,b} of secs){
+    const nm=n.name||''; const isPumpSec=/משאב(ת|ות)?\s*בטון|שאיבת?\s*בטון|משאבה\s*סטטית/.test(nm);
+    if(!isPumpSec&&UNORM(n.unit)==='מ"ק'&&(/בטון|רפסוד|יסוד|קיר|תקר|רצפ|עמוד|קור|כלונס/.test(nm)||(n.code||'').startsWith('02'))&&!/חפיר|מילוי|מצע|עפר|סומסום/.test(nm)){
+      const q=secQty(n)||0; conc[b.code]=(conc[b.code]||0)+q; (concSrc[b.code]=concSrc[b.code]||[]).push({id:n.id,code:n.code,name:nm,q}); }
+    if(n.isW&&UNORM(n.unit)==='מ"ק') allow[b.code]=(allow[b.code]||0)+(secQty(n)||0);
+    walk(n.ch,(x)=>{ if(x.t!=='r'&&x.t!=='k') return;
+      if(/פחת/.test(nodeName(x)||'')&&/בטון/.test(nodeName(x)||'')&&UNORM(x.unit)==='מ"ק'){ allow[b.code]=(allow[b.code]||0)+(qcQ(x)||0); return; }
+      if(qcCat(x)!=='שאיבה') return; if(x.t==='r'&&hasItems(x)) return;
+      const v=qcPumpVol(x); if(v===null){ if(qcQ(x)) unq.push({x,n,b}); return; }
+      pumps.push({x,n,b,v,serves:qcServes(n,b)}); });
+  }
+  const groups={}; for(const pm of pumps){ const k=pm.serves.slice().sort().join('+'); (groups[k]=groups[k]||{bl:pm.serves.slice().sort(),items:[]}).items.push(pm); }
+  for(const [k,g] of Object.entries(groups)){
+    const pv=g.items.reduce((a,x)=>a+x.v,0), cv=g.bl.reduce((a,c)=>a+(conc[c]||0),0), al=g.bl.reduce((a,c)=>a+(allow[c]||0),0);
+    const lim=cv*(1+S.pumpTol/100)+al;
+    const src=g.items.map(x=>({id:x.x.id,t:`${x.b.code} · ${x.n.code} · ${(nodeName(x.x)||'').slice(0,36)}: ${fmtQ(x.v)} מ"ק`}));
+    const csrc=g.bl.map(c=>({id:(concSrc[c]&&concSrc[c][0]||{}).id,t:`בטון מבנה ${c}: ${fmtQ(conc[c]||0)} מ"ק (${(concSrc[c]||[]).length} סעיפים)`}));
+    if(pv>lim+0.01) add({rule:1,sev:'err',msg:`שאיבה ${fmtQ(pv)} מ"ק > בטון ${fmtQ(cv)} מ"ק${al?` + פחת ${fmtQ(al)}`:''} + ${S.pumpTol}% במבנים ${g.bl.join(' + ')}. פער ${fmtQ(pv-lim)} מ"ק`,src:src.concat(csrc),gap:pv-lim});
+    else add({rule:1,sev:'ok',msg:`מבנים ${g.bl.join(' + ')}: שאיבה ${fmtQ(pv)} ≤ בטון ${fmtQ(cv)} מ"ק (${cv?fmt(pv/cv*100,0):'—'}%)`,src:src.concat(csrc)});
+  }
+  for(const u of unq) add({rule:1,sev:'info',msg:`שורת שאיבה בלי נפח במ"ק – לא נכללה בהשוואה: ${u.n.code} · ${(nodeName(u.x)||'').slice(0,40)} (${fmtQ(qcQ(u.x))} ${u.x.unit||''})`,src:[{id:u.x.id,t:u.b.code+' · '+u.n.code}]});
+  // ---- כלל 2: ריצוף / חיפוי – שורת מ"ר לא גדולה משטח הסעיף + פחת ----
+  for(const {n,b} of secs){ const nm=n.name||''; if(UNORM(n.unit)!=='מ"ר'||!/ריצוף|חיפוי|אריח|פורצלן|קרמיק/.test(nm)) continue; const q=secQty(n); if(!q) continue;
+    walk(n.ch,(x)=>{ if(x.t!=='r'&&x.t!=='k') return; if(x.t==='r'&&hasItems(x)) return; if(UNORM(x.unit)!=='מ"ר') return; const c=qcCat(x); if(c!=='ריצוף'&&c!=='חיפוי') return;
+      const xq=qcQ(x); if(xq>q*(1+S.tileTol/100)+0.01) add({rule:2,sev:'err',msg:`${b.code} · ${n.code}: ${(nodeName(x)||'').slice(0,40)} ${fmtQ(xq)} מ"ר > שטח הסעיף ${fmtQ(q)} מ"ר + ${S.tileTol}%. פער ${fmtQ(xq-q*(1+S.tileTol/100))} מ"ר`,src:[{id:x.id,t:'שורה'},{id:n.id,t:'סעיף'}],gap:xq-q});
+      else if(xq&&xq<q*0.98) add({rule:2,sev:'warn',msg:`${b.code} · ${n.code}: ${(nodeName(x)||'').slice(0,40)} ${fmtQ(xq)} מ"ר < שטח הסעיף ${fmtQ(q)} מ"ר – חסר?`,src:[{id:x.id,t:'שורה'},{id:n.id,t:'סעיף'}]}); }); }
+  // ---- כלל 12: סעיף עם כמות ובלי עלות / עלות בלי כמות ----
+  for(const {n,b} of secs){ const q=secQty(n), t=total(n);
+    if(q&&!Number.isNaN(q)&&!t) add({rule:12,sev:'warn',msg:`${b.code} · ${n.code} ${(n.name||'').slice(0,50)}: כמות ${fmtQ(q)} ${n.unit||''} – עלות 0 ₪`,src:[{id:n.id,t:'סעיף'}]});
+    else if(t&&(!q||Number.isNaN(q))) add({rule:12,sev:'warn',msg:`${b.code} · ${n.code} ${(n.name||'').slice(0,50)}: עלות ${fmt(t)} ₪ – בלי כמות (אין מחיר יחידה)`,src:[{id:n.id,t:'סעיף'}]}); }
+  // ---- כלל 13: יחידת סעיף ≠ יחידת המוביל ----
+  for(const {n,b} of secs){ const ld=leadOf(n); if(ld&&n.unit&&ld.unit&&UNORM(n.unit)!==UNORM(ld.unit)) add({rule:13,sev:'warn',msg:`${b.code} · ${n.code}: יחידת הסעיף ${n.unit} ≠ יחידת המוביל ★ ${ld.code||''} (${ld.unit})`,src:[{id:n.id,t:'סעיף'},{id:ld.id,t:'מוביל'}]}); }
+  // ---- כלל 14: פחת כפול / פחת מעל הסף ----
+  const thr=c=>c==='בטון'||c==='שאיבה'?S.wConc:(c==='ריצוף'||c==='חיפוי')?S.wTile:c==='ברזל'?S.wSteel:S.wDef;
+  for(const {n,b} of secs){ const ld=leadOf(n);
+    if(ld&&wVal(n)&&wVal(ld)) add({rule:14,sev:'err',msg:`${b.code} · ${n.code}: פחת כפול – ${fmt(wVal(n),1)}% בסעיף + ${fmt(wVal(ld),1)}% במוביל ★ ${ld.code||''}`,src:[{id:n.id,t:'סעיף'},{id:ld.id,t:'מוביל'}]});
+    const chk=(x,c)=>{ const w=wVal(x); if(w&&w>thr(c)) add({rule:14,sev:'warn',msg:`${b.code} · ${n.code}${x===n?'':' · '+(x.code||'')}: פחת ${fmt(w,1)}% מעל הסף ל${c} (${thr(c)}%)`,src:[{id:x.id,t:x===n?'סעיף':'שורה'}]}); };
+    chk(n,ld?qcCat(ld):qcAutoCat('',n.name)); walk(n.ch,x=>{ if(x.t==='r'||x.t==='k') chk(x,qcCat(x)); }); }
+  return F;
+}
+const QC_RULES={1:'שאיבה ≤ בטון',2:'ריצוף / חיפוי מול שטח',12:'סעיף בלי עלות / בלי כמות',13:'יחידות סעיף ↔ מוביל',14:'פחת'};
+function qcGo(id){ const f=find(+id); if(!f) return; f.path.forEach(p=>state.collapsed[p.id]=false); if(query){ query=''; const q=document.getElementById('q'); if(q) q.value=''; }
+  document.getElementById('printDlgHost').innerHTML=''; render();
+  setTimeout(()=>{ const tr=document.querySelector(`tr[data-id="${f.n.id}"]`); if(tr){ tr.scrollIntoView({block:'center'}); tr.style.outline='2px solid #d92d20'; setTimeout(()=>tr.style.outline='',3000); } },60); }
+function qcBadge(){ const b=document.getElementById('btnQC'); if(!b) return; try{ const F=qcRun().filter(x=>x.rule!==12); const e=F.filter(x=>x.sev==='err').length, w=F.filter(x=>x.sev==='warn').length; b.innerHTML='בקרה'+(e?` <span class="pill" style="background:#d92d20;color:#fff">${e}</span>`:'')+(w?` <span class="pill" style="background:#f79009;color:#fff">${w}</span>`:''); }catch(e){ b.textContent='בקרה'; } }
+let qcT=null; function qcSoon(){ clearTimeout(qcT); qcT=setTimeout(qcBadge,900); }
+function qcDlg(tab){
+  tab=tab||'f'; const h=document.getElementById('printDlgHost'); const S=qcSet();
+  const SEV={err:['#d92d20','חריגה'],warn:['#f79009','לבדיקה'],info:['#667085','מידע'],ok:['#12b76a','תקין']};
+  let body='';
+  if(tab==='f'){ const F=qcRun(); const by={}; F.forEach(x=>(by[x.rule]=by[x.rule]||[]).push(x));
+    body=Object.keys(QC_RULES).map(r=>{ const L=(by[r]||[]).sort((a,b)=>['err','warn','info','ok'].indexOf(a.sev)-['err','warn','info','ok'].indexOf(b.sev)); const e=L.filter(x=>x.sev==='err').length, w=L.filter(x=>x.sev==='warn').length;
+      return `<details ${e||(w&&r!=='12')?'open':''} style="margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:6px 10px"><summary style="cursor:pointer;font-weight:700">${r}. ${QC_RULES[r]} <span class="hint" style="margin:0">— ${e?`<b style="color:#d92d20">${e} חריגות</b> · `:''}${w?`<b style="color:#b54708">${w} לבדיקה</b> · `:''}${L.length?L.length+' שורות':'אין ממצאים ✓'}</span></summary>
+        ${L.map(x=>`<div style="padding:5px 0;border-top:1px solid var(--line)"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${SEV[x.sev][0]};margin-inline-end:6px" title="${SEV[x.sev][1]}"></span>${esc(x.msg)}
+          ${(x.src||[]).filter(s=>s.id).length?`<div style="margin:3px 18px 0;display:flex;flex-wrap:wrap;gap:4px">${x.src.filter(s=>s.id).map(s=>`<button class="ib" data-go="${s.id}" style="font-size:11px;border:1px solid var(--line);border-radius:6px;padding:1px 6px">${esc(s.t)}</button>`).join('')}</div>`:''}</div>`).join('')}</details>`; }).join('');
+    body+=`<div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px;align-items:center"><span class="label">ספים:</span>${[['pumpTol','שאיבה מעל בטון %'],['tileTol','ריצוף מעל שטח %'],['wConc','פחת בטון %'],['wTile','פחת ריצוף %'],['wSteel','פחת ברזל %'],['wDef','פחת אחר %']].map(([k,l])=>`<label class="hint" style="margin:0;display:inline-flex;gap:4px;align-items:center">${l}<input data-qs="${k}" value="${S[k]}" style="width:46px;border:1px solid var(--line);border-radius:6px;padding:2px 4px" inputmode="decimal"></label>`).join('')}</div>
+      <p class="hint" style="margin:6px 0 0">כלל 1 משווה לפי קבוצת מבנים: סעיף שאיבה משויך למבנים שבשדה "משרת מבנים" בטופס הסעיף, או לפי השם ("מבנים 01 + 05"), אחרת למבנה שלו. בטון = סעיפים ביחידת מ"ק (פרק 02 / "בטון" בשם). פחת בטון (סעיף מסומן "סעיף פחת" או שורה "פחת בטון") נוסף לסבולת.</p>`; }
+  else { const M=new Map(); walk(state.tree,x=>{ if((x.t==='r'||x.t==='k')&&x.code&&!M.has(x.code)) M.set(x.code,nodeName(x)||''); });
+    const rows=[...M.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+    body=`<p class="hint" style="margin:0">הסיווג האוטומטי לפי קוד ותאור. שינוי כאן חל על כל השורות עם אותו קוד בפרויקט.</p><input id="qc_f" placeholder="סינון" style="margin:6px 0;border:1px solid var(--line);border-radius:6px;padding:4px 8px;width:220px">
+      <div style="max-height:55vh;overflow:auto"><table class="boq" style="min-width:0;table-layout:auto"><thead><tr><th>קוד</th><th>תאור</th><th>אוטומטי</th><th>סיווג</th></tr></thead><tbody>${rows.map(([c,nm])=>{ const a=qcAutoCat(c,nm), o=(state.cats||{})[c]||''; return `<tr data-f="${esc((c+' '+nm).toLowerCase())}"><td class="num">${esc(c)}</td><td>${esc(nm.slice(0,60))}</td><td>${a}</td><td><select data-cat="${esc(c)}"><option value="">(אוטומטי)</option>${QC_CATS.map(k=>`<option ${o===k?'selected':''}>${k}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>`; }
+  h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="בקרת כמויות" style="width:min(1000px,100%);max-height:92vh;overflow:auto">
+    <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">בקרת כמויות</h2><div class="seg"><button data-qt="f" ${tab==='f'?'class="on" style="font-weight:700"':''}>ממצאים</button><button data-qt="c" ${tab==='c'?'class="on" style="font-weight:700"':''}>סיווג משאבים</button></div></div>
+    ${body}
+    <div class="row" style="justify-content:flex-end;margin-top:10px">${tab==='f'?'<button class="btn" id="qc_x">ייצוא לאקסל</button>':''}<button class="btn" id="qc_close">סגור</button></div></div></div>`;
+  document.getElementById('qc_close').onclick=()=>{ h.innerHTML=''; qcBadge(); };
+  h.querySelectorAll('[data-qt]').forEach(b=>b.onclick=()=>qcDlg(b.dataset.qt));
+  h.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>qcGo(b.dataset.go));
+  h.querySelectorAll('[data-qs]').forEach(i=>i.onchange=()=>{ const v=+i.value; if(!Number.isFinite(v)) return; state.qc=Object.assign({},state.qc||{},{[i.dataset.qs]:v}); save(); qcDlg('f'); });
+  h.querySelectorAll('[data-cat]').forEach(s=>s.onchange=()=>{ state.cats=state.cats||{}; if(s.value) state.cats[s.dataset.cat]=s.value; else delete state.cats[s.dataset.cat]; save(); });
+  const ff=document.getElementById('qc_f'); if(ff) ff.oninput=()=>{ const v=ff.value.toLowerCase(); h.querySelectorAll('tr[data-f]').forEach(tr=>tr.hidden=!!v&&!tr.dataset.f.includes(v)); };
+  const qx=document.getElementById('qc_x'); if(qx) qx.onclick=()=>{ if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; }
+    const F=qcRun(); const SV={err:'חריגה',warn:'לבדיקה',info:'מידע',ok:'תקין'};
+    const ws=XLSX.utils.json_to_sheet(F.map(x=>({'כלל':x.rule+'. '+QC_RULES[x.rule],'חומרה':SV[x.sev],'ממצא':x.msg,'מקור':(x.src||[]).map(s=>s.t).join(' | ')}))); ws['!cols']=[{wch:24},{wch:8},{wch:100},{wch:80}];
+    const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'בקרה'); XLSX.writeFile(wb,`בקרת כמויות ${state.project||''} ${new Date().toLocaleDateString('he-IL').replace(/\./g,'-')}.xlsx`); };
+}
+document.getElementById('btnQC').onclick=()=>qcDlg('f');
+
 function toastUndo(m){ const h=document.getElementById('toastHost'); h.innerHTML=`<div class="toast" role="status">${esc(m)} <button class="btn small" id="undoDel" style="margin-inline-start:8px">בטל</button></div>`; document.getElementById('undoDel').onclick=()=>{ restoreTrash(0); }; clearTimeout(toastT); toastT=setTimeout(()=>h.innerHTML='',6000); }
 let toastT; function toast(m){ const h=document.getElementById('toastHost'); h.innerHTML=`<div class="toast" role="status">${esc(m)}</div>`; clearTimeout(toastT); toastT=setTimeout(()=>h.innerHTML='',2800); }
 
@@ -2119,8 +2256,8 @@ function cacheLocal(dirty){ if(CUR) lsSet('ybnir-boq-cloud-'+CUR.id, JSON.string
 function scheduleCloud(){ if(!CUR) return; if(ME&&ME.role==='viewer'){ setCloud('צפייה בלבד – שינויים לא נשמרים','err'); return; } cloudDirty=true; cacheLocal(true); setCloud('ממתין לשמירה…'); clearTimeout(cloudT); cloudT=setTimeout(pushCloud,2500); }
 /* ---------- change log (diff of what was saved vs what is being saved) ---------- */
 let LOGBASE=null, LOG_OFF=false;
-const LOGF=['code','name','unit','qty','qexpr','price','sp','note','mk','lead','w'];
-const FNAME={code:'קוד',name:'תאור',unit:'יח\'',qty:'כמות',qexpr:'כמות',price:'מחיר',sp:'מחיר סעיף',note:'הערה',mk:'תוספת %',lead:'משאב מוביל (★)',w:'פחת %'};
+const LOGF=['code','name','unit','qty','qexpr','price','sp','note','mk','lead','w','serves','isW'];
+const FNAME={code:'קוד',name:'תאור',unit:'יח\'',qty:'כמות',qexpr:'כמות',price:'מחיר',sp:'מחיר סעיף',note:'הערה',mk:'תוספת %',lead:'משאב מוביל (★)',w:'פחת %',serves:'משרת מבנים',isW:'סעיף פחת'};
 function snapMap(st){ const m=new Map(); const w=(list,par,path)=>{ (list||[]).forEach((n,i)=>{ const o={t:n.t,par,idx:i,path}; for(const f of LOGF) o[f]=n[f]===undefined||n[f]===null?'':String(n[f]); if(n.t==='s'||n.t==='c'||n.t==='r') o.dn=nodeNameIn(st,n); m.set(n.id,o); w(n.ch,n.id,path?path+' › '+(n.code||''):(n.code||'')); }); }; w(st.tree,null,''); return m; }
 function nodeNameIn(st,n){ try{ if(n.t==='c') return (st.lists.chapters.find(x=>x.c===n.code)||{}).n||''; if(n.t==='s') return n.name||(st.lists.subs.find(x=>x.c===n.code)||{}).n||''; if(n.t==='r') return (st.lists.res.find(x=>x.c===n.code)||{}).n||''; }catch(e){} return ''; }
 function diffLog(a,b){
