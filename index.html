@@ -312,9 +312,9 @@ table.boq.plist{min-width:0!important;width:100%}
     <div class="tablewrap">
       <table class="boq">
         <thead><tr>
-          <th style="width:160px">קוד</th><th>תאור</th><th style="width:84px">יח'</th>
-          <th class="n" style="width:118px">כמות</th><th class="n" style="width:118px">מחיר יח'</th>
-          <th class="n" style="width:120px">סה"כ ₪</th><th class="n" style="width:52px" title="תוספת למחיר (רווח/כלליות). חלה על כל מה שמתחת, אלא אם הוגדר אחרת ברמה נמוכה יותר">תוספת %</th><th class="n" style="width:66px">% תקציב</th><th style="width:250px"></th>
+          <th style="width:150px">קוד</th><th>תאור</th><th style="width:84px">יח'</th>
+          <th class="n" style="width:132px">כמות</th><th class="n" style="width:118px">מחיר יח'</th>
+          <th class="n" style="width:120px">סה"כ ₪</th><th class="n" style="width:52px" title="תוספת למחיר (רווח/כלליות). חלה על כל מה שמתחת, אלא אם הוגדר אחרת ברמה נמוכה יותר">תוספת %</th><th class="n" style="width:80px">% תקציב</th><th style="width:250px"></th>
         </tr></thead>
         <tbody id="tb"></tbody>
       </table>
@@ -590,7 +590,7 @@ function total(n){
 }
 function rUnitCost(r){ if(!hasItems(r)) return evalExpr(r.price)||0; const q=rQty(r); return q&&!Number.isNaN(q)?total(r)/q:total(r); }
 const fmt = (v,d=0)=> (v===null||v===undefined||Number.isNaN(v)) ? '' : v.toLocaleString('he-IL',{minimumFractionDigits:d,maximumFractionDigits:d});
-const fmtQ = v => Number.isNaN(v)?'שגיאה':v.toLocaleString('he-IL',{maximumFractionDigits:3});
+const fmtQ = v => Number.isNaN(v)?'שגיאה':v.toLocaleString('he-IL',{maximumFractionDigits:2});
 
 /* ---------- tree helpers ---------- */
 function walk(list, fn, path=[]){ for(const n of list){ fn(n,path); if(n.ch) walk(n.ch,fn,[...path,n]); } }
@@ -700,7 +700,7 @@ function rowHtml(n,G){
   const L=LV[n.t]; const t=total(n);
   const OL=OHC&&['b','c','s','i'].includes(n.t); const tl=OL?ohTot(n):t; const inOH=OL&&ohInOHB(n);
   const pct=G?tl/G*100:0;
-  const share=`<td class="n"><div class="share"><span class="num">${pct?fmt(pct,1)+'%':''}</span>${pct?`<i style="width:${Math.max(2,Math.min(60,pct*0.6))}px"></i>`:''}</div></td>`;
+  const share=`<td class="n"><div class="share"><span class="num">${pct?fmt(pct,1)+'%':''}</span>${pct?`<i style="width:${Math.max(2,Math.min(22,pct*0.5))}px"></i>`:''}</div></td>`;
   let unit='<td></td>',qty='<td></td>',price='<td></td>';
   if(n.t==='i'){
     unit=`<td><select class="cell-in w-unit" data-f="unit" data-id="${n.id}"><option value=""></option>${UNITS.map(u=>`<option ${u===n.unit?'selected':''}>${esc(u)}</option>`).join('')}${n.unit&&!UNITS.includes(n.unit)?`<option selected>${esc(n.unit)}</option>`:''}</select></td>`;
