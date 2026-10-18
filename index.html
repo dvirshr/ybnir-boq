@@ -845,6 +845,8 @@ function moveSection(n,subCode,bld,keepCode){
 (function(){ const t=document.querySelector('.top'); if(!t) return; const set=()=>document.documentElement.style.setProperty('--toph',Math.ceil(t.getBoundingClientRect().height)+'px'); set(); if(window.ResizeObserver) new ResizeObserver(set).observe(t); window.addEventListener('resize',set); })();
 let CLIP=null; try{ CLIP=JSON.parse(localStorage.getItem('ybnir-boq-clip')||'null'); if(CLIP&&!CLIP.nodes) CLIP.nodes=[CLIP.node]; }catch(e){}
 function setClip(c){ CLIP=c; try{ c?localStorage.setItem('ybnir-boq-clip',JSON.stringify(c)):localStorage.removeItem('ybnir-boq-clip'); }catch(e){} updClipBar(); }
+// סנכרון לוח העתקה בין טאבים: העתקה בפרויקט אחד – הדבקה בפרויקט בטאב אחר
+window.addEventListener('storage',e=>{ if(e.key!=='ybnir-boq-clip') return; try{ CLIP=JSON.parse(e.newValue||'null'); if(CLIP&&!CLIP.nodes) CLIP.nodes=[CLIP.node]; }catch(_){ CLIP=null; } updClipBar(); render(); });
 function updClipBar(){ let b=document.getElementById('clipBar'); if(!b){ b=document.createElement('div'); b.id='clipBar'; b.style.cssText='position:fixed;bottom:14px;inset-inline-start:14px;z-index:50;background:var(--lv1);color:var(--lv1-ink);padding:8px 12px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.25);font-size:13px;display:flex;gap:8px;align-items:center'; document.body.appendChild(b); }
   if(!CLIP){ b.hidden=true; return; } b.hidden=false;
   const N=CLIP.nodes.length;
