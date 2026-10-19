@@ -1593,7 +1593,7 @@ document.addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('#f
 
 /* ---------- ריכוזי כמויות לפי נושא (בטון, ברזל, טפסנות...) – להדפסה ולאקסל ---------- */
 function sumTopicSec(n,ch){ const nm=n.name||'', u=UNORM(n.unit);
-  if(u==='מ"ק'&&(ch==='02'||/בטון/.test(nm))&&!/משאב|שאיב|חפיר|מילוי|מצע|עפר|סומסום|פחת|מבלוק|בלוקי\s*בטון|אדמת\s*גן/.test(nm)) return 'בטון';
+  if(u==='מ"ק'&&(ch==='02'||/בטון/.test(nm))&&!/משאב|שאיב|פחת|מבלוק|בלוקי\s*בטון|אדמת\s*גן/.test(nm)&&!(/חפיר|מילוי|מצע|עפר|סומסום/.test(nm)&&!/בטון|ב-?\s*\d{2}\b|מזוין/.test(nm))) return 'בטון'; // "על מצע" בסעיף בטון (ב-30) = בטון
   if((u==='טון'||/ק"?ג/.test(u))&&/זיון|ברזל|פלדה\s*מצולעת|רשת/.test(nm)) return 'ברזל';
   const c=qcAutoCat(n.code,nm); return c==='בטון'?'אחר':c; }
 function sumCollect(){
