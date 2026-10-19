@@ -2528,8 +2528,13 @@ $('btnEditImp').onclick=()=>$('fileEditImp').click();
 $('fileEditImp').onchange=async e=>{
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
   try{ const wb=XLSX.read(await f.arrayBuffer());
-    const we=wb.Sheets['כתב כמויות']; if(we&&we['N1']&&String(we['N1'].v).trim()==='הערות'&&we['M1']&&/הערות מערכת/.test(String(we['M1'].v))){ // קובץ "ייצוא לאפי"
-      const rows=XLSX.utils.sheet_to_json(we,{defval:'',raw:true}); rows.forEach(r=>{ const c=we['K'+(r.__rowNum__+1)]; r.__Kf=!c||!!c.f; });
+    // קובץ "ייצוא לאפי": מחפשים גיליון עם כותרת "מזהה" + "הערות מערכת" באחת מ-10 השורות הראשונות (גם אם נוספה שורת כותרת מעל)
+    let we=null, hr=0;
+    for(const sn of ['כתב כמויות',...wb.SheetNames]){ const w=wb.Sheets[sn]; if(!w||!w['!ref']) continue; const R=XLSX.utils.decode_range(w['!ref']);
+      for(let r=R.s.r;r<=Math.min(R.s.r+9,R.e.r);r++){ const vals=[]; for(let c=R.s.c;c<=R.e.c;c++){ const x=w[XLSX.utils.encode_cell({r,c})]; vals.push(x?String(x.v).trim():''); }
+        if(vals.includes('מזהה')&&vals.includes('הערות מערכת')&&vals.includes('הערות')){ we=w; hr=r; break; } } if(we) break; }
+    if(we){
+      const rows=XLSX.utils.sheet_to_json(we,{defval:'',raw:true,range:hr}); rows.forEach(r=>{ const c=we['K'+(r.__rowNum__+1)]; r.__Kf=!c||!!c.f; });
       if(rows.some(r=>/\(מועמס\)/.test(String(r['תאור סעיף']||'')))){ toast('זה קובץ עם מחירים מועמסים – לא ניתן לטעון ממנו מחירים. ייצא לאפי בלי העמסה ועבוד עליו'); return; }
       editImportPreview(rows,f.name,effiPlan(rows)); return; }
     const ws=wb.Sheets['עריכה']||wb.Sheets[wb.SheetNames[0]];
@@ -2612,7 +2617,7 @@ function effiPlan(rows){
   const idMap={}; walk(state.tree,(n,p)=>{ if(n.t==='i') idMap[n.id]={n,p}; });
   const S=v=>String(v??'').trim(); const N=v=>{ const t=String(v??'').replace(/,/g,'').trim(); if(t==='') return null; const x=+t; return Number.isFinite(x)?x:null; };
   const ops=[], warn=[]; let inFin=false; const today=new Date().toLocaleDateString('he-IL'); const FR=finRows(); let seen=0;
-  rows.forEach((r,ix)=>{ const line=ix+2, id=+S(r['מזהה'])||0, name=S(r['תאור סעיף']);
+  rows.forEach((r,ix)=>{ const line=r.__rowNum__!=null?r.__rowNum__+1:ix+2, id=+S(r['מזהה'])||0, name=S(r['תאור סעיף']);
     if(!id&&/^סה"כ כתב כמויות/.test(name)){ inFin=true; return; }
     if(!id&&/^סה"כ/.test(name)) return;
     if(inFin){ const f=FR.find(x=>x.name===name); if(f){ const v=N(r["מחיר יח'"]); if(v!==null&&Math.abs(v-(+f.pct||0))>1e-9) ops.push({k:'fin',fk:f.k,v,line,txt:`${f.name}: ${f.pct||0}% → ${v}%`}); } else if(name) warn.push(`שורה ${line}: "${name}" אחרי הסה"כ – לא מזוהה כעלות כלכלית, דולגה`); return; }
@@ -2626,13 +2631,26 @@ function effiPlan(rows){
     if(S(r['קוד סעיף'])&&S(r['קוד סעיף'])!==(n.code||'')) ch.code=S(r['קוד סעיף']);
     if(name&&name!==(n.name||'').trim()) ch.name=name;
     const u=normUnit(S(r["יח'"])); if(u!==(n.unit||'')) ch.unit=u;
+    // פחת: מספר = פחת סעיף %. טקסט "סעיף 3% · 4-0012 5%" = פחת סעיף + פחת משאב/מק"ט לפי קוד. ריק = בלי פחת
+    const wRaw=S(r['פחת']); let wNew=wVal(n);
+    { const cur=[]; if(wVal(n)) cur.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) cur.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); });
+      if(wRaw!==cur.join(' · ')){
+        const tok=wRaw===''?[]:(N(wRaw)!==null?[['סעיף',N(wRaw)]]:wRaw.split(/\s*[·|;,]\s*/).map(t=>{ const m=t.match(/^(.*?)\s*([\d.]+)\s*%?$/); return m?[m[1].trim()||'סעיף',+m[2]]:null; }).filter(Boolean));
+        const want=new Map(tok); const sw=want.has('סעיף')?want.get('סעיף'):0;
+        if(Math.abs(sw-(wVal(n)||0))>1e-9){ ch.w=sw?String(sw):''; wNew=sw; }
+        const kids=[]; walk(n.ch,x=>{ if(x.t==='r'||x.t==='k') kids.push(x); });
+        for(const [k,v] of want){ if(k==='סעיף') continue; const x=kids.find(y=>(y.code||'')===k||(nodeName(y)||'')===k);
+          if(!x){ warn.push(`שורה ${line}: ${n.code} – פחת "${k} ${v}%": לא נמצא משאב/מק"ט בקוד הזה בסעיף – לא עודכן`); continue; }
+          if(Math.abs((wVal(x)||0)-v)>1e-9) ops.push({k:'upd',n:x,ch:{w:String(v)},line,txt:`${x.t==='r'?'משאב':'מק"ט'} ${x.code} בסעיף ${n.code}: פחת → ${v}%`}); }
+        for(const x of kids){ const nm=x.code||nodeName(x)||'שורה'; if(wVal(x)&&!want.has(nm)) ops.push({k:'upd',n:x,ch:{w:''},line,txt:`${x.t==='r'?'משאב':'מק"ט'} ${x.code} בסעיף ${n.code}: פחת הוסר`}); }
+      } }
     const q0=secQty(n), q1=N(r['כמות']);
     let qNew=q0;
     if(q1!==null&&Math.abs(R2(q1)-R2(q0))>0.005){
       if(isPct(n)) warn.push(`שורה ${line}: ${n.code} – סעיף אחוז, הכמות היא בסיס מחושב – לא עודכנה`);
       else if(leadOf(n)) warn.push(`שורה ${line}: ${n.code} – הכמות נלקחת ממשאב מוביל ★ – לא עודכנה (לשנות במשאב)`);
       else if(n.calc&&n.calc.length) warn.push(`שורה ${line}: ${n.code} – כמות מחושבת מפירוט – לא עודכנה (${fmtQ(q0)} → ${fmtQ(q1)})`);
-      else { const w=wVal(n); ch.qty=String(R2(w?q1/(1+w/100):q1)); qNew=q1; if(w) warn.push(`שורה ${line}: ${n.code} – הכמות בקובץ כוללת פחת ${fmt(w,1)}%, נשמרה נטו ${ch.qty}`); } }
+      else { const w=wNew; ch.qty=String(R2(q1)); qNew=w?q1*(1+w/100):q1; if(w) warn.push(`שורה ${line}: ${n.code} – הכמות שהוקלדה ${fmtQ(q1)} נשמרה כנטו, והפחת ${fmt(w,1)}% מתווסף עליה = ${fmtQ(qNew)}`); } }
     // מחיר: הקלדת מחיר שונה מהמחושב = תמחור ברמת סעיף. הקלדת סה"כ במקום הנוסחה = מחיר = סה"כ ÷ כמות
     const t0=total(n), up0=q0?t0/q0:0; let p1=N(r["מחיר יח'"]); const k1=N(r['סה"כ']);
     if(!r.__Kf&&k1!==null&&Math.abs(k1-(p1||0)*(q1||0))>0.5&&q1){ p1=k1/q1; warn.push(`שורה ${line}: ${n.code} – הוקלד סה"כ ${fmt(k1)} במקום הנוסחה – נגזר מחיר יח' ${fmt(p1,2)}`); }
@@ -2641,7 +2659,7 @@ function effiPlan(rows){
     if(sn!==note.trim()&&sn) note=sn;
     if(rev&&!note.includes(rev)) note=(note?note+' | ':'')+`אפי (${today}): ${rev}`;
     if(note!==(n.note||'')) ch.note=note;
-    if(Object.keys(ch).length) ops.push({k:'upd',n,ch,line,txt:`סעיף ${n.code}: `+Object.entries(ch).map(([k,v])=>({code:'קוד',name:'תאור',unit:"יח'",qty:'כמות',note:'הערה',sp:'מחיר סעיף'}[k]||k)+' → '+String(v).slice(0,60)).join(' · ')});
+    if(Object.keys(ch).length) ops.push({k:'upd',n,ch,line,txt:`סעיף ${n.code}: `+Object.entries(ch).map(([k,v])=>({code:'קוד',name:'תאור',unit:"יח'",qty:'כמות',note:'הערה',sp:'מחיר סעיף',w:'פחת %'}[k]||k)+' → '+String(v).slice(0,60)).join(' · ')});
   });
   const total0=Object.keys(idMap).length; if(seen<total0) warn.unshift(`${total0-seen} סעיפים לא מופיעים בקובץ (סוננו או נמחקו) – לא נמחקים מהמערכת`);
   return {ops,warn,gone:[]};
