@@ -1609,7 +1609,7 @@ function sumDlg(){
   const h=document.getElementById('printDlgHost'); const sel=new Set(state.sumSel||['בטון','ברזל']);
   h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="ריכוזי כמויות" style="width:min(720px,100%)">
     <h2 style="margin:0 0 6px">ריכוזי כמויות לפי נושא</h2><p class="hint" style="margin:0 0 8px">ריכוז נקי לבקרה עצמית: כל הסעיפים (או שורות הרכש) של הנושא, לפי מבנה, עם סיכום לכל יחידה. הסיווג לפי תאור/קוד – אפשר לתקן בחלון "בקרה" ← סיווג משאבים.</p>
-    <table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><thead><tr><th></th><th>נושא</th><th>סעיפים</th><th>משאבים / מק"טים (רכש)</th></tr></thead><tbody>
+    <table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><thead><tr><th></th><th>נושא</th><th>סעיפים (כולל פחת)</th><th>משאבים / מק"טים – רכש (כולל פחת)</th></tr></thead><tbody>
     ${topics.map(t=>`<tr><td><input type="checkbox" data-st="${t}" ${sel.has(t)?'checked':''}></td><td><b>${t}</b></td><td class="num">${D.S[t]?D.S[t].length+' · '+sumByUnit(D.S[t]):'—'}</td><td class="num">${D.R[t]?D.R[t].length+' · '+sumByUnit(D.R[t]):'—'}</td></tr>`).join('')}</tbody></table>
     <div class="row" style="gap:14px;margin-top:10px;flex-wrap:wrap;align-items:center">
       <label>מקור <select id="s_src" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px"><option value="sec">סעיפים</option><option value="res">משאבים / מק"טים</option><option value="both">שניהם</option></select></label>
@@ -1622,41 +1622,41 @@ function sumDlg(){
   document.getElementById('s_x').onclick=()=>{ const o=opts(); if(!o.ts.length){ toast('בחר נושא'); return; } sumExcel(D,o); };
 }
 function sumGroups(L){ const g=new Map(); L.forEach(r=>{ const k=r.b.code||''; if(!g.has(k)) g.set(k,{b:r.b,rows:[]}); g.get(k).rows.push(r); }); return [...g.values()].sort((a,b)=>String(a.b.code).localeCompare(String(b.b.code),undefined,{numeric:true})); }
-function sumUnitTot(L){ const m={}; L.forEach(r=>{ const u=r.u||'—'; m[u]=m[u]||{q:0,t:0,n:0}; m[u].q+=r.q; m[u].t+=r.t; m[u].n++; }); return m; }
+function sumUnitTot(L){ const m={}; L.forEach(r=>{ const u=r.u||'—'; m[u]=m[u]||{q:0,net:0,t:0,n:0}; m[u].q+=r.q; m[u].net+=(r.net!=null?r.net:r.q); m[u].t+=r.t; m[u].n++; }); return m; }
 function sumPrint(D,o){
   const parts=[]; const d=new Date().toLocaleDateString('he-IL');
   o.ts.forEach((t,ti)=>{
     for(const kind of (o.src==='both'?['sec','res']:[o.src])){
       const L=(kind==='sec'?D.S[t]:D.R[t])||[]; if(!L.length) continue;
-      const cols=kind==='sec'?['קוד','תאור סעיף',"יח'",'כמות','פחת']:['סעיף','קוד','משאב / מק"ט',"יח'",'כמות'];
+      const cols=kind==='sec'?['קוד','תאור סעיף',"יח'",'כמות נטו','פחת %','כמות כולל פחת']:['סעיף','קוד','משאב / מק"ט',"יח'",'פחת שורה %','כמות כולל פחת'];
       const rows=[];
-      const totRow=(cls,label,v)=>kind==='sec'?`<tr class="${cls}"><td colspan="3">${label}</td><td class="n">${fmtQ(v.q)}</td><td></td>${o.cost?`<td class="n">${fmt(v.t)}</td>`:''}</tr>`:`<tr class="${cls}"><td colspan="4">${label}</td><td class="n">${fmtQ(v.q)}</td>${o.cost?`<td class="n">${fmt(v.t)}</td>`:''}</tr>`;
+      const totRow=(cls,label,v)=>kind==='sec'?`<tr class="${cls}"><td colspan="3">${label}</td><td class="n">${fmtQ(v.net)}</td><td class="n">${v.net?fmt((v.q/v.net-1)*100,1)+'%':''}</td><td class="n">${fmtQ(v.q)}</td>${o.cost?`<td class="n">${fmt(v.t)}</td>`:''}</tr>`:`<tr class="${cls}"><td colspan="5">${label}</td><td class="n">${fmtQ(v.q)}</td>${o.cost?`<td class="n">${fmt(v.t)}</td>`:''}</tr>`;
       for(const g of sumGroups(L)){
         rows.push(`<tr class="P1"><td colspan="${cols.length+(o.cost?1:0)}">מבנה ${esc(g.b.code||'')} ${esc(g.b.name||'')}</td></tr>`);
         g.rows.sort((a,b)=>String(kind==='sec'?a.n.code:a.sec.code).localeCompare(String(kind==='sec'?b.n.code:b.sec.code),undefined,{numeric:true}));
         for(const r of g.rows){ const cost=o.cost?`<td class="n">${fmt(r.t)}</td>`:'';
-          rows.push(kind==='sec'?`<tr><td class="code">${esc(r.n.code||'')}</td><td>${esc(r.n.name||'')}</td><td>${esc(r.u||'')}</td><td class="n">${fmtQ(r.q)}</td><td class="n">${r.w?fmt(r.w,1)+'% (נטו '+fmtQ(r.net)+')':''}</td>${cost}</tr>`
-            :`<tr><td class="code">${esc(r.sec.code||'')}</td><td class="code">${esc(r.n.code||'')}</td><td>${esc(nodeName(r.n)||'')}</td><td>${esc(r.u||'')}</td><td class="n">${fmtQ(r.q)}${r.w?` <span style="font-size:9px">(כולל ${fmt(r.w,1)}%)</span>`:''}</td>${cost}</tr>`); }
+          rows.push(kind==='sec'?`<tr><td class="code">${esc(r.n.code||'')}</td><td>${esc(r.n.name||'')}</td><td>${esc(r.u||'')}</td><td class="n">${fmtQ(r.net)}</td><td class="n">${r.w?fmt(r.w,1)+'%':''}</td><td class="n">${fmtQ(r.q)}</td>${cost}</tr>`
+            :`<tr><td class="code">${esc(r.sec.code||'')}</td><td class="code">${esc(r.n.code||'')}</td><td>${esc(nodeName(r.n)||'')}</td><td>${esc(r.u||'')}</td><td class="n">${r.w?fmt(r.w,1)+'%':''}</td><td class="n">${fmtQ(r.q)}</td>${cost}</tr>`); }
         const ut=sumUnitTot(g.rows); Object.entries(ut).forEach(([u,v])=>rows.push(totRow('P3',`סה"כ מבנה ${esc(g.b.code||'')} – ${esc(u)} (${v.n} שורות)`,v)));
       }
       const ut=sumUnitTot(L); Object.entries(ut).forEach(([u,v])=>rows.push(totRow('tot',`סה"כ ${esc(t)} – ${esc(u)}`,v)));
       parts.push(`<div style="${o.page&&parts.length?'page-break-before:always;':''}margin-bottom:14px"><h2 style="font:700 14px Rubik,Arial;margin:8px 0 4px">${esc(t)} – ${kind==='sec'?'לפי סעיפים':'לפי משאבים / מק"טים'}</h2>
         <table><thead><tr>${cols.map(c=>`<th${/כמות|פחת/.test(c)?' class="n"':''}>${c}</th>`).join('')}${o.cost?'<th class="n">₪</th>':''}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`);
     } });
-  document.getElementById('printArea').innerHTML=`<h1>ריכוז כמויות${state.project?' – '+esc(state.project):''}</h1><div class="meta">${esc(o.ts.join(' · '))} · ${d}</div>${parts.join('')}`;
+  document.getElementById('printArea').innerHTML=`<h1>ריכוז כמויות${state.project?' – '+esc(state.project):''}</h1><div class="meta">${esc(o.ts.join(' · '))} · ${d}<br>סעיפים: כמות נטו, פחת הסעיף וכמות כולל פחת. שורות רכש (משאב / מק"ט): הכמות כוללת פחת – גם של הסעיף (כשהכמות מוגדרת =Q) וגם של השורה עצמה.</div>${parts.join('')}`;
   const pt=document.title; document.title=`ריכוז כמויות ${o.ts.join(' ')} ${state.project||''}`.trim(); setTimeout(()=>{ window.print(); document.title=pt; },50);
 }
 function sumExcel(D,o){
   if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; }
-  const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; const sum=[['נושא','מקור','מבנה',"יח'",'כמות','שורות','₪']];
+  const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; const sum=[['נושא','מקור','מבנה',"יח'",'כמות נטו','כמות כולל פחת','שורות','₪']];
   o.ts.forEach(t=>{ for(const kind of (o.src==='both'?['sec','res']:[o.src])){ const L=(kind==='sec'?D.S[t]:D.R[t])||[]; if(!L.length) continue;
-    const A=[kind==='sec'?['מבנה','פרק','קוד סעיף','תאור',"יח'",'כמות (כולל פחת)','פחת %','כמות נטו','₪']:['מבנה','פרק','סעיף','קוד','משאב / מק"ט',"יח'",'כמות','פחת %','₪']];
+    const A=[kind==='sec'?['מבנה','פרק','קוד סעיף','תאור',"יח'",'כמות (כולל פחת)','פחת %','כמות נטו','₪']:['מבנה','פרק','סעיף','קוד','משאב / מק"ט',"יח'",'כמות כולל פחת','פחת שורה %','₪']];
     for(const g of sumGroups(L)){ g.rows.forEach(r=>A.push(kind==='sec'?[r.b.code,r.c.code,r.n.code,r.n.name,r.n.unit,R2(r.q),r.w||null,R2(r.net),R2(r.t)]:[r.b.code,r.c.code,r.sec.code,r.n.code,nodeName(r.n),r.n.unit,R2(r.q),r.w||null,R2(r.t)]));
-      Object.entries(sumUnitTot(g.rows)).forEach(([u,v])=>sum.push([t,kind==='sec'?'סעיפים':'משאבים',g.b.code+' '+(g.b.name||''),u,R2(v.q),v.n,R2(v.t)])); }
-    Object.entries(sumUnitTot(L)).forEach(([u,v])=>sum.push([t,kind==='sec'?'סעיפים':'משאבים','סה"כ',u,R2(v.q),v.n,R2(v.t)]));
+      Object.entries(sumUnitTot(g.rows)).forEach(([u,v])=>sum.push([t,kind==='sec'?'סעיפים':'משאבים',g.b.code+' '+(g.b.name||''),u,kind==='sec'?R2(v.net):null,R2(v.q),v.n,R2(v.t)])); }
+    Object.entries(sumUnitTot(L)).forEach(([u,v])=>sum.push([t,kind==='sec'?'סעיפים':'משאבים','סה"כ',u,kind==='sec'?R2(v.net):null,R2(v.q),v.n,R2(v.t)]));
     const ws=XLSX.utils.aoa_to_sheet(A); ws['!cols']=kind==='sec'?[{wch:6},{wch:5},{wch:12},{wch:60},{wch:7},{wch:14},{wch:8},{wch:12},{wch:14}]:[{wch:6},{wch:5},{wch:12},{wch:12},{wch:44},{wch:7},{wch:14},{wch:8},{wch:14}];
     ws['!autofilter']={ref:'A1:I'+A.length}; XLSX.utils.book_append_sheet(wb,ws,(t+' '+(kind==='sec'?'סעיפים':'משאבים')).slice(0,31)); } });
-  const s=XLSX.utils.aoa_to_sheet(sum); s['!cols']=[{wch:10},{wch:9},{wch:24},{wch:7},{wch:14},{wch:7},{wch:14}]; XLSX.utils.book_append_sheet(wb,s,'סיכום'); wb.SheetNames.unshift(wb.SheetNames.pop());
+  const s=XLSX.utils.aoa_to_sheet(sum); s['!cols']=[{wch:10},{wch:9},{wch:24},{wch:7},{wch:14},{wch:14},{wch:7},{wch:14}]; XLSX.utils.book_append_sheet(wb,s,'סיכום'); wb.SheetNames.unshift(wb.SheetNames.pop());
   XLSX.writeFile(wb,`ריכוז כמויות ${o.ts.join(' ')} ${state.project||''}.xlsx`.replace(/\s+/g,' ')); toast('הקובץ יוצא');
 }
 document.getElementById('btnSum').onclick=sumDlg;
