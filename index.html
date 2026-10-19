@@ -718,7 +718,9 @@ function attDlg(id){
       ${up.length?`<tr><td colspan="4" style="font-size:12px;font-weight:600;padding-top:8px">ברמה שמעל</td></tr>`+up.map(x=>fl(x,0,false)).join(''):''}
     </tbody></table>
     ${down?`<div class="hint" style="margin:4px 0 0">ועוד ${down} מסמכים בסעיפים שמתחת</div>`:''}
-    ${can?`<div class="row" style="margin-top:10px;gap:8px;align-items:center"><label class="btn" for="at_file" style="cursor:pointer">+ צירוף קובץ (PDF / תמונה)</label><input type="file" id="at_file" multiple accept=".pdf,image/*,.xlsx,.xls,.docx,.doc,.msg,.eml" hidden><span class="hint" id="at_st" style="margin:0"></span></div>`
+    ${can?`<div class="row" style="margin-top:10px;gap:8px;align-items:center;flex-wrap:wrap"><label class="btn" for="at_file" style="cursor:pointer">+ צירוף קובץ (PDF / תמונה)</label><input type="file" id="at_file" multiple accept=".pdf,image/*,.xlsx,.xls,.docx,.doc,.msg,.eml" hidden><button class="btn" id="at_lib">🔎 קובץ קיים מהספרייה</button><span class="hint" id="at_st" style="margin:0"></span></div>
+      <div id="at_libbox" hidden style="margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:8px"><input id="at_q" placeholder="חיפוש לפי שם קובץ (כל הפרויקטים)" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit"><div id="at_res" style="max-height:240px;overflow:auto;margin-top:6px;font-size:13px"></div></div>
+      <div class="hint" id="at_use" style="margin:6px 0 0"></div>`
       :`<div class="hint" style="margin-top:8px">צירוף קבצים זמין בגרסת הענן בלבד</div>`}
     <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" id="at_c">סגור</button></div></div></div>`;
   const close=()=>{ h.innerHTML=''; render(); };
@@ -728,9 +730,22 @@ function attDlg(id){
   h.querySelectorAll('[data-frm]').forEach(x=>x.onclick=()=>{ const it=(n.files||[])[+x.dataset.frm]; if(!it||!confirm('להסיר את "'+it.name+'" מהרשימה?\nהקובץ עצמו נשמר בארכיון ולא נמחק.')) return; it.rm=new Date().toISOString(); save(); attDlg(id); });
   const fi=document.getElementById('at_file'); if(fi) fi.onchange=async()=>{ const st=document.getElementById('at_st'); const L=[...fi.files]; let ok=0;
     for(const file of L){ if(file.size>25*1024*1024){ toast(file.name+': מעל 25MB'); continue; } st.textContent=`מעלה ${file.name}…`;
-      try{ const k=await FILES.upload(n.id,file); (n.files=n.files||[]).push({k,name:file.name,size:file.size,type:file.type||'',at:new Date().toISOString(),by:FILES.who()}); ok++; }
+      try{ const u=await FILES.upload(n.id,file); if((n.files||[]).some(x=>x.k===u.k&&!x.rm)){ toast(file.name+': כבר מצורף כאן'); continue; }
+        (n.files=n.files||[]).push({k:u.k,name:file.name,size:file.size,type:file.type||'',at:new Date().toISOString(),by:FILES.who()}); ok++;
+        if(u.dup) toast(`"${file.name}" כבר קיים בספרייה${u.rec.project_name?' (מ"'+u.rec.project_name+'"'+(u.rec.created_at?', '+new Date(u.rec.created_at).toLocaleDateString('he-IL'):'')+')':''} – שויך בלי להעלות שוב`); }
       catch(e){ st.textContent=''; toast('ההעלאה נכשלה: '+e.message+(/bucket|not found|policy|row-level/i.test(e.message)?' – צריך להריץ פעם אחת את boq_supabase_files.sql':'')); } }
     if(ok){ if(!n.pb&&!(b&&!b.own)){ n.pb='q'; toast(ok+' קבצים צורפו · בסיס המחיר סומן "הצעת מחיר"'); } else toast(ok+' קבצים צורפו'); save(); attDlg(id); } };
+  if(can){
+    FILES.usage().then(u=>{ const el=document.getElementById('at_use'); if(el) el.textContent=`ספריית הקבצים: ${fmt(u.n)} קבצים · ${fmt(u.bytes/1048576,1)} MB`; }).catch(()=>{});
+    const lb=document.getElementById('at_lib'), box=document.getElementById('at_libbox'), q=document.getElementById('at_q'), res=document.getElementById('at_res'); let T=null;
+    const run=async()=>{ res.innerHTML='<span class="hint">מחפש…</span>'; try{ const L=await FILES.search(q.value.trim()); const have=new Set(liveFiles(n).map(x=>x.k));
+        res.innerHTML=L.length?L.map((r,i)=>`<div style="display:flex;gap:6px;align-items:center;padding:3px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${/pdf$/i.test(r.name||'')?'📄':'📎'} ${esc(r.name||'')}<span class="hint" style="margin:0"> · ${r.size?fmt(r.size/1024)+' KB':''} · ${esc(r.project_name||'')} · ${r.created_at?new Date(r.created_at).toLocaleDateString('he-IL'):''}</span></span><a href="#" data-fo="${esc(r.k)}" class="hint" style="margin:0">פתח</a>${have.has(r.k)?'<span class="pill">מצורף</span>':`<button class="btn small" data-lp="${i}">שייך</button>`}</div>`).join(''):'<span class="hint">לא נמצאו קבצים</span>';
+        res.querySelectorAll('[data-lp]').forEach(x=>x.onclick=()=>{ const r=L[+x.dataset.lp]; (n.files=n.files||[]).push({k:r.k,name:r.name,size:r.size,type:r.type||'',at:new Date().toISOString(),by:FILES.who(),lib:1}); if(!n.pb&&!(b&&!b.own)) n.pb='q'; save(); toast('"'+r.name+'" שויך – בלי העלאה נוספת'); attDlg(id); });
+        res.querySelectorAll('[data-fo]').forEach(a=>a.onclick=async ev=>{ ev.preventDefault(); const w=window.open('about:blank','_blank'); try{ const u=await FILES.url(a.dataset.fo); if(w) w.location=u; }catch(e){ if(w) w.close(); toast('פתיחה נכשלה: '+e.message); } });
+      }catch(e){ res.innerHTML='<span class="hint">שגיאה: '+esc(e.message)+(/boq_files|relation|schema/i.test(e.message)?' – צריך להריץ את boq_supabase_files.sql':'')+'</span>'; } };
+    lb.onclick=()=>{ box.hidden=!box.hidden; if(!box.hidden){ q.focus(); run(); } };
+    q.oninput=()=>{ clearTimeout(T); T=setTimeout(run,300); };
+  }
 }
 function nameCell(n){
   const demo=(n.demo?'<span class="pill demo">דוגמה</span>':'')+(n.sugg?'<span class="pill" title="משאב שהוצע אוטומטית – לבדוק">הצעה</span>':'');
@@ -3334,10 +3349,23 @@ $('pr_file').onchange=async e=>{
   e.target.value='';
 };
 
-/* ---------- מסמכים מצורפים (Supabase Storage, bucket boq-files) ---------- */
+/* ---------- מסמכים מצורפים: ספרייה משותפת ב-Supabase Storage (bucket boq-files) ----------
+   כל קובץ נשמר פעם אחת: lib/<sha256>.<ext>; טבלת boq_files = אינדקס (שם, נפח, מקור) לחיפוש ולזיהוי כפילויות */
+async function fileSha(file){ try{ const b=await file.arrayBuffer(); const h=await crypto.subtle.digest('SHA-256',b); return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join(''); }catch(e){ return null; } }
 window.FILES={ enabled:()=>!!(sb&&CUR&&CUR.id), who:()=>USER?.email||'',
-  async upload(nodeId,file){ const ext=((file.name.match(/\.([a-z0-9]{1,6})$/i)||[])[1]||'bin').toLowerCase(); const key=`${CUR.id}/${nodeId}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
-    const {error}=await sb.storage.from('boq-files').upload(key,file,{contentType:file.type||undefined,upsert:false}); if(error) throw error; return key; },
+  // מחזיר {k,dup,rec}; dup=true כשהקובץ כבר היה בספרייה (לא הועלה שוב)
+  async upload(nodeId,file){ const ext=((file.name.match(/\.([a-z0-9]{1,6})$/i)||[])[1]||'bin').toLowerCase();
+    const sha=await fileSha(file)||('x'+Date.now()+Math.random().toString(36).slice(2,8));
+    const {data:ex}=await sb.from('boq_files').select('*').eq('sha',sha).maybeSingle();
+    if(ex) return {k:ex.k,dup:true,rec:ex};
+    const key=`lib/${sha}.${ext}`;
+    const {error}=await sb.storage.from('boq-files').upload(key,file,{contentType:file.type||undefined,upsert:false});
+    if(error&&!/exist|duplicate/i.test(error.message)) throw error;
+    const rec={sha,k:key,name:file.name,size:file.size,type:file.type||'',project_id:CUR.id,project_name:CUR.name||'',by_email:USER?.email||''};
+    const {error:e2}=await sb.from('boq_files').insert(rec); if(e2&&!/duplicate/i.test(e2.message)) console.warn('index',e2);
+    return {k:key,dup:false,rec}; },
+  async search(q){ let qy=sb.from('boq_files').select('*').order('created_at',{ascending:false}).limit(40); if(q) qy=qy.ilike('name','%'+q.replace(/[%_]/g,'')+'%'); const {data,error}=await qy; if(error) throw error; return data||[]; },
+  async usage(){ const {data,error}=await sb.from('boq_files').select('size'); if(error) throw error; return {n:data.length,bytes:data.reduce((a,r)=>a+(+r.size||0),0)}; },
   async url(key){ const {data,error}=await sb.storage.from('boq-files').createSignedUrl(key,600); if(error) throw error; return data.signedUrl; } };
 document.addEventListener('change',e=>{ if(e.target&&e.target.id==='p_arch') openProjectsList(P_ROWS); });
 
