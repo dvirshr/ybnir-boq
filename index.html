@@ -331,6 +331,7 @@ table.boq.plist{min-width:0!important;width:100%}
       <div class="chips" id="dashFilter"></div>
       <div class="kpis" id="kpis"></div>
       <div class="panels"><div class="panel" id="areaPanel"></div><div class="panel" id="gapPanel"></div></div>
+      <div class="panels"><div class="panel" id="pbPanel"></div></div>
       <div class="panels">
         <div class="panel"><h3>לפי מבנה</h3><div class="bars" id="byB"></div></div>
         <div class="panel"><h3>לפי פרק</h3><div class="bars" id="byC"></div></div>
@@ -422,6 +423,7 @@ table.boq.plist{min-width:0!important;width:100%}
       <input type="file" id="p_file" accept=".json" hidden>
       <button class="btn" id="p_new">פרויקט חדש ריק</button>
       <button class="btn" id="p_bulk">הוספת סעיפים מרשימה</button>
+      <label class="hint" style="margin:0;display:flex;gap:4px;align-items:center"><input type="checkbox" id="p_arch"> הצג ארכיון <span id="p_arch_n"></span></label>
       <button class="btn" id="p_users" hidden>משתמשים <span class="pill" id="p_users_n" hidden></span></button>
     </div>
     <div class="tablewrap"><table class="boq plist"><thead><tr><th>פרויקט</th><th>עודכן</th><th class="n">גרסה</th><th>במחשב הזה</th><th></th></tr></thead><tbody id="p_list"></tbody></table></div>
@@ -689,6 +691,47 @@ function codeCell(n){
   return `<td class="code" style="padding-inline-start:${4+(L-1)*12}px"><span style="display:inline-flex;align-items:center;gap:2px">${car}${code}</span>${!leaf&&cnt&&closed?`<span class="pill">${cnt}</span>`:''}</td>`;
 }
 
+/* ---------- בסיס מחיר + מסמכים מצורפים (הצעות מחיר סרוקות) ---------- */
+const PB={q:'הצעת מחיר',e:'הערכה',i:'חשבונית / ביצוע',p:'מחירון / חוזה'};
+const PBC={q:'#067647',e:'#b54708',i:'#175cd3',p:'#6941c6'};
+function pbOf(n){ if(n.pb&&PB[n.pb]) return {k:n.pb,own:true}; const f=find(n.id); if(!f) return null; for(let i=f.path.length-1;i>=0;i--){ const p=f.path[i]; if(p.pb&&PB[p.pb]) return {k:p.pb,own:false,from:p}; } return null; }
+const liveFiles=n=>(n&&n.files||[]).filter(f=>!f.rm);
+function filesUp(n){ const f=find(n.id); const L=[]; if(f) f.path.forEach(p=>liveFiles(p).forEach(x=>L.push(Object.assign({},x,{from:p})))); return L; }
+function filesDown(n){ let c=0; walk(n.ch||[],x=>{ c+=liveFiles(x).length; }); return c; }
+function attPills(n){ if(!['i','c','s'].includes(n.t)) return '';
+  const b=pbOf(n), F=liveFiles(n).length, up=n.t==='i'?filesUp(n).length:0;
+  let h='';
+  if(b) h+=`<button class="pill" data-act="att" data-id="${n.id}" title="בסיס מחיר: ${PB[b.k]}${b.own?'':' (מ'+(b.from.t==='s'?'תת-פרק ':b.from.t==='c'?'פרק ':'מבנה ')+esc(b.from.code||'')+')'}" style="border:1px solid ${PBC[b.k]};color:${PBC[b.k]};background:#fff;${b.own?'':'opacity:.55'}">${PB[b.k]}</button>`;
+  if(F||up) h+=`<button class="pill" data-act="att" data-id="${n.id}" title="${F?F+' מסמכים מצורפים':''}${F&&up?' + ':''}${up?up+' מסמכים ברמה שמעל':''}">📎${F||''}${up?`<span style="opacity:.6">${F?'+':''}${up}↑</span>`:''}</button>`;
+  return h?`<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:2px">${h}</div>`:''; }
+function attDlg(id){
+  const f=find(id); if(!f) return; const n=f.n; const h=document.getElementById('printDlgHost'); const can=typeof FILES!=='undefined'&&FILES.enabled();
+  const b=pbOf(n); const up=filesUp(n); const own=liveFiles(n); const down=filesDown(n);
+  const fl=(x,ix,mine)=>`<tr><td>${/pdf$/i.test(x.name)?'📄':/\.(png|jpe?g|gif|webp|heic|tiff?)$/i.test(x.name)?'🖼':'📎'} <a href="#" data-fo="${esc(x.k)}">${esc(x.name)}</a></td><td class="num" style="font-size:11px">${x.size?fmt(x.size/1024)+' KB':''}</td><td style="font-size:11px">${new Date(x.at).toLocaleDateString('he-IL')}${x.by?' · '+esc(String(x.by).split('@')[0]):''}</td><td style="font-size:11px">${mine?`<button class="ib del" data-frm="${ix}" title="הסרה מהרשימה (הקובץ נשמר בארכיון)">הסר</button>`:esc((x.from.t==='s'?'תת-פרק ':x.from.t==='c'?'פרק ':'מבנה ')+(x.from.code||''))}</td></tr>`;
+  h.innerHTML=`<div class="pdlg"><div class="box" role="dialog" aria-label="מסמכים ובסיס מחיר" style="width:min(680px,100%)">
+    <h2 style="margin:0 0 2px">מסמכים ובסיס מחיר – ${NAMES[n.t]} ${esc(n.code||'')}</h2><div class="hint" style="margin:0 0 10px">${esc((n.name||nodeName(n)||'').slice(0,90))}</div>
+    <div class="field"><label for="at_pb">בסיס המחיר</label><select id="at_pb"><option value="">${b&&!b.own?'לפי '+(b.from.t==='s'?'תת-הפרק':b.from.t==='c'?'הפרק':'המבנה')+': '+PB[b.k]:'— לא סומן —'}</option>${Object.entries(PB).map(([k,l])=>`<option value="${k}" ${n.pb===k?'selected':''}>${l}</option>`).join('')}</select>
+      ${n.t!=='i'?`<div class="hint" style="margin:2px 0 0">חל על כל הסעיפים ב${n.t==='s'?'תת-פרק':'פרק'} שלא סומנו בנפרד</div>`:''}</div>
+    <h3 style="margin:10px 0 4px;font-size:14px">מסמכים מצורפים</h3>
+    <table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><tbody>
+      ${own.length?own.map(x=>fl(x,(n.files||[]).indexOf((n.files||[]).find(y=>y.k===x.k)),true)).join(''):'<tr><td colspan="4" class="hint" style="padding:6px">אין מסמכים ברמה הזו</td></tr>'}
+      ${up.length?`<tr><td colspan="4" style="font-size:12px;font-weight:600;padding-top:8px">ברמה שמעל</td></tr>`+up.map(x=>fl(x,0,false)).join(''):''}
+    </tbody></table>
+    ${down?`<div class="hint" style="margin:4px 0 0">ועוד ${down} מסמכים בסעיפים שמתחת</div>`:''}
+    ${can?`<div class="row" style="margin-top:10px;gap:8px;align-items:center"><label class="btn" for="at_file" style="cursor:pointer">+ צירוף קובץ (PDF / תמונה)</label><input type="file" id="at_file" multiple accept=".pdf,image/*,.xlsx,.xls,.docx,.doc,.msg,.eml" hidden><span class="hint" id="at_st" style="margin:0"></span></div>`
+      :`<div class="hint" style="margin-top:8px">צירוף קבצים זמין בגרסת הענן בלבד</div>`}
+    <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" id="at_c">סגור</button></div></div></div>`;
+  const close=()=>{ h.innerHTML=''; render(); };
+  document.getElementById('at_c').onclick=close;
+  document.getElementById('at_pb').onchange=e=>{ const v=e.target.value; if(v) n.pb=v; else delete n.pb; save(); };
+  h.querySelectorAll('[data-fo]').forEach(a=>a.onclick=async ev=>{ ev.preventDefault(); const w=window.open('about:blank','_blank'); try{ const u=await FILES.url(a.dataset.fo); if(w) w.location=u; else location.href=u; }catch(e){ if(w) w.close(); toast('פתיחה נכשלה: '+e.message); } });
+  h.querySelectorAll('[data-frm]').forEach(x=>x.onclick=()=>{ const it=(n.files||[])[+x.dataset.frm]; if(!it||!confirm('להסיר את "'+it.name+'" מהרשימה?\nהקובץ עצמו נשמר בארכיון ולא נמחק.')) return; it.rm=new Date().toISOString(); save(); attDlg(id); });
+  const fi=document.getElementById('at_file'); if(fi) fi.onchange=async()=>{ const st=document.getElementById('at_st'); const L=[...fi.files]; let ok=0;
+    for(const file of L){ if(file.size>25*1024*1024){ toast(file.name+': מעל 25MB'); continue; } st.textContent=`מעלה ${file.name}…`;
+      try{ const k=await FILES.upload(n.id,file); (n.files=n.files||[]).push({k,name:file.name,size:file.size,type:file.type||'',at:new Date().toISOString(),by:FILES.who()}); ok++; }
+      catch(e){ st.textContent=''; toast('ההעלאה נכשלה: '+e.message+(/bucket|not found|policy|row-level/i.test(e.message)?' – צריך להריץ פעם אחת את boq_supabase_files.sql':'')); } }
+    if(ok){ if(!n.pb&&!(b&&!b.own)){ n.pb='q'; toast(ok+' קבצים צורפו · בסיס המחיר סומן "הצעת מחיר"'); } else toast(ok+' קבצים צורפו'); save(); attDlg(id); } };
+}
 function nameCell(n){
   const demo=(n.demo?'<span class="pill demo">דוגמה</span>':'')+(n.sugg?'<span class="pill" title="משאב שהוצע אוטומטית – לבדוק">הצעה</span>':'');
   const miss=missing(n)?'<span class="pill err">לא ברשימה</span>':'';
@@ -755,8 +798,8 @@ function rowHtml(n,G){
   if(n.t==='i'||n.t==='r'||n.t==='k') qty=qty.replace(/<\/td>$/,wChip(n)+'</td>');
   const del = pendingDel===n.id
     ? `<span class="confirm">למחוק${n.ch&&n.ch.length?' כולל '+countDesc(n)+' שורות':''}? <button class="btn small" data-act="delyes" data-id="${n.id}">מחק</button><button class="btn small" data-act="delno">ביטול</button></span>`
-    : `${(n.t==='r'&&(parentOf(n.id)||{}).t==='i')||n.t==='k'?(n.lead?`<button class="ib" data-act="qunlink" data-id="${n.id}" title="מוביל – כמות הסעיף נלקחת מכאן. לחיצה = ניתוק" style="color:var(--accent);font-weight:700">★ מוביל</button>`:(!canLead(n)?'':`<button class="ib" data-act="qlink" data-id="${n.id}" title="קבע את הכמות בשורה הזו ככמות הסעיף (מוביל)">☆ לסעיף</button>`)):''}${n.t==='r'&&!hasItems(n)?`<button class="ib" data-act="add" data-id="${n.id}" title="פירוק המשאב למק&quot;טים" style="color:var(--accent);font-weight:600">+ מק"ט</button>`:''}${(n.t==='i'||n.t==='r'||n.t==='k')?`<button class="ib" data-act="form" data-id="${n.id}">טופס</button>`:''}${n.t==='i'?`<button class="ib" data-act="addafter" data-id="${n.id}" title="הוסף סעיף חדש מיד אחרי הסעיף הזה" style="color:var(--accent);font-weight:600">+ אחרי</button><button class="ib" data-act="move" data-id="${n.id}" title="העבר סעיף לתת-פרק / פרק / מבנה אחר">העבר</button>`:''}${n.t==='c'&&n.ch.length?`<button class="ib" data-act="movec" data-id="${n.id}" title="העבר או העתק את הפרק למבנה אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length?`<button class="ib" data-act="move" data-id="${n.id}" title="העבר את כל הסעיפים של תת-הפרק לתת-פרק / פרק אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length>1?`<button class="ib" data-act="renum" data-id="${n.id}" title="מספור מחדש של הסעיפים בתת-פרק לפי הסדר המוצג">מספור</button>`:''}${pasteBtns(n)}<button class="ib" data-act="copy" data-id="${n.id}" title="העתק ${NAMES[n.t]} (כולל כל מה שמתחת)">העתק</button><button class="ib" data-act="up" data-id="${n.id}" aria-label="הזז למעלה">▲</button><button class="ib" data-act="down" data-id="${n.id}" aria-label="הזז למטה">▼</button><button class="ib del" data-act="del" data-id="${n.id}" aria-label="מחק">✕</button>`;
-  return `<tr class="L${L}" data-id="${n.id}">${codeCell(n)}${nameCell(n)}${unit}${qty}${price}${OL?(inOH?`<td class="n num tot" title="מבנה תקורה – העלות מועמסת על הסעיפים הישירים" style="color:var(--muted)">${t?'<s>'+fmt(t)+'</s><div style="font-size:10px">מועמס</div>':''}</td>`:`<td class="n num tot" title="סה&quot;כ מועמס בתקורות ורווח. ישיר: ${fmt(t)}"><span style="${n.t==='b'?'':'color:#6941c6'}">${tl?fmt(tl):''}</span>${tl&&Math.abs(tl-t)>0.5?`<div style="font-size:10px;color:var(--muted);font-weight:400">ישיר ${fmt(t)}</div>`:''}</td>`):`<td class="n num tot">${t?fmt(t):''}</td>`}${mkCell(n)}${share}<td><div class="rowact">${del}</div></td></tr>`;
+    : `${(n.t==='r'&&(parentOf(n.id)||{}).t==='i')||n.t==='k'?(n.lead?`<button class="ib" data-act="qunlink" data-id="${n.id}" title="מוביל – כמות הסעיף נלקחת מכאן. לחיצה = ניתוק" style="color:var(--accent);font-weight:700">★ מוביל</button>`:(!canLead(n)?'':`<button class="ib" data-act="qlink" data-id="${n.id}" title="קבע את הכמות בשורה הזו ככמות הסעיף (מוביל)">☆ לסעיף</button>`)):''}${n.t==='r'&&!hasItems(n)?`<button class="ib" data-act="add" data-id="${n.id}" title="פירוק המשאב למק&quot;טים" style="color:var(--accent);font-weight:600">+ מק"ט</button>`:''}${(n.t==='i'||n.t==='r'||n.t==='k')?`<button class="ib" data-act="form" data-id="${n.id}">טופס</button>`:''}${n.t==='i'?`<button class="ib" data-act="addafter" data-id="${n.id}" title="הוסף סעיף חדש מיד אחרי הסעיף הזה" style="color:var(--accent);font-weight:600">+ אחרי</button><button class="ib" data-act="move" data-id="${n.id}" title="העבר סעיף לתת-פרק / פרק / מבנה אחר">העבר</button>`:''}${n.t==='c'&&n.ch.length?`<button class="ib" data-act="movec" data-id="${n.id}" title="העבר או העתק את הפרק למבנה אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length?`<button class="ib" data-act="move" data-id="${n.id}" title="העבר את כל הסעיפים של תת-הפרק לתת-פרק / פרק אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length>1?`<button class="ib" data-act="renum" data-id="${n.id}" title="מספור מחדש של הסעיפים בתת-פרק לפי הסדר המוצג">מספור</button>`:''}${['i','c','s'].includes(n.t)?`<button class="ib" data-act="att" data-id="${n.id}" title="מסמכים (הצעות מחיר) ובסיס מחיר">📎</button>`:''}${pasteBtns(n)}<button class="ib" data-act="copy" data-id="${n.id}" title="העתק ${NAMES[n.t]} (כולל כל מה שמתחת)">העתק</button><button class="ib" data-act="up" data-id="${n.id}" aria-label="הזז למעלה">▲</button><button class="ib" data-act="down" data-id="${n.id}" aria-label="הזז למטה">▼</button><button class="ib del" data-act="del" data-id="${n.id}" aria-label="מחק">✕</button>`;
+  return `<tr class="L${L}" data-id="${n.id}">${codeCell(n)}${nameCell(n).replace(/<\/td>$/,attPills(n)+'</td>')}${unit}${qty}${price}${OL?(inOH?`<td class="n num tot" title="מבנה תקורה – העלות מועמסת על הסעיפים הישירים" style="color:var(--muted)">${t?'<s>'+fmt(t)+'</s><div style="font-size:10px">מועמס</div>':''}</td>`:`<td class="n num tot" title="סה&quot;כ מועמס בתקורות ורווח. ישיר: ${fmt(t)}"><span style="${n.t==='b'?'':'color:#6941c6'}">${tl?fmt(tl):''}</span>${tl&&Math.abs(tl-t)>0.5?`<div style="font-size:10px;color:var(--muted);font-weight:400">ישיר ${fmt(t)}</div>`:''}</td>`):`<td class="n num tot">${t?fmt(t):''}</td>`}${mkCell(n)}${share}<td><div class="rowact">${del}</div></td></tr>`;
 }
 function countDesc(n){ let c=0; walk(n.ch,()=>c++); return c; }
 
@@ -775,6 +818,7 @@ tb.addEventListener('click',e=>{
     if(A.t==='i'&&B.t==='i'&&A.code&&B.code){ const pre=x=>x.replace(/\.\d+$/,''); if(pre(A.code)===pre(B.code)){ (A.oldCodes=A.oldCodes||[]).push(A.code); (B.oldCodes=B.oldCodes||[]).push(B.code); [A.code,B.code]=[B.code,A.code]; } }
     [l[i],l[j]]=[l[j],l[i]]; save(); render(); } }
   if(act==='form') openDrawer(id);
+  if(act==='att') attDlg(id);
   if(act==='qlink'||act==='qunlink'){ const f=find(id); if(f&&setLead(f.n,act==='qlink')){ save(); render(); toast(act==='qlink'?'כמות הסעיף נלקחת עכשיו מ-'+(f.n.code||''):'נותק – הכמות נשארה כמספר בסעיף'); } }
   if(act==='move') moveDlg(id);
   if(act==='movec') moveChDlg(id);
@@ -1087,6 +1131,7 @@ function drawBody(n){
       <div class="grid2"><div class="field"><label for="d_pct">סעיף אחוז – % מבסיס מחושב (רווח / ביטוח / בצ"מ)</label><input id="d_pct" class="mono" value="${esc(n.pct??'')}" placeholder="ריק = סעיף רגיל" inputmode="decimal"><div class="hint" id="d_pctl" style="margin:2px 0 0"></div></div>
         <div class="field"><label for="d_pctB">בסיס</label><select id="d_pctB"><option value="do" ${n.pctB!=='d'?'selected':''}>ישיר + תקורות (כולל ביטוח/בצ"מ)</option><option value="d" ${n.pctB==='d'?'selected':''}>ישיר בלבד</option></select></div></div>
       <div class="field"><label for="d_sp">מחיר יחידה לסעיף (תמחור ברמת סעיף – אופציונלי)</label><input id="d_sp" class="mono" value="${esc(n.sp??'')}" placeholder="ריק = לפי משאבים"></div>
+      <div class="field"><label>בסיס מחיר ומסמכים</label><div class="row" style="gap:6px;align-items:center;flex-wrap:wrap">${(()=>{ const b=pbOf(n); const F=liveFiles(n).length, U=filesUp(n).length; return `<span style="font-size:13px">${b?`<b style="color:${PBC[b.k]}">${PB[b.k]}</b>${b.own?'':' <span class="hint" style="margin:0">(מ'+(b.from.t==='s'?'תת-פרק ':b.from.t==='c'?'פרק ':'מבנה ')+esc(b.from.code||'')+')</span>'}`:'<span class="hint" style="margin:0">לא סומן</span>'}</span><span class="hint" style="margin:0">· 📎 ${F} בסעיף${U?' + '+U+' ברמה שמעל':''}</span>`; })()}<button class="btn small" data-act2="att">ניהול / צירוף</button></div></div>
       <div class="field"><label for="d_note">הערות / מקור הכמות</label><textarea id="d_note" rows="3" style="border:1px solid var(--line);border-radius:6px;padding:7px 10px;background:var(--surface);font:inherit;color:inherit;resize:vertical">${esc(n.note||'')}</textarea></div>
       ${calcBlock(n)}
       <div class="field"><label>משאבים בסעיף</label>
@@ -1096,6 +1141,7 @@ function drawBody(n){
       </div>
       <button class="btn" id="d_addr">+ משאב לסעיף</button>`;
     const bind=(id,k)=>document.getElementById(id).oninput=e=>{ n[k]=e.target.value; save(); updTot(n); };
+    { const ab=B.querySelector('[data-act2="att"]'); if(ab) ab.onclick=()=>attDlg(n.id); }
     bind('d_name','name'); bind('d_code','code'); bind('d_note','note'); bind('d_sp','sp'); bind('d_serves','serves');
     document.getElementById('d_isw').onchange=e=>{ if(e.target.checked) n.isW=true; else delete n.isW; save(); };
     { const fixed=()=>n.ch.filter(r=>r.t==='r'&&!hasItems(r)&&!(r.calc&&r.calc.length)&&String(r.qexpr??'').trim()!==''&&!String(r.qexpr).trim().startsWith('='));
@@ -1205,6 +1251,13 @@ function buildResList(){
 }
 
 /* ---------- dashboard ---------- */
+function pbPanel(){ const el=document.getElementById('pbPanel'); if(!el) return; const OB=new Set(typeof ohBlds==='function'?ohBlds():[]);
+  const acc={}, L=[]; let T=0; walk(state.tree,(x,p)=>{ if(x.t!=='i'||isPct(x)) return; const t=total(x); if(!t) return; const b=pbOf(x), k=b?b.k:'-'; acc[k]=(acc[k]||0)+t; T+=t; if(k==='e'||k==='-') L.push({x,p,t,k,F:liveFiles(x).length+filesUp(x).length}); });
+  L.sort((a,b)=>b.t-a.t);
+  el.innerHTML=`<h3>בסיס תמחור <small class="hint" style="font-weight:400">– כמה מהעלות מגובה בהצעות מחיר. סימון בכפתור 📎 בסעיף / תת-פרק / פרק</small></h3>
+   <table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><tbody>${Object.keys(PB).concat('-').filter(k=>acc[k]).map(k=>`<tr><td><span style="color:${PBC[k]||'var(--muted)'};font-weight:600">${PB[k]||'לא סומן'}</span></td><td class="n num">${fmt(acc[k])}</td><td class="n num" style="width:70px">${fmt(acc[k]/T*100,1)}%</td><td style="width:40%"><div style="height:8px;border-radius:4px;background:${PBC[k]||'#98a2b3'};width:${Math.max(1,acc[k]/T*100)}%"></div></td></tr>`).join('')}</tbody></table>
+   ${L.length?`<div style="margin-top:8px;font-size:13px;font-weight:600">הסעיפים היקרים שמבוססים על הערכה / לא סומנו</div><table class="boq" style="min-width:0;table-layout:auto;font-size:12px"><tbody>${L.slice(0,10).map(r=>`<tr><td class="mono">${esc((r.p[0]||{}).code||'')}</td><td class="mono"><button class="ib" data-act="att" data-id="${r.x.id}">${esc(r.x.code||'')}</button></td><td>${esc((r.x.name||'').slice(0,55))}</td><td class="n num">${fmt(r.t)}</td><td style="color:${PBC[r.k]||'var(--muted)'}">${PB[r.k]||'לא סומן'}${r.F?' · 📎'+r.F:''}</td></tr>`).join('')}</tbody></table>`:''}`;
+  el.querySelectorAll('[data-act="att"]').forEach(b=>b.onclick=()=>attDlg(+b.dataset.id)); }
 function renderDash(){
   const B=state.tree; const G=B.reduce((a,b)=>a+total(b),0);
   const C=pfC(), U=pfV('units')||projU(), main=pfMainNet(), serv=pfServNet(), balc=pfV('balc'), base=pfV('base'), gross=pfGross(), eq=pfEq();
@@ -1262,6 +1315,7 @@ function renderDash(){
   const near=[]; if(U) walk(B,(n,p)=>{ if(n.t!=='i'||UNORM(n.unit)!=="יח'") return; const q=secQty(n); if(!q||Number.isNaN(q)) return; for(const m of [1,2]){ const t=U*m; if(q!==t&&Math.abs(q-t)/t<=0.1){ near.push({n,b:p[0],q,t}); break; } } });
   const SC={ok:'#12b76a',warn:'#f79009',info:'#667085'};
   let qcE=0,qcW=0; try{ const F=qcRun().filter(x=>x.rule!==12); qcE=F.filter(x=>x.sev==='err').length; qcW=F.filter(x=>x.sev==='warn').length; }catch(e){}
+  pbPanel();
   document.getElementById('gapPanel').innerHTML=`<h3>פערים והשוואת כמויות <small class="hint" style="font-weight:400">– טווחים ראשוניים לכיול</small></h3>
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;font-size:13px">בקרה: ${qcE?`<b style="color:#d92d20">${qcE} חריגות</b>`:'אין חריגות'} · ${qcW?`<b style="color:#f79009">${qcW} לבדיקה</b>`:'אין הערות'} <button class="btn small" data-openqc="1">פתח בקרה</button></div>
     <table class="boq plist" style="min-width:0;table-layout:auto"><thead><tr><th></th><th>בדיקה</th><th class="n">כתב כמויות</th><th class="n">בסיס</th><th class="n">יחס</th><th class="n">טווח</th></tr></thead><tbody>
@@ -1403,10 +1457,10 @@ function effiExport(o){
     if(OHC&&OHC.OB.has(b.code)) return;
     const q=secQty(n), t=OHC?ohTot(n):total(n); if(!o.zero&&!t) return;
     const L=[]; if(wVal(n)) L.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) L.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); });
-    rows.push({ord:ord++,id:n.id,b:b.code||'',bn:b.name||'',c:c.code||'',s:s.code||'',code:n.code||'',name:n.name||'',unit:n.unit||'',q:Number.isNaN(q)?0:(q||0),t,w:L.join(' · '),note:n.note||''}); });
+    rows.push({ord:ord++,id:n.id,b:b.code||'',bn:b.name||'',c:c.code||'',s:s.code||'',code:n.code||'',name:n.name||'',unit:n.unit||'',q:Number.isNaN(q)?0:(q||0),t,w:L.join(' · '),note:n.note||'',pb:(()=>{ const b=pbOf(n); const F=liveFiles(n).length+filesUp(n).length; return (b?PB[b.k]:'')+(F?(b?' · ':'')+'📎'+F:''); })()}); });
   if(o.sort==='code') rows.sort((a,b)=>String(a.code).localeCompare(String(b.code),undefined,{numeric:true})||String(a.b).localeCompare(String(b.b),undefined,{numeric:true})||a.ord-b.ord);
-  const H=['מזהה','מבנה','שם מבנה','פרק','תת-פרק','קוד סעיף','תאור סעיף',"יח'",'כמות',"מחיר יח'",'סה"כ','פחת','הערות מערכת','הערות'];
-  const aoa=[H]; rows.forEach(r=>aoa.push([r.id,r.b,r.bn,r.c,r.s,r.code,r.name,r.unit,R2(r.q),r.q?r.t/r.q:null,R2(r.t),r.w,r.note,'']));
+  const H=['מזהה','מבנה','שם מבנה','פרק','תת-פרק','קוד סעיף','תאור סעיף',"יח'",'כמות',"מחיר יח'",'סה"כ','פחת','הערות מערכת','הערות','בסיס מחיר'];
+  const aoa=[H]; rows.forEach(r=>aoa.push([r.id,r.b,r.bn,r.c,r.s,r.code,r.name,r.unit,R2(r.q),r.q?r.t/r.q:null,R2(r.t),r.w,r.note,'',r.pb]));
   const N=aoa.length; const G=rows.reduce((a,r)=>a+r.t,0);
   // עלויות כלכליות – מתחת לסה"כ כתב הכמויות (בסיס מחושב בנוסחה)
   const FC=finCalc(); const FR=(OHC&&OHC.ff>1)?[]:FC.rows; // כל השורות הכלכליות (גם 0%) – כדי שאפשר יהיה להזין אחוז באקסל ולטעון חזרה
@@ -1424,8 +1478,8 @@ function effiExport(o){
     ws['I'+i]={t:'n',v:R2(r.A),f:(r.isG&&r.g)?`(${bf})*${r.g}/100`:bf,z:'#,##0'}; ws['J'+i]={t:'n',v:r.p,z:'0.00'}; ws['K'+i]={t:'n',v:R2(r.v),f:`I${i}*J${i}/100`,z:'#,##0'};
     prev=`${prev}+K${i}`; });
   const GR=TR+FR.length+1; if(FR.length) ws['K'+GR]={t:'n',v:R2(G+FR.reduce((a,r)=>a+r.v,0)),f:`K${TR}+SUM(K${TR+1}:K${TR+FR.length})`,z:'#,##0'};
-  ws['!cols']=[{wch:7,hidden:true},{wch:6},{wch:18},{wch:5},{wch:7},{wch:12},{wch:60},{wch:7},{wch:11},{wch:11},{wch:14},{wch:18},{wch:40,hidden:!o.notes},{wch:40}];
-  ws['!autofilter']={ref:'A1:N'+N};
+  ws['!cols']=[{wch:7,hidden:true},{wch:6},{wch:18},{wch:5},{wch:7},{wch:12},{wch:60},{wch:7},{wch:11},{wch:11},{wch:14},{wch:18},{wch:40,hidden:!o.notes},{wch:40},{wch:16}];
+  ws['!autofilter']={ref:'A1:O'+N};
   // סיכום
   const S=[['מבנה','שם מבנה','פרק','שם פרק','סה"כ']]; const cm=chMap(); const acc={};
   rows.forEach(r=>{ const k=r.b+'|'+r.c; acc[k]=acc[k]||{b:r.b,bn:r.bn,c:r.c,v:0}; acc[k].v+=r.t; });
@@ -2052,7 +2106,7 @@ function printCard(id){
   let src=n.t==='i'?(leadOf(n)?'★ משאב מוביל '+esc(leadOf(n).code||'')+' '+esc(nodeName(leadOf(n))):calc.length?'פירוט כמויות':'הקלדה'):(calc.length?'פירוט כמויות':esc(n.qexpr||''));
   let html=`<h1>${NAMES[n.t]} ${esc(n.code||'')} – ${esc(nodeName(n)||n.name||'')}</h1><div class="meta">${esc(state.project||'')} · ${esc(crumbs)} · ${new Date().toLocaleDateString('he-IL')}</div>
     <table>${kv('יחידה',esc(n.unit||''))}${kv('כמות נטו',fmtQ(netQ(n)))}${w?kv('פחת',fmt(w,1)+'%'):''}${kv('כמות לחישוב',fmtQ(q))}${kv('מקור הכמות',src)}
-      ${n.t==='i'&&q&&t?kv('מחיר יחידה',fmt(t/q,2)+' ₪'):''}${n.t!=='i'&&n.price?kv('מחיר יחידה',esc(n.price)+' ₪'):''}${kv('סה"כ',fmt(t)+' ₪')}</table>`;
+      ${n.t==='i'&&q&&t?kv('מחיר יחידה',fmt(t/q,2)+' ₪'):''}${n.t!=='i'&&n.price?kv('מחיר יחידה',esc(n.price)+' ₪'):''}${kv('סה"כ',fmt(t)+' ₪')}${(()=>{ const b=['i','c','s'].includes(n.t)?pbOf(n):null; const F=['i','c','s'].includes(n.t)?liveFiles(n).concat(filesUp(n)):[]; return (b?kv('בסיס מחיר',PB[b.k]):'')+(F.length?kv('מסמכים מצורפים',F.map(x=>esc(x.name)).join(' · ')):''); })()}</table>`;
   if(n.note) html+=`<h2 style="font-size:13px;margin:12px 0 4px">הערות / מקור הכמות</h2><div style="white-space:pre-wrap;border:1px solid #999;padding:6px 8px">${esc(n.note)}</div>`;
   if(calc.length) html+=`<h2 style="font-size:13px;margin:12px 0 4px">פירוט חישוב כמויות</h2><table><thead><tr><th>תאור / מיקום</th><th class="n">מס'</th><th class="n">אורך</th><th class="n">רוחב</th><th class="n">גובה/עובי</th><th class="n">כמות</th></tr></thead><tbody>${calc.map(l=>{ const v=['n','l','w','h'].map(k=>{ const x=evalExpr(l[k]); return x===null?1:x; }).reduce((a,b)=>a*b,1); return `<tr><td>${esc(l.d||'')}</td>${['n','l','w','h'].map(k=>`<td class="n">${esc(l[k]??'')}</td>`).join('')}<td class="n">${fmtQ(v)}</td></tr>`; }).join('')}<tr class="tot"><td colspan="5">סה"כ</td><td class="n">${fmtQ(calcQty(n))}</td></tr></tbody></table>`;
   if(n.ch&&n.ch.length){ const rows=[]; walk(n.ch,(x)=>{ if(x.t!=='r'&&x.t!=='k') return; const xq=x.t==='r'?rQty(x):kQty(x), xw=wVal(x);
@@ -2192,6 +2246,7 @@ const DB = window.__MOCK_DB__ || {
   async init(url,key){ sb=supabase.createClient(url,key,{auth:{persistSession:true,storageKey:'ybnir-boq-auth'}}); const {data}=await sb.auth.getSession(); return data.session?.user||null; },
   async signIn(email,pw){ const {data,error}=await sb.auth.signInWithPassword({email,password:pw}); if(error) throw error; return data.user; },
   async signOut(){ await sb.auth.signOut(); },
+  async setArchived(id,v){ const {error}=await sb.from('boq_projects').update({archived:!!v}).eq('id',id); if(error) throw error; },
   async listProjects(){ const {data,error}=await sb.from('boq_projects').select('id,name,rev,updated_at,archived').order('updated_at',{ascending:false}); if(error) throw error; return data; },
   async getProject(id){ const {data,error}=await sb.from('boq_projects').select('id,name,rev,state,updated_at').eq('id',id).single(); if(error) throw error; return data; },
   async createProject(name,st,note){ const {data,error}=await sb.from('boq_projects').insert({name,state:st}).select('id,rev').single(); if(error) throw error;
@@ -2296,12 +2351,15 @@ async function openProjects(){
 function localSyncInfo(r){ try{ const c=JSON.parse(lsGet('ybnir-boq-cloud-'+r.id)||'null'); if(!c) return '<span class="hint" style="margin:0" title="הפרויקט לא נפתח בדפדפן הזה">—</span>';
   if(c.dirty) return `<span class="pill err" title="שינויים מ-${c.ts?new Date(c.ts).toLocaleString('he-IL'):''} שלא נשמרו בענן">⚠ שינויים מקומיים</span>`;
   return '<span class="pill pl" title="אין במחשב הזה שינויים שלא הגיעו לענן">✔ מסונכרן</span>'; }catch(e){ return ''; } }
+let P_ROWS=[];
 function openProjectsList(rows){
-    $('p_list').innerHTML = rows.length ? rows.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td class="num">${new Date(r.updated_at).toLocaleString('he-IL',{dateStyle:'short',timeStyle:'short'})}</td><td class="n num">${r.rev}</td><td>${localSyncInfo(r)}</td>
-      <td><div class="row" style="justify-content:flex-end"><button class="btn small primary" data-open="${r.id}">פתח</button><button class="btn small" data-vers="${r.id}">גרסאות</button></div></td></tr>`).join('')
+    P_ROWS=rows; const showA=$('p_arch')&&$('p_arch').checked; const nA=rows.filter(r=>r.archived).length; if($('p_arch_n')) $('p_arch_n').textContent=nA?'('+nA+')':''; rows=rows.filter(r=>showA||!r.archived);
+    $('p_list').innerHTML = rows.length ? rows.map(r=>`<tr style="${r.archived?'opacity:.55':''}"><td><b>${esc(r.name)}</b>${r.archived?' <span class="pill">בארכיון</span>':''}</td><td class="num">${new Date(r.updated_at).toLocaleString('he-IL',{dateStyle:'short',timeStyle:'short'})}</td><td class="n num">${r.rev}</td><td>${localSyncInfo(r)}</td>
+      <td><div class="row" style="justify-content:flex-end"><button class="btn small primary" data-open="${r.id}">פתח</button><button class="btn small" data-vers="${r.id}">גרסאות</button>${r.archived?`<button class="btn small" data-arch="${r.id}" data-v="0" title="החזרה לרשימה">שחזר</button>`:`<button class="btn small" data-arch="${r.id}" data-v="1" title="הסתרה מהרשימה. לא נמחק – הגרסאות נשמרות ואפשר לשחזר">ארכיון</button>`}</div></td></tr>`).join('')
       : '<tr><td colspan="5" class="empty">אין עדיין פרויקטים בענן. לחץ "העלאה מהמחשב".</td></tr>';
 }
-$('p_list').onclick=e=>{ const o=e.target.closest('[data-open]'); if(o) openProject(o.dataset.open); const v=e.target.closest('[data-vers]'); if(v) openVersions(v.dataset.vers); };
+$('p_list').onclick=async e=>{ const a=e.target.closest('[data-arch]'); if(a){ const r=P_ROWS.find(x=>x.id===a.dataset.arch); const v=a.dataset.v==='1'; if(v&&!confirm(`להעביר לארכיון את "${r?r.name:''}"?\nהפרויקט לא נמחק – הוא רק יוסתר מהרשימה, כל הגרסאות נשמרות, ואפשר לשחזר דרך "הצג ארכיון".`)) return; try{ await DB.setArchived(a.dataset.arch,v); if(r) r.archived=v; openProjectsList(P_ROWS); toast(v?'הועבר לארכיון':'שוחזר'); }catch(err){ toast('שגיאה: '+err.message); } return; }
+  const o=e.target.closest('[data-open]'); if(o) openProject(o.dataset.open); const v=e.target.closest('[data-vers]'); if(v) openVersions(v.dataset.vers); };
 async function openProject(id){
   $('p_msg').textContent='פותח…';
   try{
@@ -3275,6 +3333,13 @@ $('pr_file').onchange=async e=>{
   }catch(err){ toast('הייבוא נכשל: '+err.message); }
   e.target.value='';
 };
+
+/* ---------- מסמכים מצורפים (Supabase Storage, bucket boq-files) ---------- */
+window.FILES={ enabled:()=>!!(sb&&CUR&&CUR.id), who:()=>USER?.email||'',
+  async upload(nodeId,file){ const ext=((file.name.match(/\.([a-z0-9]{1,6})$/i)||[])[1]||'bin').toLowerCase(); const key=`${CUR.id}/${nodeId}/${Date.now()}-${Math.random().toString(36).slice(2,7)}.${ext}`;
+    const {error}=await sb.storage.from('boq-files').upload(key,file,{contentType:file.type||undefined,upsert:false}); if(error) throw error; return key; },
+  async url(key){ const {data,error}=await sb.storage.from('boq-files').createSignedUrl(key,600); if(error) throw error; return data.signedUrl; } };
+document.addEventListener('change',e=>{ if(e.target&&e.target.id==='p_arch') openProjectsList(P_ROWS); });
 
 boot();
 </script>
