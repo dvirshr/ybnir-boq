@@ -488,7 +488,7 @@ let saveT=null;
 let PMAP=null;
 function parentOf(id){ if(!PMAP){ PMAP={}; walk(state.tree,(n,p)=>{ if(p.length) PMAP[n.id]=p[p.length-1]; }); } return PMAP[id]; }
 function save(){
-  PMAP=null; PCTB=null;
+  PMAP=null; PCTB=null; CONCC=null;
   clearTimeout(saveT);
   saveT=setTimeout(()=>{ if(typeof scheduleCloud==='function') scheduleCloud(); },300);
 }
@@ -569,7 +569,14 @@ function leadOf(n){ if(!n||n.t!=='i'||!n.ch) return null; for(const r of n.ch){ 
 const secOfLead=x=>{ const p=parentOf(x.id); return x.t==='k'?(p?parentOf(p.id):null):p; };
 const leadQ=x=>x.t==='k'?kQty(x):rQty(x);
 const _qg=new Set();
-function secQtyNet(n){ if(isPct(n)) return pctBase(n); const r=leadOf(n); if(r){ if(_qg.has(n.id)) return NaN; _qg.add(n.id); try{ return leadQ(r); } finally{ _qg.delete(n.id); } }
+/* כמות לפי בטון: סעיף (בד"כ ברזל) שכמותו = בטון (כולל פחת) × מקדם. n.byc={k:ק"ג למ"ק, all:true=כל הפרויקט, sc:"02.04,02.01.010"} */
+const isByc=n=>n&&n.t==='i'&&n.byc&&+n.byc.k>0;
+let CONCC=null;
+function bycConcRows(){ if(CONCC) return CONCC; CONCC=[]; walk(state.tree,(x,p)=>{ if(x.t==='i'&&!isByc(x)&&typeof sumTopicSec==='function'&&sumTopicSec(x,(p[1]||{}).code||'')==='בטון') CONCC.push({x,b:(p[0]||{}).code||''}); }); return CONCC; }
+function bycBase(n){ const f=find(n.id); const b=f&&f.path[0]?f.path[0].code:''; const sc=String(n.byc.sc||'').split(/[\s,;]+/).filter(Boolean);
+  let v=0; for(const r of bycConcRows()){ if(!n.byc.all&&r.b!==b) continue; if(sc.length&&!sc.some(s=>(r.x.code||'').startsWith(s))) continue; const q=secQty(r.x); if(q&&!Number.isNaN(q)) v+=q; } return v; }
+function bycQty(n){ const base=bycBase(n), k=+n.byc.k; const u=UNORM(n.unit); return u==='טון'?base*k/1000:base*k; }
+function secQtyNet(n){ if(isPct(n)) return pctBase(n); if(isByc(n)){ if(_qg.has(n.id)) return NaN; _qg.add(n.id); try{ return bycQty(n); } finally{ _qg.delete(n.id); } } const r=leadOf(n); if(r){ if(_qg.has(n.id)) return NaN; _qg.add(n.id); try{ return leadQ(r); } finally{ _qg.delete(n.id); } }
   if(n.calc&&n.calc.length) return calcQty(n); return evalExpr(n.qty); }
 function secQty(n){ return withW(n,secQtyNet(n)); }
 const netQ=n=>n.t==='i'?secQtyNet(n):n.t==='r'?rQtyNet(n):kQtyNet(n);
@@ -630,7 +637,7 @@ function qfOptions(){ const sel=document.getElementById('qf'); if(!sel) return; 
   sel.style.borderColor=qf?'#d92d20':''; sel.style.fontWeight=qf?'700':''; }
 
 function render(){
-  PCTB=null;
+  PCTB=null; CONCC=null;
   const G=state.tree.reduce((a,n)=>a+total(n),0);
   { const fb=document.getElementById('grandFinBox'); if(fb&&typeof finCalc==='function'){ const C=finCalc(); fb.hidden=!C.sum; document.getElementById('grandFin').textContent='₪ '+fmt(C.grand); } }
   OHC=state.ohView?ohCalc():null;
@@ -708,7 +715,9 @@ function rowHtml(n,G){
   if(n.t==='i'){
     unit=`<td><select class="cell-in w-unit" data-f="unit" data-id="${n.id}"><option value=""></option>${UNITS.map(u=>`<option ${u===n.unit?'selected':''}>${esc(u)}</option>`).join('')}${n.unit&&!UNITS.includes(n.unit)?`<option selected>${esc(n.unit)}</option>`:''}</select></td>`;
     const q=secQty(n); const ld=leadOf(n); const noQ=!ld&&!(n.calc&&n.calc.length)&&!q&&t;
-    qty= ld
+    qty= isByc(n)
+      ? `<td class="n"><button class="ib num" data-act="form" data-id="${n.id}" title="כמות לפי בטון: ${fmtQ(bycBase(n))} מ&quot;ק בטון (כולל פחת) × ${esc(n.byc.k)} ק&quot;ג/מ&quot;ק" style="color:var(--accent)">⛓ ${fmtQ(secQtyNet(n))}</button><div style="font-size:10px;color:var(--muted)">${esc(n.byc.k)} ק"ג/מ"ק</div></td>`
+      : ld
       ? `<td class="n"><button class="ib num" data-act="qunlink" data-id="${ld.id}" title="הכמות נלקחת מהמשאב המוביל ${esc(ld.code||'')} ${esc(nodeName(ld)||'')}. לחיצה = ניתוק (הכמות תישאר כמספר)" style="color:var(--accent)">★ ${Number.isNaN(q)?'שגיאה':fmtQ(secQtyNet(n))}</button><div style="font-size:11px;color:var(--muted)">${esc(ld.code||'')}</div></td>`
       : (n.calc&&n.calc.length)
       ? `<td class="n"><button class="ib num" data-act="form" data-id="${n.id}" title="מחושב מפירוט כמויות">∑ ${fmtQ(q)}</button></td>`
@@ -1066,6 +1075,11 @@ function drawBody(n){
       <div class="grid2"><div class="field"><label for="d_serves">משרת מבנים (לבקרה, למשל 01,05)</label><input id="d_serves" class="mono" value="${esc(n.serves??'')}" placeholder="ריק = המבנה של הסעיף"></div>
         <div class="field"><label style="display:flex;gap:6px;align-items:center;margin-top:22px"><input type="checkbox" id="d_isw" ${n.isW?'checked':''}> סעיף פחת (נספר כסבולת בבקרה)</label></div></div>
       <div id="d_pkg"></div>
+      <div class="field"><label>כמות לפי בטון (ברזל) – ק"ג למ"ק × כמות הבטון כולל פחת</label>
+        <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center"><input id="d_bk" class="mono" style="width:80px" placeholder="ק&quot;ג/מ&quot;ק" value="${esc((n.byc||{}).k??'')}" inputmode="decimal">
+        <select id="d_ball"><option value="" ${!(n.byc||{}).all?'selected':''}>בטון המבנה של הסעיף</option><option value="1" ${(n.byc||{}).all?'selected':''}>כל הבטון בפרויקט</option></select>
+        <input id="d_bsc" class="mono" style="width:170px" placeholder="קודים/קידומות (ריק = הכל)" value="${esc((n.byc||{}).sc??'')}" title="למשל 02.04 או 02.01.010,02.01.030 – רק סעיפי בטון שהקוד שלהם מתחיל כך"></div>
+        <div class="hint" id="d_bl" style="margin:2px 0 0"></div><div id="d_bfix" style="margin-top:4px"></div></div>
       <div class="grid2"><div class="field"><label for="d_pct">סעיף אחוז – % מבסיס מחושב (רווח / ביטוח / בצ"מ)</label><input id="d_pct" class="mono" value="${esc(n.pct??'')}" placeholder="ריק = סעיף רגיל" inputmode="decimal"><div class="hint" id="d_pctl" style="margin:2px 0 0"></div></div>
         <div class="field"><label for="d_pctB">בסיס</label><select id="d_pctB"><option value="do" ${n.pctB!=='d'?'selected':''}>ישיר + תקורות (כולל ביטוח/בצ"מ)</option><option value="d" ${n.pctB==='d'?'selected':''}>ישיר בלבד</option></select></div></div>
       <div class="field"><label for="d_sp">מחיר יחידה לסעיף (תמחור ברמת סעיף – אופציונלי)</label><input id="d_sp" class="mono" value="${esc(n.sp??'')}" placeholder="ריק = לפי משאבים"></div>
@@ -1080,6 +1094,15 @@ function drawBody(n){
     const bind=(id,k)=>document.getElementById(id).oninput=e=>{ n[k]=e.target.value; save(); updTot(n); };
     bind('d_name','name'); bind('d_code','code'); bind('d_note','note'); bind('d_sp','sp'); bind('d_serves','serves');
     document.getElementById('d_isw').onchange=e=>{ if(e.target.checked) n.isW=true; else delete n.isW; save(); };
+    { const fixed=()=>n.ch.filter(r=>r.t==='r'&&!hasItems(r)&&!(r.calc&&r.calc.length)&&String(r.qexpr??'').trim()!==''&&!String(r.qexpr).trim().startsWith('='));
+      const bl=()=>{ const l=document.getElementById('d_bl'); if(!l) return; CONCC=null; l.textContent=isByc(n)?`בסיס: ${fmtQ(bycBase(n))} מ"ק בטון (כולל פחת) × ${n.byc.k} ק"ג/מ"ק = ${fmtQ(secQtyNet(n))} ${n.unit||''}${wVal(n)?' + פחת סעיף '+fmt(wVal(n),1)+'%':''}`:'';
+        const fx=document.getElementById('d_bfix'); const F=isByc(n)?fixed():[];
+        fx.innerHTML=F.length?`<div style="border:1px solid #fec84b;background:#fffaeb;border-radius:6px;padding:4px 8px;font-size:12px">⚠ ${F.map(r=>esc((r.code||'')+' בכמות קבועה '+r.qexpr)).join(' · ')} – לא יתעדכן לפי הבטון, והעלות לא תשתנה. <button class="btn small" id="d_bq">הצמד לכמות הסעיף (=Q)</button></div>`:'';
+        const bq=document.getElementById('d_bq'); if(bq) bq.onclick=()=>{ F.forEach(r=>{ r.qexpr='=Q'; }); save(); updTot(n); bl(); toast(F.length+' משאבים הוצמדו לכמות הסעיף'); }; };
+      const bu=()=>{ const k=String(document.getElementById('d_bk').value).trim(); if(k===''){ delete n.byc; } else { if(!Number.isFinite(+k)){ toast('מספר לא תקין'); return; } n.byc={k,all:!!document.getElementById('d_ball').value,sc:document.getElementById('d_bsc').value.trim()};
+          if(leadOf(n)){ const ld=leadOf(n); delete ld.lead; toast('הסימון ★ של '+(ld.code||'')+' הוסר – הכמות נקבעת עכשיו לפי הבטון'); } }
+        CONCC=null; save(); updTot(n); bl(); };
+      ['d_bk','d_bsc'].forEach(i=>document.getElementById(i).onchange=bu); document.getElementById('d_ball').onchange=bu; bl(); }
     { const pl=()=>{ const l=document.getElementById('d_pctl'); if(l) l.textContent=isPct(n)?`${fmt(+n.pct,2)}% × ${fmt(pctBase(n))} = ${fmt(total(n))} ₪ (מתעדכן אוטומטית)`:''; };
       document.getElementById('d_pct').oninput=e=>{ const v=e.target.value.replace('%','').trim(); if(v==='') delete n.pct; else n.pct=v; PCTB=null; save(); updTot(n); pl(); };
       document.getElementById('d_pctB').onchange=e=>{ if(e.target.value==='d') n.pctB='d'; else delete n.pctB; PCTB=null; save(); updTot(n); pl(); }; pl(); }
@@ -2540,7 +2563,7 @@ $('btnEditX').onclick=()=>{
   const V=v=>v===''||v==null?'':(Number.isFinite(+v)?+v:String(v));
   walk(state.tree,(n,p)=>{
     const [b,c,s]=p;
-    if(n.t==='i'){ const calc=n.calc&&n.calc.length; aoa.push([n.id,'סעיף',b?.code||'',c?.code||'',s?.code||'',n.code||'',n.name||'','','',n.unit||'',(leadOf(n)||isPct(n))?R2(secQty(n)):calc?R2(calcQty(n)):V(n.qty),secPriced(n)?V(n.sp):'',n.note||'','',R2(total(n)),'',V(n.w),(()=>{ const L=[]; if(wVal(n)) L.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) L.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); }); return L.join(' · '); })()]); meta.push({n}); }
+    if(n.t==='i'){ const calc=n.calc&&n.calc.length; aoa.push([n.id,'סעיף',b?.code||'',c?.code||'',s?.code||'',n.code||'',n.name||'','','',n.unit||'',(leadOf(n)||isPct(n)||isByc(n))?R2(secQtyNet(n)):calc?R2(calcQty(n)):V(n.qty),secPriced(n)?V(n.sp):'',n.note||'','',R2(total(n)),'',V(n.w),(()=>{ const L=[]; if(wVal(n)) L.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) L.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); }); return L.join(' · '); })()]); meta.push({n}); }
     if(n.t==='r'){ const i=p[p.length-1]; const qe=n.calc&&n.calc.length?R2(calcQty(n)):V(n.qexpr);
       aoa.push([n.id,'משאב',b?.code||'',c?.code||'',s?.code||'',i?.code||'','',n.code||'',nodeName(n),n.unit||'',qe,hasItems(n)?'':V(n.price),'','',R2(total(n)),'',V(n.w)]); meta.push({n,sec:i}); }
     if(n.t==='k'){ const i=p[p.length-2], r=p[p.length-1]; const qe=n.calc&&n.calc.length?R2(calcQty(n)):V(n.qexpr);
@@ -2634,6 +2657,7 @@ function editPlan(rows){
         if(S(r['תאור סעיף'])&&!same(r['תאור סעיף'],n.name)) ch.name=S(r['תאור סעיף']);
         if(!same(normUnit(S(r["יח'"])),n.unit||'')) ch.unit=normUnit(S(r["יח'"]));
         if(isPct(n)){ /* סעיף אחוז – כמות = בסיס מחושב, מחיר = אחוז; לא מתעדכנים מהקובץ */ }
+        else if(isByc(n)){ if(!same(r['כמות'],R2(secQtyNet(n)))) warn.push(`שורה ${line}: סעיף ${n.code} – כמות לפי בטון (${n.byc.k} ק"ג/מ"ק) – לא עודכנה. לשנות את המקדם בטופס הסעיף`); }
         else if(leadOf(n)){ if(!same(r['כמות'],R2(secQty(n)))) warn.push(`שורה ${line}: סעיף ${n.code} – הכמות נלקחת ממשאב מוביל (★ ${leadOf(n).code||''}), לא עודכנה. לשנות את כמות המשאב`); }
         else if(!same(r['כמות'],n.qty??'')){ if(n.calc&&n.calc.length){ if(!same(r['כמות'],R2(calcQty(n)))) warn.push(`שורה ${line}: סעיף ${n.code} – כמות מחושבת מפירוט, לא עודכנה`); } else ch.qty=S(r['כמות']); }
         if(!same(r['הערות'],n.note||'')) ch.note=S(r['הערות']);
@@ -2730,6 +2754,7 @@ function effiPlan(rows){
     let qNew=q0;
     if(q1!==null&&Math.abs(R2(q1)-R2(q0))>0.005){
       if(isPct(n)) warn.push(`שורה ${line}: ${n.code} – סעיף אחוז, הכמות היא בסיס מחושב – לא עודכנה`);
+      else if(isByc(n)) warn.push(`שורה ${line}: ${n.code} – כמות לפי בטון (${n.byc.k} ק"ג/מ"ק × בטון כולל פחת) – לא עודכנה. לשנות את המקדם בטופס הסעיף`);
       else if(leadOf(n)) warn.push(`שורה ${line}: ${n.code} – הכמות נלקחת ממשאב מוביל ★ – לא עודכנה (לשנות במשאב)`);
       else if(n.calc&&n.calc.length) warn.push(`שורה ${line}: ${n.code} – כמות מחושבת מפירוט – לא עודכנה (${fmtQ(q0)} → ${fmtQ(q1)})`);
       else { const w=wNew; ch.qty=String(R2(q1)); qNew=w?q1*(1+w/100):q1; if(w) warn.push(`שורה ${line}: ${n.code} – הכמות שהוקלדה ${fmtQ(q1)} נשמרה כנטו, והפחת ${fmt(w,1)}% מתווסף עליה = ${fmtQ(qNew)}`); } }
