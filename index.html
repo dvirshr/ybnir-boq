@@ -1412,7 +1412,7 @@ function effiExport(o){
   const FC=finCalc(); const FR=(OHC&&OHC.ff>1)?[]:FC.rows; // כל השורות הכלכליות (גם 0%) – כדי שאפשר יהיה להזין אחוז באקסל ולטעון חזרה
   const OB=new Set(typeof ohBlds==='function'?ohBlds():[]);
   aoa.push(['','','','','','','סה"כ כתב כמויות'+(OHC?' (מועמס)':''),'',null,null,null,'','','']);
-  FR.forEach(r=>aoa.push(['','','','','','',r.name,'%',null,r.p,null,'','בסיס: '+FIN_BASE[r.base],'']));
+  FR.forEach(r=>aoa.push(['','','','','','',r.name,'%',null,r.p,null,'','בסיס: '+FIN_BASE[r.base]+(r.isG&&r.g?` · כמות = סכום ערבות (${fmt(r.g,2)}% מהבסיס ${fmt(r.B)})`:''),'']));
   if(FR.length) aoa.push(['','','','','','','סה"כ כולל עלויות כלכליות','',null,null,null,'','','']);
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   const isInt=v=>Math.abs(v-Math.round(v))<1e-9;
@@ -1421,7 +1421,7 @@ function effiExport(o){
   const TR=N+1; ws['K'+TR]={t:'n',v:R2(G),f:`SUBTOTAL(9,K2:K${N})`,z:'#,##0'};
   const dirF=`SUMPRODUCT(${[...OB].map(c=>`(B2:B${N}<>"${c}")*`).join('')}K2:K${N})`;
   let prev=`K${TR}`, profCell=''; FR.forEach((r,j)=>{ const i=TR+1+j; const bf=r.base==='d'?(OHC?`SUM(K2:K${N})`:dirF):r.base==='cum'?prev:r.base==='boqp'?`SUM(K2:K${N})`+(profCell?`+${profCell}`:''):`SUM(K2:K${N})`; if(r.k==='prf') profCell=`K${i}`;
-    ws['I'+i]={t:'n',v:R2(r.B),f:bf,z:'#,##0'}; ws['J'+i]={t:'n',v:r.p,z:'0.00'}; ws['K'+i]={t:'n',v:R2(r.v),f:`I${i}*J${i}/100`,z:'#,##0'};
+    ws['I'+i]={t:'n',v:R2(r.A),f:(r.isG&&r.g)?`(${bf})*${r.g}/100`:bf,z:'#,##0'}; ws['J'+i]={t:'n',v:r.p,z:'0.00'}; ws['K'+i]={t:'n',v:R2(r.v),f:`I${i}*J${i}/100`,z:'#,##0'};
     prev=`${prev}+K${i}`; });
   const GR=TR+FR.length+1; if(FR.length) ws['K'+GR]={t:'n',v:R2(G+FR.reduce((a,r)=>a+r.v,0)),f:`K${TR}+SUM(K${TR+1}:K${TR+FR.length})`,z:'#,##0'};
   ws['!cols']=[{wch:7,hidden:true},{wch:6},{wch:18},{wch:5},{wch:7},{wch:12},{wch:60},{wch:7},{wch:11},{wch:11},{wch:14},{wch:18},{wch:40,hidden:!o.notes},{wch:40}];
@@ -1560,12 +1560,12 @@ document.addEventListener('click',e=>{ if(!e.target.closest||!e.target.closest('
   XLSX.writeFile(wb,`טופס פרויקט ${state.project||''}.xlsx`.replace(/\s+/g,' ')); toast('הקובץ יוצא'); });
 
 /* ---------- עלויות כלכליות: מחוץ לכתב הכמויות (הנדסי ↔ כלכלי) ---------- */
-const FIN_DEF=[{k:'ins',name:'ביטוח',base:'boq',re:/ביטוח/},{k:'bnm',name:'בנ"מ (בלתי נראה מראש)',base:'d',re:/בצ"?מ|בנ"?מ|בלתי\s*נראה/},{k:'prf',name:'רווח קבלני',base:'boq',re:/^רווח/},{k:'gex',name:'ערבות ביצוע – עמלות',base:'boqp',re:/ערבות\s*ביצוע/},{k:'gwr',name:'ערבות בדק – עמלות',base:'boqp',re:/ערבות\s*בדק/},{k:'fin',name:'הוצאות מימון',base:'boqp',re:/הוצאות\s*מימון|מימון/}];
+const FIN_DEF=[{k:'ins',name:'ביטוח',base:'boq',re:/ביטוח/},{k:'bnm',name:'בנ"מ (בלתי נראה מראש)',base:'d',re:/בצ"?מ|בנ"?מ|בלתי\s*נראה/},{k:'prf',name:'רווח קבלני',base:'boq',re:/^רווח/},{k:'gex',name:'ערבות ביצוע – עמלות',base:'boqp',g:1,re:/ערבות\s*ביצוע/},{k:'gwr',name:'ערבות בדק – עמלות',base:'boqp',g:1,re:/ערבות\s*בדק/},{k:'fin',name:'הוצאות מימון',base:'boqp',re:/הוצאות\s*מימון|מימון/}];
 const FIN_BASE={boq:'עלות כוללת (סה"כ כתב כמויות)',boqp:'עלות כוללת + רווח',cum:'עלות כוללת + כל הכלכליות שמעל',d:'עלות ישירה (בלי מבני תקורה)'};
-function finRows(){ const F=state.fin||[]; return FIN_DEF.map(d=>Object.assign({k:d.k,name:d.name,pct:'',base:d.base},F.find(x=>x.k===d.k)||{})); }
+function finRows(){ const F=state.fin||[]; return FIN_DEF.map(d=>Object.assign({k:d.k,name:d.name,pct:'',base:d.base},d.g?{gr:''}:{},F.find(x=>x.k===d.k)||{})); }
 function finCalc(){ PCTB=null; const G=state.tree.reduce((a,n)=>a+total(n),0), D=pctBase({pctB:'d'}); const pp=r=>+String(r.pct||'').replace('%','')||0;
   let cum=G, profV=0; // סדר השורות: ביטוח, בנ"מ, רווח, ערבויות, מימון – "עלות כוללת + רווח" משתמש ברווח שחושב מעליו
-  const R=finRows().map(r=>{ const p=pp(r); const B=r.base==='d'?D:r.base==='cum'?cum:r.base==='boqp'?G+profV:G; const v=B*p/100; cum+=v; if(r.k==='prf') profV=v; return Object.assign({},r,{p,B,v}); });
+  const R=finRows().map(r=>{ const p=pp(r); const B=r.base==='d'?D:r.base==='cum'?cum:r.base==='boqp'?G+profV:G; const isG=!!(FIN_DEF.find(d=>d.k===r.k)||{}).g, g=isG?(+String(r.gr||'').replace('%','')||0):0; const A=isG&&g?B*g/100:B; const v=A*p/100; cum+=v; if(r.k==='prf') profV=v; return Object.assign({},r,{p,B,v,isG,g,A}); });
   return {G,D,rows:R,sum:R.reduce((a,r)=>a+r.v,0),grand:cum,prof:profV}; }
 function finFindSecs(){ const L=[]; walk(state.tree,(n,p)=>{ if(n.t!=='i') return; const nm=(n.name||'').trim(); const d=FIN_DEF.find(x=>x.re.test(nm)); if(!d) return; if(!(/%/.test(n.unit||'')||isPct(n)||/^(ביטוח|בצ"?מ|בנ"?מ|ערבות|הוצאות מימון|רווח)/.test(nm))) return; L.push({n,p,d}); }); return L; }
 function finMove(){
@@ -1582,13 +1582,13 @@ function finPanel(){
   const L=finFindSecs();
   return `<div class="panel"><h3>עלויות כלכליות <small class="hint" style="font-weight:400">– מחוץ לכתב הכמויות. מתווספות מעל סה"כ כתב הכמויות (בייצוא לאפי ובכותרת)</small></h3>
    ${L.length?`<div style="border:1px solid #fec84b;background:#fffaeb;border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:13px">בכתב הכמויות יש ${L.length} סעיפים כלכליים: ${L.map(x=>esc(x.n.code+' '+x.n.name)).join(' · ')} <button class="btn small" id="fin_move">העבר לכאן</button></div>`:''}
-   <table class="boq plist" style="min-width:0;table-layout:auto"><thead><tr><th>סעיף</th><th class="n">%</th><th>בסיס</th><th class="n">ערך הבסיס</th><th class="n">סכום</th><th></th></tr></thead><tbody>
-   <tr style="font-weight:700"><td>סה"כ כתב כמויות</td><td></td><td></td><td></td><td class="n num">${fmt(C.G)}</td><td></td></tr>
-   ${C.rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${inp(`data-fin="${r.k}" data-fk="pct"`,r.pct,64,'0')}</td><td><select data-fin="${r.k}" data-fk="base" style="border:1px solid var(--line);border-radius:6px;padding:2px 4px">${Object.entries(FIN_BASE).map(([k,l])=>`<option value="${k}" ${r.base===k?'selected':''}>${l}</option>`).join('')}</select></td><td class="n num">${r.p?fmt(r.B):''}</td><td class="n num">${r.v?fmt(r.v):'—'}</td><td class="hint" style="margin:0;font-size:11px">${r.src?'הועבר מ-'+esc(r.src):''}</td></tr>`).join('')}
-   <tr style="font-weight:700;border-top:2px solid var(--line)"><td>סה"כ כולל עלויות כלכליות</td><td></td><td></td><td></td><td class="n num">${fmt(C.grand)}</td><td class="hint" style="margin:0;font-weight:400">כלכליות: ${fmt(C.sum)} ₪ (${C.G?fmt(C.sum/C.G*100,2):0}%)</td></tr></tbody></table></div>`;
+   <table class="boq plist" style="min-width:0;table-layout:auto"><thead><tr><th>סעיף</th><th>בסיס</th><th class="n">ערך הבסיס</th><th class="n">שיעור ערבות %</th><th class="n">סכום ערבות</th><th class="n">% עלות</th><th class="n">סכום</th><th></th></tr></thead><tbody>
+   <tr style="font-weight:700"><td>סה"כ כתב כמויות</td><td></td><td></td><td></td><td></td><td></td><td class="n num">${fmt(C.G)}</td><td></td></tr>
+   ${C.rows.map(r=>`<tr><td>${esc(r.name)}</td><td><select data-fin="${r.k}" data-fk="base" style="border:1px solid var(--line);border-radius:6px;padding:2px 4px">${Object.entries(FIN_BASE).map(([k,l])=>`<option value="${k}" ${r.base===k?'selected':''}>${l}</option>`).join('')}</select></td><td class="n num">${fmt(r.B)}</td><td class="n">${r.isG?inp(`data-fin="${r.k}" data-fk="gr"`,r.gr,56,'100'):''}</td><td class="n num">${r.isG?fmt(r.A):''}</td><td class="n">${inp(`data-fin="${r.k}" data-fk="pct"`,r.pct,64,'0')}</td><td class="n num">${r.v?fmt(r.v):'—'}</td><td class="hint" style="margin:0;font-size:11px">${r.src?'הועבר מ-'+esc(r.src):''}</td></tr>`).join('')}
+   <tr style="font-weight:700;border-top:2px solid var(--line)"><td>סה"כ כולל עלויות כלכליות</td><td></td><td></td><td></td><td></td><td></td><td class="n num">${fmt(C.grand)}</td><td class="hint" style="margin:0;font-weight:400">כלכליות: ${fmt(C.sum)} ₪ (${C.G?fmt(C.sum/C.G*100,2):0}%)</td></tr></tbody></table></div>`;
 }
 document.addEventListener('change',e=>{ const x=e.target; if(!x.dataset||!x.dataset.fin) return; state.fin=finRows(); const r=state.fin.find(f=>f.k===x.dataset.fin); if(!r) return;
-  if(x.dataset.fk==='pct'){ const v=String(x.value).replace('%','').trim(); if(v!==''&&!Number.isFinite(+v)){ toast('מספר לא תקין'); return; } r.pct=v; } else r.base=x.value; save(); render(); if(typeof pfSoon==='function') pfSoon(); });
+  if(x.dataset.fk==='pct'||x.dataset.fk==='gr'){ const v=String(x.value).replace('%','').trim(); if(v!==''&&!Number.isFinite(+v)){ toast('מספר לא תקין'); return; } r[x.dataset.fk]=v; } else r.base=x.value; save(); render(); if(typeof pfSoon==='function') pfSoon(); });
 document.addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('#fin_move')){ finMove(); if(typeof pfSoon==='function') pfSoon(); } });
 
 /* ---------- ריכוזי כמויות לפי נושא (בטון, ברזל, טפסנות...) – להדפסה ולאקסל ---------- */
