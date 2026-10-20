@@ -3021,9 +3021,10 @@ $('fileEditImp').onchange=async e=>{
 function editPlan(rows){
   const idMap={}; walk(state.tree,(n,p)=>{ if(n.t==='i'||n.t==='r'||n.t==='k') idMap[n.id]={n,p}; });
   const S=v=>String(v??'').trim(); const same=(a,b)=>{ a=S(a); b=S(b); if(a===b) return true; const x=+a.replace(/,/g,''), y=+b.replace(/,/g,''); return a!==''&&b!==''&&Number.isFinite(x)&&Number.isFinite(y)&&Math.abs(x-y)<1e-9; };
-  const ops=[], warn=[], seen=new Set(); let curSec=null, curSecNew=null, curRes=null, curResNew=null;
+  const ops=[], warn=[], seen=new Set(), optL=new Set(); let curSec=null, curSecNew=null, curRes=null, curResNew=null;
   rows.forEach((r,ix)=>{
-    const line=ix+2, id=+S(r['מזהה'])||0, act=S(r['פעולה']), lvl=S(r['רמה']);
+    const line=ix+2, id=+S(r['מזהה'])||0, actRaw=S(r['פעולה']), lvl=S(r['רמה']);
+    const act=actRaw.replace(/\s*\?$/,'').trim(); if(/\?$/.test(actRaw)) optL.add(line);   // "?" בסוף הפעולה = שינוי לבחירה (לא מסומן בברירת מחדל)
     const del=/^(מחק|x|X|מחיקה)$/.test(act);
     if(id&&idMap[id]){
       seen.add(id); const {n}=idMap[id];
@@ -3089,6 +3090,7 @@ function editPlan(rows){
   const gone=Object.values(idMap).filter(x=>!seen.has(x.n.id)&&!(x.n.t==='r'&&!seen.has(x.p[x.p.length-1]?.id)&&false));
   // only report rows whose section is still in the file (or sections themselves)
   const goneRep=gone.filter(x=>x.n.t==='i'||seen.has(x.p[x.p.length-1]?.id)||!gone.some(g=>g.n===x.p[x.p.length-1]));
+  ops.forEach(o=>{ if(optL.has(o.line)) o.opt=true; });
   return {ops,warn,gone:goneRep};
 }
 function effiPlan(rows){
@@ -3157,32 +3159,72 @@ function effiPlan(rows){
 function editImportPreview(rows,fname,P0){
   if(!rows.length||!('מזהה' in rows[0])){ toast('הקובץ לא במבנה של "אקסל לעריכה"'); return; }
   const P=P0||editPlan(rows); const h=$('printDlgHost');
+  const KN={upd:'עדכון',addS:'סעיף חדש',addR:'משאב חדש',addK:'מק"ט חדש',del:'מחיקה',move:'העברה',fin:'עלות כלכלית',gone:'הוסר מהקובץ'};
+  const FL={code:'קוד',name:'תאור',unit:"יח'",qty:'כמות',qexpr:'כמות',note:'הערה',price:'מחיר',pdate:'תאריך מחיר',psrc:'מקור מחיר',sp:'מחיר סעיף',w:'פחת %',calcAdd:'כמות (התאמה בפירוט)'};
+  const T={i:'סעיף',r:'משאב',k:'מק"ט'};
+  const num=v=>{ const x=+String(v??'').replace(/,/g,''); return String(v??'').trim()!==''&&Number.isFinite(x)?x:null; };
+  const cut=v=>{ v=String(v??''); return v.length>60?v.slice(0,60)+'…':v; };
+  const oldOf=(n,k)=>{ if(k==='calcAdd') return calcQty(n); if(k==='qty') return n.calc&&n.calc.length?calcQty(n):(n.qty??''); if(k==='qexpr') return n.calc&&n.calc.length?calcQty(n):(n.qexpr??''); return n[k]??''; };
+  // פריט = שדה בודד בעדכון / שורה חדשה / מחיקה / העברה / שורה שהוסרה מהקובץ
+  const IT=[];
+  P.ops.forEach((o,oi)=>{
+    if(o.k==='upd'){ for(const k of Object.keys(o.ch)){ if(k==='pdate'||k==='psrc') continue; const isQ=k==='qty'||k==='qexpr'||k==='calcAdd';
+        const ov=oldOf(o.n,k), nv=k==='calcAdd'?calcQty(o.n)+(+o.ch.calcAdd.n):o.ch[k];
+        const a=num(ov), b=num(nv); IT.push({oi,k,o,line:o.line,typ:'upd',code:o.n.code||'',lvl:T[o.n.t]||'',fld:FL[k]||k,ov,nv,isQ,dp:isQ&&a!==null&&b!==null&&a!==0?(b-a)/Math.abs(a)*100:null,on:!o.opt}); } }
+    else IT.push({oi,o,line:o.line,typ:o.k,code:(o.n&&o.n.code)||(o.sec&&o.sec.code)||(o.r&&o.r.code)||'',lvl:o.k==='addS'?'סעיף':o.k==='addR'?'משאב':o.k==='addK'?'מק"ט':(o.n?T[o.n.t]||'':''),fld:'',ov:'',nv:o.txt,isQ:false,dp:null,on:!o.opt});
+  });
+  P.gone.forEach((x,gi)=>IT.push({gi,line:'',typ:'gone',code:x.n.code||'',lvl:T[x.n.t]||'',fld:'',ov:cut(x.n.name||nodeName(x.n)),nv:'מחיקה מהכתב',isQ:false,dp:null,on:false}));
+  // תלות: משאב/מק"ט חדש תחת סעיף/משאב חדש שלא נבחר – לא ייכנס
+  const parentIt=it=>{ if(it.typ==='addR') return IT.find(x=>x.typ==='addS'&&x.o.sec===it.o.sec); if(it.typ==='addK') return IT.find(x=>x.typ==='addR'&&x.o.r===it.o.res); return null; };
+  const blocked=it=>{ let p=parentIt(it); while(p){ if(!p.on) return true; p=parentIt(p); } return false; };
   const cnt=k=>P.ops.filter(o=>o.k===k).length;
-  h.innerHTML=`<div class="pdlg" style="z-index:9999"><div class="box" style="width:min(820px,100%);max-height:92vh;overflow:auto">
+  let flt='';
+  const rowH=(it,ix)=>{ const bl=blocked(it); const cls=it.typ==='gone'||it.typ==='del'?'background:#fef3f2':it.o&&it.o.opt?'background:#fffaeb':'';
+    const dp=it.dp===null?'':`<span style="color:${Math.abs(it.dp)>=20?'#b42318;font-weight:700':'var(--muted)'}">${it.dp>0?'+':''}${fmt(it.dp,1)}%</span>`;
+    const fq=v=>{ const x=num(v); return x!==null?fmtQ(x):esc(cut(v)); };
+    return `<tr data-ix="${ix}" style="${cls}"><td><input type="checkbox" data-ck="${ix}" ${it.on&&!bl?'checked':''} ${bl?'disabled title="תלוי בשורה חדשה שלא נבחרה"':''}></td><td class="n">${it.line}</td><td>${esc(KN[it.typ]||it.typ)}${it.o&&it.o.opt?' <span class="pill note" style="font-size:10px">לבחירה</span>':''}</td><td class="mono">${esc(it.code)}</td><td>${esc(it.lvl)}${it.fld?' · '+esc(it.fld):''}</td><td class="n">${it.typ==='upd'?fq(it.ov):esc(it.ov)}</td><td class="${it.typ==='upd'?'n':''}">${it.typ==='upd'?fq(it.nv):esc(cut(it.nv))}</td><td class="n">${dp}</td></tr>`; };
+  const vis=it=>!flt||[it.code,it.fld,it.lvl,KN[it.typ],String(it.nv),String(it.ov)].join(' ').toLowerCase().includes(flt);
+  h.innerHTML=`<div class="pdlg" style="z-index:9999"><div class="box" style="width:min(1100px,100%);max-height:94vh;overflow:auto">
     <h2>טעינת עריכה – ${esc(fname)}</h2>
-    <p style="margin:0">עדכונים: <b>${cnt('upd')}</b> · סעיפים חדשים: <b>${cnt('addS')}</b> · משאבים חדשים: <b>${cnt('addR')}</b> · מחיקות מסומנות: <b>${cnt('del')}</b> · העברות: <b>${cnt('move')}</b></p>
-    ${P.gone.length?`<label style="display:block;margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:8px"><input type="checkbox" id="ei_gone" checked> למחוק גם <b>${P.gone.length}</b> שורות שהוסרו מהקובץ (${P.gone.filter(x=>x.n.t==='i').length} סעיפים, ${P.gone.filter(x=>x.n.t==='r').length} משאבים)
-      <div class="hint" style="margin:4px 0 0">${P.gone.slice(0,12).map(x=>esc((x.n.t==='i'?'סעיף ':'משאב ')+(x.n.code||'')+' '+(x.n.name||nodeName(x.n)).slice(0,40))).join('<br>')}${P.gone.length>12?'<br>…':''}</div></label>`:''}
-    ${P.warn.length?`<div style="margin-top:8px;color:var(--warn,#a15c00)"><b>הערות (${P.warn.length}):</b><br>${P.warn.slice(0,30).map(esc).join('<br>')}${P.warn.length>30?'<br>…':''}</div>`:''}
-    <details style="margin-top:8px" ${P.ops.length<=40?'open':''}><summary class="label" style="cursor:pointer">פירוט השינויים (${P.ops.length})</summary><div class="hint" style="margin:4px 0 0;max-height:40vh;overflow:auto">${P.ops.map(o=>`שורה ${o.line}: ${esc(o.txt)}`).join('<br>')||'אין שינויים'}</div></details>
-    <p class="hint">לפני הטעינה נשמרת גרסה, כך שאפשר לחזור אחורה דרך "גרסאות".</p>
-    <div class="row" style="justify-content:flex-end"><button class="btn" id="ei_print" title="הדפסת רשימת השינויים וההערות">הדפסה / PDF</button><button class="btn" id="ei_xls">ייצוא לאקסל</button><button class="btn" id="ei_cancel">ביטול</button><button class="btn primary" id="ei_go" ${(P.ops.length||P.gone.length)?'':'disabled'}>החל שינויים</button></div></div></div>`;
+    <p style="margin:0">עדכונים: <b>${cnt('upd')}</b> שורות (${IT.filter(x=>x.typ==='upd').length} שדות) · סעיפים חדשים: <b>${cnt('addS')}</b> · משאבים חדשים: <b>${cnt('addR')}</b> · מחיקות: <b>${cnt('del')}</b> · העברות: <b>${cnt('move')}</b>${P.gone.length?` · הוסרו מהקובץ: <b>${P.gone.length}</b>`:''}</p>
+    ${P.warn.length?`<details style="margin-top:6px;color:var(--warn,#a15c00)"><summary style="cursor:pointer"><b>הערות – לא ייכנסו (${P.warn.length})</b></summary>${P.warn.map(esc).join('<br>')}</details>`:''}
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">
+      <button class="btn" data-sel="all">סמן הכל</button><button class="btn" data-sel="none">בטל הכל</button><button class="btn" data-sel="def">ברירת מחדל</button>
+      <button class="btn" data-sel="q">רק כמויות</button><button class="btn" data-sel="new">רק חדשים</button><button class="btn" data-sel="txt">רק תאור/הערות</button>
+      <input id="ei_f" placeholder="סינון: קוד / שדה / טקסט" style="flex:1;min-width:160px">
+      <b id="ei_n"></b></div>
+    <div style="max-height:52vh;overflow:auto;margin-top:6px;border:1px solid var(--line);border-radius:8px">
+      <table class="boq" style="min-width:0;width:100%;table-layout:auto;font-size:12px"><thead style="position:sticky;top:0;background:var(--bg,#fff);z-index:1"><tr><th style="width:28px"><input type="checkbox" id="ei_vis" title="סימון/ביטול השורות המוצגות"></th><th class="n">שורה</th><th>סוג</th><th>קוד</th><th>רמה · שדה</th><th class="n">אצלך (ישן)</th><th>בקובץ (חדש)</th><th class="n">הפרש</th></tr></thead><tbody id="ei_tb"></tbody></table></div>
+    <p class="hint" style="margin:6px 0 0">צהוב = שינוי לבחירה ("?" בעמודת פעולה) – לא מסומן מראש. אדום = מחיקה. הפרש ≥20% מודגש. לפני הטעינה נשמרת גרסה, כך שאפשר לחזור אחורה דרך "גרסאות".</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" id="ei_print" title="הדפסת רשימת השינויים וההערות">הדפסה / PDF</button><button class="btn" id="ei_xls">ייצוא לאקסל</button><button class="btn" id="ei_cancel">ביטול</button><button class="btn primary" id="ei_go">החל נבחרים</button></div></div></div>`;
+  const tb=$('ei_tb');
+  const draw=()=>{ tb.innerHTML=IT.map((it,ix)=>vis(it)?rowH(it,ix):'').join('')||'<tr><td colspan="8" class="hint">אין שינויים</td></tr>'; cntUpd(); };
+  const sel=()=>IT.filter(it=>it.on&&!blocked(it));
+  const cntUpd=()=>{ const n=sel().length; $('ei_n').textContent=`נבחרו ${n} מתוך ${IT.length}`; $('ei_go').disabled=!n; };
+  tb.addEventListener('change',e=>{ const ix=e.target.dataset.ck; if(ix===undefined) return; IT[+ix].on=e.target.checked; draw(); });
+  h.querySelectorAll('[data-sel]').forEach(b=>b.onclick=()=>{ const m=b.dataset.sel;
+    IT.forEach(it=>{ it.on= m==='all'?true: m==='none'?false: m==='def'?(it.typ==='gone'?false:!(it.o&&it.o.opt)): m==='q'?it.isQ&&!(it.o&&it.o.opt): m==='new'?/^add/.test(it.typ)&&!(it.o&&it.o.opt): m==='txt'?(it.k==='name'||it.k==='note')&&!(it.o&&it.o.opt):it.on; }); draw(); });
+  $('ei_vis').onchange=e=>{ IT.forEach(it=>{ if(vis(it)) it.on=e.target.checked; }); draw(); };
+  $('ei_f').oninput=e=>{ flt=e.target.value.trim().toLowerCase(); draw(); };
   $('ei_cancel').onclick=()=>h.innerHTML='';
-  const KN={upd:'עדכון',addS:'סעיף חדש',addR:'משאב חדש',addK:'מק"ט חדש',del:'מחיקה',move:'העברה',fin:'עלות כלכלית'};
-  const rowsOf=()=>P.ops.map(o=>({'שורה בקובץ':o.line,'סוג':KN[o.k]||o.k,'שינוי':o.txt})).concat(P.warn.map(w=>({'שורה בקובץ':(w.match(/^שורה (\d+)/)||[])[1]||'','סוג':'הערה','שינוי':w})));
+  const rowsOf=()=>IT.map(it=>({'נבחר':it.on&&!blocked(it)?'✓':'','שורה בקובץ':it.line,'סוג':KN[it.typ]||it.typ,'קוד':it.code,'רמה':it.lvl,'שדה':it.fld,'אצלך (ישן)':String(it.ov??''),'בקובץ (חדש)':String(it.nv??''),'הפרש %':it.dp===null?'':+it.dp.toFixed(1)})).concat(P.warn.map(w=>({'נבחר':'','שורה בקובץ':(w.match(/^שורה (\d+)/)||[])[1]||'','סוג':'הערה','קוד':'','רמה':'','שדה':'','אצלך (ישן)':'','בקובץ (חדש)':w,'הפרש %':''})));
   $('ei_print').onclick=()=>{ const d=new Date().toLocaleDateString('he-IL'); const R=rowsOf();
-    $('printArea').innerHTML=`<h1>שינויים מטעינת קובץ – ${esc(state.project||'')}</h1><div class="meta">${esc(fname)} · ${d} · ${P.ops.length} שינויים · ${P.warn.length} הערות${P.gone.length?' · '+P.gone.length+' שורות שהוסרו מהקובץ':''} · <b>לפני אישור</b></div>
-      <table><thead><tr><th class="n" style="width:8%">שורה</th><th style="width:12%">סוג</th><th>שינוי</th></tr></thead><tbody>${R.map(r=>`<tr${r['סוג']==='הערה'?' class="pn"':''}><td class="n">${esc(String(r['שורה בקובץ']))}</td><td>${esc(r['סוג'])}</td><td>${esc(r['שינוי'])}</td></tr>`).join('')}</tbody></table>`;
+    $('printArea').innerHTML=`<h1>שינויים מטעינת קובץ – ${esc(state.project||'')}</h1><div class="meta">${esc(fname)} · ${d} · נבחרו ${sel().length} מתוך ${IT.length} · ${P.warn.length} הערות · <b>לפני אישור</b></div>
+      <table><thead><tr><th style="width:4%">✓</th><th class="n" style="width:6%">שורה</th><th style="width:9%">סוג</th><th style="width:9%">קוד</th><th style="width:12%">רמה · שדה</th><th>אצלך (ישן)</th><th>בקובץ (חדש)</th><th class="n" style="width:7%">הפרש</th></tr></thead><tbody>${R.map(r=>`<tr${r['סוג']==='הערה'?' class="pn"':''}><td>${r['נבחר']}</td><td class="n">${esc(String(r['שורה בקובץ']))}</td><td>${esc(r['סוג'])}</td><td>${esc(r['קוד'])}</td><td>${esc(r['רמה']+(r['שדה']?' · '+r['שדה']:''))}</td><td>${esc(cut(r['אצלך (ישן)']))}</td><td>${esc(cut(r['בקובץ (חדש)']))}</td><td class="n">${r['הפרש %']===''?'':r['הפרש %']+'%'}</td></tr>`).join('')}</tbody></table>`;
     const pt=document.title; document.title='שינויים מטעינה '+(state.project||''); setTimeout(()=>{ window.print(); document.title=pt; },50); };
-  $('ei_xls').onclick=()=>{ const ws=XLSX.utils.json_to_sheet(rowsOf()); ws['!cols']=[{wch:10},{wch:12},{wch:120}]; const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'שינויים'); XLSX.writeFile(wb,`שינויים מטעינה ${state.project||''}.xlsx`.replace(/\s+/g,' ')); };
+  $('ei_xls').onclick=()=>{ const ws=XLSX.utils.json_to_sheet(rowsOf()); ws['!cols']=[{wch:6},{wch:10},{wch:12},{wch:12},{wch:16},{wch:50},{wch:50},{wch:9}]; const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'שינויים'); XLSX.writeFile(wb,`שינויים מטעינה ${state.project||''}.xlsx`.replace(/\s+/g,' ')); };
   $('ei_go').onclick=async()=>{
-    const delGone=$('ei_gone')?$('ei_gone').checked:false;
+    const S2=sel(); if(!S2.length) return;
+    const ops=[]; P.ops.forEach((o,oi)=>{ if(o.k==='upd'){ const ks=S2.filter(it=>it.oi===oi).map(it=>it.k); if(!ks.length) return; const ch={}; ks.forEach(k=>ch[k]=o.ch[k]); if(ch.price&&o.ch.pdate){ ch.pdate=o.ch.pdate; } if(ch.price&&o.ch.psrc){ ch.psrc=o.ch.psrc; } ops.push(Object.assign({},o,{ch})); } else if(S2.some(it=>it.oi===oi&&it.typ!=='gone')) ops.push(o); });
+    const gone=S2.filter(it=>it.typ==='gone').map(it=>P.gone[it.gi]);
+    if(gone.length&&!confirm(`למחוק ${gone.length} שורות שהוסרו מהקובץ? (נשמרות בסל המחזור)`)) return;
     await flushCloud(); if(cloudDirty||CONFLICT){ toast('יש שינויים שלא נשמרו בענן – נסה שוב בעוד רגע'); return; }
     await pushCloud(false,'לפני טעינת עריכה מאקסל ('+fname+')');
-    const r=applyEditPlan(P,delGone); h.innerHTML=''; PMAP=null; save(); render();
-    await pushCloud(false,`טעינת עריכה מאקסל: ${r.upd} עודכנו, ${r.addS} סעיפים ו-${r.addR} משאבים נוספו, ${r.del} נמחקו`);
-    toast(`בוצע: ${r.upd} עודכנו · ${r.addS} סעיפים חדשים · ${r.addR} משאבים חדשים · ${r.del} נמחקו`);
+    const r=applyEditPlan({ops,warn:P.warn,gone},true); h.innerHTML=''; PMAP=null; save(); render();
+    await pushCloud(false,`טעינת עריכה מאקסל (${S2.length}/${IT.length} נבחרו): ${r.upd} עודכנו, ${r.addS} סעיפים ו-${r.addR} משאבים נוספו, ${r.del} נמחקו`);
+    toast(`בוצע (${S2.length} מתוך ${IT.length}): ${r.upd} עודכנו · ${r.addS} סעיפים חדשים · ${r.addR} משאבים חדשים · ${r.del} נמחקו`);
   };
+  draw();
 }
 function applyEditPlan(P,delGone){
   const res={upd:0,addS:0,addR:0,del:0}; const secNode=new Map();
