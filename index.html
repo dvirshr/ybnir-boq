@@ -3409,11 +3409,12 @@ document.addEventListener('click',e=>{ if(e.target&&e.target.id==='btnPull') pul
 setInterval(()=>{ const b=document.getElementById('btnPull'); if(b) b.hidden=!CUR; const c=document.getElementById('btnCmp'); if(c) c.hidden=!CUR; },1500);
 
 /* ---------- השוואת פרויקטים: מכנה משותף (יח"ד / מ"ר שו"ע / מ"ר ברוטו), הצמדה למדד, היקף, חריגים, אומדן מהיר ---------- */
-function metricsOf(st){ const keep=state, kOH=OHC; try{ state=st; PMAP=null; PCTB=null; CONCC=null; OHC=null; return projMetrics(); } finally { state=keep; PMAP=null; PCTB=null; CONCC=null; OHC=kOH; } }
+function metricsOf(st){ const keep=state, kOH=OHC; try{ st=Object.assign({},st); st.tree=st.tree||[]; st.lists=Object.assign({},keep.lists||{},st.lists||{}); st.collapsed=st.collapsed||{}; state=st; PMAP=null; PCTB=null; CONCC=null; OHC=null; return projMetrics(); } finally { state=keep; PMAP=null; PCTB=null; CONCC=null; OHC=kOH; } }
 const med=a=>{ const v=a.filter(x=>x>0).sort((x,y)=>x-y); if(!v.length) return null; const m=Math.floor(v.length/2); return v.length%2?v[m]:(v[m-1]+v[m])/2; };
 let CMP_CACHE=new Map();
 async function cmpDlg(){
-  const h=$('printDlgHost'); const all=(await DB.listProjects()).filter(r=>!r.archived);
+  const h=$('printDlgHost'); h.innerHTML='<div class="pdlg"><div class="box" style="width:min(400px,100%)"><p>⚖ טוען השוואת פרויקטים…</p></div></div>';
+  let all; try{ all=(await DB.listProjects()).filter(r=>!r.archived); }catch(e){ h.innerHTML=`<div class="pdlg"><div class="box" style="width:min(500px,100%)"><p style="color:#d92d20">שגיאה בטעינת הפרויקטים: ${esc(e.message)}</p><button class="btn" onclick="this.closest('.pdlg').remove()">סגור</button></div></div>`; return; }
   let sel=new Set(JSON.parse(lsGet('ybnir-cmp-sel')||'null')||all.map(r=>r.id)); if(CUR) sel.add(CUR.id);
   let target=idxLatest(), den='eq';
   const shell=()=>{ h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="השוואת פרויקטים" style="width:min(1300px,100%);max-height:95vh;overflow:auto">
@@ -3434,11 +3435,15 @@ async function cmpDlg(){
     $('cm_t').onchange=e=>{ target=e.target.value; draw(); }; $('cm_d').onchange=e=>{ den=e.target.value; draw(); };
     $('cm_idx').onclick=idxEd; $('cm_bench').onclick=bench; $('cm_x').onclick=xls; };
   let M=[];
-  const run=async()=>{ $('cm_body').innerHTML='<p class="hint">טוען פרויקטים…</p>'; M=[];
-    for(const r of all){ if(!sel.has(r.id)) continue; let m;
-      if(CUR&&CUR.id===r.id) m=projMetrics(); else { let c=CMP_CACHE.get(r.id); if(!c||c.rev!==r.rev){ const P=await DB.getProject(r.id); c={rev:r.rev,m:metricsOf(P.state)}; CMP_CACHE.set(r.id,c); } m=c.m; }
-      M.push(Object.assign({id:r.id,cur:!!(CUR&&CUR.id===r.id)},m,{name:r.name})); }
-    draw(); };
+  const ERR=[];
+  const run=async()=>{ M=[]; ERR.length=0; const L=all.filter(r=>sel.has(r.id)); let k=0;
+    for(const r of L){ k++; const b=$('cm_body'); if(!b) return; b.innerHTML=`<p class="hint">טוען ${k}/${L.length}: ${esc(r.name)}…</p>`;
+      try{ let m;
+        if(CUR&&CUR.id===r.id) m=projMetrics(); else { let c=CMP_CACHE.get(r.id); if(!c||c.rev!==r.rev){ const P=await DB.getProject(r.id); c={rev:r.rev,m:metricsOf(P.state||{})}; CMP_CACHE.set(r.id,c); } m=c.m; }
+        M.push(Object.assign({id:r.id,cur:!!(CUR&&CUR.id===r.id)},m,{name:r.name})); }
+      catch(e){ console.error('cmp',r.name,e); ERR.push(r.name+': '+e.message); } }
+    try{ draw(); }catch(e){ console.error(e); $('cm_body').innerHTML='<p style="color:#d92d20">שגיאה בהצגה: '+esc(e.message)+'</p>'; }
+    if(ERR.length) $('cm_body').insertAdjacentHTML('afterbegin',`<div style="border:1px solid #fda29b;background:#fef3f2;border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:13px">⚠ לא נטענו: ${ERR.map(esc).join(' · ')}</div>`); };
   const fOf=m=>{ if(!target) return {f:1,ok:true}; const a=idxAt(target), b=idxAt(m.bdate); return a&&b?{f:a/b,ok:true}:{f:1,ok:false}; };
   const D={eq:m=>m.eq,u:m=>m.U,g:m=>m.gross}, DL={eq:'₪ למ"ר שו"ע',u:'₪ ליח"ד',g:'₪ למ"ר ברוטו'};
   let LAST=null;
@@ -3494,8 +3499,8 @@ async function cmpDlg(){
     A.push([]); A.push(['הערות',...M.map(m=>[m.char.notes||'',...Object.entries(m.scope).filter(([,x])=>x.n||x.s).map(([c,x])=>c+' '+SCOPE[x.s||'']+(x.n?': '+x.n:''))].filter(Boolean).join(' | '))]);
     const ws=XLSX.utils.aoa_to_sheet(A); ws['!cols']=[{wch:34},...M.map(()=>({wch:18}))]; const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'השוואה'); XLSX.writeFile(wb,`השוואת פרויקטים ${new Date().toLocaleDateString('he-IL').replace(/\./g,'-')}.xlsx`); };
   shell(); run(); }
-$('p_cmp').onclick=()=>cmpDlg().catch(e=>toast(e.message));
-document.addEventListener('click',e=>{ if(e.target&&e.target.id==='btnCmp') cmpDlg().catch(err=>toast(err.message)); });
+$('p_cmp').onclick=()=>cmpDlg().catch(e=>{ console.error(e); $('printDlgHost').innerHTML=`<div class="pdlg"><div class="box" style="width:min(500px,100%)"><p style="color:#d92d20">שגיאה: ${esc(e.message)}</p><button class="btn" onclick="this.closest('.pdlg').remove()">סגור</button></div></div>`; });
+document.addEventListener('click',e=>{ if(e.target&&e.target.closest&&e.target.closest('#btnCmp')) $('p_cmp').onclick(); });
 $('pr_push').onclick=()=>pushDlg();
 function pushDlg(){
   const C=new Map(); let noCode=0, secOnly=0;
