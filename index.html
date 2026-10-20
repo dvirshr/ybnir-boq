@@ -207,7 +207,7 @@ tr.L1 .share i{background:var(--lv1-ink);opacity:.7}
 .lists .panel table{border-collapse:collapse;width:100%}
 .lists td,.lists th{padding:4px 8px;border-bottom:1px solid var(--line2);text-align:start;font-size:14px}
 .lists .scroll{max-height:340px;overflow:auto}
-.toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));inset-inline-start:50%;transform:translateX(50%);background:var(--lv1);color:var(--lv1-ink);padding:8px 16px;border-radius:6px;z-index:60;font-size:14px;box-shadow:var(--shadow)}
+.toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));inset-inline-start:50%;transform:translateX(50%);background:var(--lv1);color:var(--lv1-ink);padding:8px 16px;border-radius:6px;z-index:10000;font-size:14px;box-shadow:var(--shadow)}
 @media (max-width:700px){.tabs{margin-inline-start:0}.grand{border:none;padding:0}}
 [hidden]{display:none!important}
 .screen{position:fixed;inset:0;z-index:70;background:var(--bg);overflow:auto;padding-block:40px;padding-inline:16px;display:flex;justify-content:center;align-items:flex-start}
@@ -3413,11 +3413,11 @@ function metricsOf(st){ const keep=state, kOH=OHC; try{ st=Object.assign({},st);
 const med=a=>{ const v=a.filter(x=>x>0).sort((x,y)=>x-y); if(!v.length) return null; const m=Math.floor(v.length/2); return v.length%2?v[m]:(v[m-1]+v[m])/2; };
 let CMP_CACHE=new Map();
 async function cmpDlg(){
-  const h=$('printDlgHost'); h.innerHTML='<div class="pdlg"><div class="box" style="width:min(400px,100%)"><p>⚖ טוען השוואת פרויקטים…</p></div></div>';
-  let all; try{ all=(await DB.listProjects()).filter(r=>!r.archived); }catch(e){ h.innerHTML=`<div class="pdlg"><div class="box" style="width:min(500px,100%)"><p style="color:#d92d20">שגיאה בטעינת הפרויקטים: ${esc(e.message)}</p><button class="btn" onclick="this.closest('.pdlg').remove()">סגור</button></div></div>`; return; }
+  const h=$('printDlgHost'); h.innerHTML='<div class="pdlg" style="z-index:90"><div class="box" style="width:min(400px,100%)"><p>⚖ טוען השוואת פרויקטים…</p></div></div>';
+  let all; try{ all=(await DB.listProjects()).filter(r=>!r.archived); }catch(e){ h.innerHTML=`<div class="pdlg" style="z-index:90"><div class="box" style="width:min(500px,100%)"><p style="color:#d92d20">שגיאה בטעינת הפרויקטים: ${esc(e.message)}</p><button class="btn" onclick="this.closest('.pdlg').remove()">סגור</button></div></div>`; return; }
   let sel=new Set(JSON.parse(lsGet('ybnir-cmp-sel')||'null')||all.map(r=>r.id)); if(CUR) sel.add(CUR.id);
   let target=idxLatest(), den='eq';
-  const shell=()=>{ h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="השוואת פרויקטים" style="width:min(1300px,100%);max-height:95vh;overflow:auto">
+  const shell=()=>{ h.innerHTML=`<div class="pdlg" style="z-index:90" id="pdlg"><div class="box" role="dialog" aria-label="השוואת פרויקטים" style="width:min(1300px,100%);max-height:95vh;overflow:auto">
     <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">⚖ השוואת פרויקטים</h2><button class="btn" id="cm_c">סגור</button></div>
     <p class="hint" style="margin:2px 0 8px">מכנה משותף: יח"ד, מ"ר שווה-ערך ומ"ר ברוטו (מטופס הפרויקט). העלויות מוצמדות ל${IDXN} לפי התאריך הקובע של כל פרויקט. פרקים שסומנו "ע"י אחרים" / "לא רלוונטי" לא נספרים בחציון. חריגה מעל 25% מהחציון של האחרים מסומנת.</p>
     <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
