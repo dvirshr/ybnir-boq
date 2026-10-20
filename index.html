@@ -178,6 +178,12 @@ tr.L1 .share i{background:var(--lv1-ink);opacity:.7}
 .calc input:focus{border-color:var(--accent);outline:none}
 .calc .n input{text-align:end;font-family:"IBM Plex Mono",monospace}
 .calc tfoot td{font-weight:700;background:var(--bg)}
+.calc select{border:1px solid var(--line);border-radius:4px;padding:3px;background:var(--surface);font-size:12px;max-width:100%}
+.calc .dims{display:flex;flex-wrap:wrap;gap:4px}
+.calc .cf{display:flex;flex-direction:column;flex:1 1 64px;min-width:58px;max-width:110px}
+.calc .cf span{font-size:10px;color:var(--muted);line-height:1.1;padding-inline-start:4px}
+.calc .cf input{border:1px solid var(--line2);direction:ltr;text-align:end;font-family:"IBM Plex Mono",monospace}
+.calc tr.neg td{background:#fef3f2}
 .sumline{display:flex;justify-content:space-between;align-items:baseline;padding:10px 12px;background:var(--accent-soft);border-radius:8px}
 .sumline b{font:500 18px "IBM Plex Mono",monospace}
 
@@ -528,13 +534,46 @@ function evalExpr(s,Q,RQ){
   if(!/^[0-9+\-*/().\s]+$/.test(s)) return NaN;
   try{ const v=Function('"use strict";return ('+s+')')(); return Number.isFinite(v)?v:NaN; }catch(e){ return NaN; }
 }
+/* צורות בפירוט חישוב כמויות. שורה בלי s = "box" (התנהגות קודמת: מכפלה של כל השדות, ריק = 1) */
+const SHAPES={
+  box:  {n:'חופשי (מס׳×אורך×רוחב×גובה)', f:[['n',"מס'"],['l','אורך'],['w','רוחב'],['h','גובה/עובי']]},
+  len:  {n:'אורך (מ"א)',                f:[['n',"מס'"],['l','אורך']]},
+  area: {n:'שטח (אורך×רוחב)',           f:[['n',"מס'"],['l','אורך'],['w','רוחב']]},
+  per:  {n:'היקף × גובה',               f:[['n',"מס'"],['a','אורך'],['b','רוחב'],['h','גובה']]},
+  cyl:  {n:'גליל',                      f:[['n',"מס'"],['D','קוטר'],['l','אורך/עומק']]},
+  ring: {n:'טבעת / צינור',              f:[['n',"מס'"],['D','קוטר חיצוני'],['di','קוטר פנימי'],['l','אורך']]},
+  trap: {n:'טרפז',                      f:[['n',"מס'"],['a','בסיס עליון'],['b','בסיס תחתון'],['h','גובה'],['l','אורך']]},
+  tri:  {n:'משולש',                     f:[['n',"מס'"],['b','בסיס'],['h','גובה'],['l','אורך']]}
+};
+const ONE_DEF=new Set(['n','l']);   // שדות שריקים = 1 (בצורות שאינן "חופשי"); שאר הממדים ריקים = 0
+/* תוצאה לפי יחידת השורה בגליל/טבעת: מ"ר = מעטפת π·D·L, מ"א = אורך, אחרת נפח */
+function calcLine(l,unit){
+  const sh=SHAPES[l.s]?l.s:'box', keys=SHAPES[sh].f.map(x=>x[0]);
+  if(keys.every(k=>l[k]===''||l[k]==null)) return null;
+  const v={}; for(const k of keys){ const x=evalExpr(l[k]); if(Number.isNaN(x)) return NaN; v[k]=x===null?(sh==='box'||ONE_DEF.has(k)?1:0):x; }
+  const u=UNORM(unit), PI=Math.PI; let r;
+  switch(sh){
+    case 'box':  r=v.n*v.l*v.w*v.h; break;
+    case 'len':  r=v.n*v.l; break;
+    case 'area': r=v.n*v.l*v.w; break;
+    case 'per':  r=v.n*2*(v.a+v.b)*v.h; break;
+    case 'cyl':  r=u==='מ"ר'?v.n*PI*v.D*v.l:u==='מ"א'?v.n*v.l:v.n*PI*v.D*v.D/4*v.l; break;
+    case 'ring': r=u==='מ"ר'?v.n*PI*v.D*v.l:u==='מ"א'?v.n*v.l:v.n*PI*(v.D*v.D-v.di*v.di)/4*v.l; break;
+    case 'trap': r=v.n*(v.a+v.b)/2*v.h*v.l; break;
+    case 'tri':  r=v.n*v.b*v.h/2*v.l; break;
+  }
+  return l.neg?-r:r;
+}
+function calcFx(l,unit){ const sh=SHAPES[l.s]?l.s:'box', u=UNORM(unit); const P={box:'מס׳×אורך×רוחב×גובה',len:'מס׳×אורך',area:'מס׳×אורך×רוחב',per:'מס׳×2×(אורך+רוחב)×גובה',
+    cyl:u==='מ"ר'?'מס׳×π×D×L (מעטפת)':u==='מ"א'?'מס׳×L':'מס׳×π×D²/4×L (נפח)',ring:u==='מ"ר'?'מס׳×π×D×L (מעטפת)':u==='מ"א'?'מס׳×L':'מס׳×π×(D²−d²)/4×L (נפח)',trap:'מס׳×(a+b)/2×h×L',tri:'מס׳×b×h/2×L'}[sh];
+  return (l.neg?'ניכוי: −':'')+P; }
+function calcDims(l){ const sh=SHAPES[l.s]?l.s:'box'; return SHAPES[sh].f.filter(([k])=>l[k]!==''&&l[k]!=null).map(([k,t])=>t+' '+l[k]).join(' · '); }
 function calcQty(n){ // from calc lines
   let t=0;
   for(const l of (n.calc||[])){
-    const f=['n','l','w','h'].map(k=>{const v=evalExpr(l[k]); return v===null?1:v;});
-    if(f.some(Number.isNaN)) return NaN;
-    if(['n','l','w','h'].every(k=>l[k]===''||l[k]==null)) continue;
-    t+=f.reduce((a,b)=>a*b,1);
+    const v=calcLine(l,n.unit);
+    if(v===null) continue; if(Number.isNaN(v)) return NaN;
+    t+=v;
   }
   return t;
 }
@@ -803,7 +842,7 @@ function rowHtml(n,G){
       : ld
       ? `<td class="n"><button class="ib num" data-act="qunlink" data-id="${ld.id}" title="הכמות נלקחת מהמשאב המוביל ${esc(ld.code||'')} ${esc(nodeName(ld)||'')}. לחיצה = ניתוק (הכמות תישאר כמספר)" style="color:var(--accent)">★ ${Number.isNaN(q)?'שגיאה':fmtQ(secQtyNet(n))}</button><div style="font-size:11px;color:var(--muted)">${esc(ld.code||'')}</div></td>`
       : (n.calc&&n.calc.length)
-      ? `<td class="n"><button class="ib num" data-act="form" data-id="${n.id}" title="מחושב מפירוט כמויות">∑ ${fmtQ(q)}</button></td>`
+      ? `<td class="n"><button class="ib num" data-act="form" data-id="${n.id}" title="מחושב מפירוט כמויות – לחיצה = פתיחת הטופס">∑ ${fmtQ(q)}</button><div style="font-size:10px;color:var(--muted);white-space:nowrap">לפי חישוב ידני</div></td>`
       : `<td class="n"><input class="cell-in n w-num" data-f="qty" data-id="${n.id}" value="${esc(n.qty??'')}" placeholder="${isApt(n)?fmtQ(aptCount(n)):'כמות סעיף'}" ${noQ?'style="outline:2px solid #d92d20;outline-offset:-2px" title="לסעיף יש עלות אבל אין כמות – מחיר היחידה לא מחושב. הזן כמות או סמן משאב מוביל (★)"':''}>${aptTag(n)}</td>`;
     const em=effMk(n); const sp=secPriced(n); const up=q&&!Number.isNaN(q)&&t?t/q:null;
     price=`<td class="n num" title="${sp?'תמחור ברמת סעיף – המשאבים לא נספרים בסה&quot;כ. מחיקת המחיר מחזירה לחישוב לפי משאבים':'עלות ליחידת סעיף לפי המשאבים. הקלדת מחיר כאן = תמחור ברמת סעיף'}"><input class="cell-in n w-num" data-f="sp" data-id="${n.id}" value="${sp?esc(n.sp):''}" placeholder="${up!==null?fmt(up,2):''}" style="${sp?'font-weight:700':'border-style:dashed'}">${sp?'<span class="pill note" style="font-size:10px">מחיר סעיף</span>':''}${em&&up!==null?`<div style="font-size:11px;color:var(--muted)" title="מחיר יחידה כולל תוספת ${fmt(em,1)}%">${fmt(up*(1+em/100),2)}</div>`:''}${OL&&!inOH&&q&&!Number.isNaN(q)&&tl?`<div style="font-size:11px;color:#6941c6;font-weight:700" title="מחיר יחידה מועמס בתקורות ורווח (ישיר ${fmt(up,2)} + תקורה ${fmt((tl-t)/q,2)})">מועמס ${fmt(tl/q,2)}</div>`:''}</td>`;
@@ -817,7 +856,7 @@ function rowHtml(n,G){
     const hasCalc=n.calc&&n.calc.length;
     const q=rQty(n);
     qty= hasCalc
-      ? `<td class="n"><button class="ib num" data-act="form" data-id="${n.id}" title="מחושב מפירוט כמויות">∑ ${fmtQ(q)}</button></td>`
+      ? `<td class="n"><button class="ib num" data-act="form" data-id="${n.id}" title="מחושב מפירוט כמויות – לחיצה = פתיחת הטופס">∑ ${fmtQ(q)}</button><div style="font-size:10px;color:var(--muted);white-space:nowrap">לפי חישוב ידני</div></td>`
       : `<td class="n"><input class="cell-in n w-num" data-f="qexpr" data-id="${n.id}" value="${esc(n.qexpr??'')}" title="${esc(n.qexpr&&String(n.qexpr).startsWith('=')?'= '+fmtQ(q):'')}">${n.qexpr&&String(n.qexpr).startsWith('=')?`<div class="num" style="font-size:11px;color:var(--muted)">${fmtQ(q)}</div>`:''}${aptTag(n)}</td>`;
     price=`<td class="n"><input class="cell-in n w-num" data-f="price" data-id="${n.id}" value="${esc(n.price??'')}" title="${esc(n.psrc||'')}">${typeof priceBadge==='function'?priceBadge(n):''}</td>`;
     if(hasItems(n)){ const uc=rUnitCost(n); price=`<td class="n num" title="מחושב מהמק&quot;טים: סה&quot;כ מק&quot;טים ÷ כמות משאב">${uc?fmt(uc,2):''}<div style="font-size:11px;color:var(--muted)">${n.ch.length} מק"טים</div></td>`; }
@@ -826,7 +865,7 @@ function rowHtml(n,G){
     unit=`<td><select class="cell-in w-unit" data-f="unit" data-id="${n.id}"><option value=""></option>${UNITS.map(u=>`<option ${u===n.unit?'selected':''}>${esc(u)}</option>`).join('')}${n.unit&&!UNITS.includes(n.unit)?`<option selected>${esc(n.unit)}</option>`:''}</select></td>`;
     const q=kQty(n); const ex=n.qexpr&&/^=/.test(String(n.qexpr));
     qty= (n.calc&&n.calc.length)
-      ? `<td class="n"><button class="ib num" data-act="form" data-id="${n.id}" title="מחושב מפירוט כמויות">∑ ${fmtQ(q)}</button></td>`
+      ? `<td class="n"><button class="ib num" data-act="form" data-id="${n.id}" title="מחושב מפירוט כמויות – לחיצה = פתיחת הטופס">∑ ${fmtQ(q)}</button><div style="font-size:10px;color:var(--muted);white-space:nowrap">לפי חישוב ידני</div></td>`
       : `<td class="n"><input class="cell-in n w-num" data-f="qexpr" data-id="${n.id}" value="${esc(n.qexpr??'')}" title="Q = כמות הסעיף, R = כמות המשאב">${ex?`<div class="num" style="font-size:11px;color:var(--muted)">${fmtQ(q)}</div>`:''}${aptTag(n)}</td>`;
     const old=isOld(n.pdate);
     price=`<td class="n"><input class="cell-in n w-num" data-f="price" data-id="${n.id}" value="${esc(n.price??'')}" title="${esc((n.psrc||'')+(n.pdate?' · '+fmtDt(n.pdate):''))}">${n.pdate?`<div class="num" style="font-size:11px;${old?'color:#b54708;font-weight:700':'color:var(--muted)'}" title="${old?'מחיר ישן מעל שנה – לבדוק':'תאריך המחיר'}">${old?'⚠ ':''}${fmtDt(n.pdate)}</div>`:''}${typeof priceBadge==='function'?priceBadge(n):''}</td>`;
@@ -1223,7 +1262,7 @@ function drawBody(n){
       <div class="grid2">
         <div class="field"><label for="d_code">קוד סעיף</label><input id="d_code" class="mono" value="${esc(n.code)}"></div>
         <div class="field"><label for="d_unit">יחידה</label><select id="d_unit"><option></option>${UNITS.map(u=>`<option ${u===n.unit?'selected':''}>${esc(u)}</option>`).join('')}${n.unit&&!UNITS.includes(n.unit)?`<option selected>${esc(n.unit)}</option>`:''}</select></div>
-        <div class="field"><label for="d_q">כמות סעיף${leadOf(n)?' (★ מהמשאב '+esc(leadOf(n).code||'')+')':n.calc.length?' (מהפירוט)':''}</label><input id="d_q" class="mono" value="${leadOf(n)?fmtQ(secQtyNet(n)):n.calc.length?fmtQ(calcQty(n)):esc(n.qty??'')}" ${n.calc.length||leadOf(n)?'readonly':''}></div>
+        <div class="field"><label for="d_q">כמות סעיף${leadOf(n)?' (★ מהמשאב '+esc(leadOf(n).code||'')+')':n.calc.length?' (לפי חישוב ידני)':''}</label><input id="d_q" class="mono" value="${leadOf(n)?fmtQ(secQtyNet(n)):n.calc.length?fmtQ(calcQty(n)):esc(n.qty??'')}" ${n.calc.length||leadOf(n)?'readonly':''}></div>
         <div class="field"><label for="d_w">פחת %</label><input id="d_w" class="mono" value="${esc(n.w??'')}" placeholder="0" inputmode="decimal"><div class="hint" id="d_wl" style="margin:2px 0 0"></div></div>
       </div>
       <div class="grid2"><div class="field"><label for="d_serves">משרת מבנים (לבקרה, למשל 01,05)</label><input id="d_serves" class="mono" value="${esc(n.serves??'')}" placeholder="ריק = המבנה של הסעיף"></div>
@@ -1278,7 +1317,7 @@ function drawBody(n){
       <div class="grid2">
         <div class="field"><label for="d_unit">יחידה</label><select id="d_unit"><option></option>${UNITS.map(u=>`<option ${u===n.unit?'selected':''}>${esc(u)}</option>`).join('')}${n.unit&&!UNITS.includes(n.unit)?`<option selected>${esc(n.unit)}</option>`:''}</select></div>
         <div class="field"><label for="d_price">מחיר יחידה ₪ ${n.pdate?'<span class="hint" style="margin:0">('+esc(n.psrc||'')+' · '+fmtDt(n.pdate)+')</span>':''}</label><input id="d_price" class="mono" value="${esc(n.price??'')}"></div>
-        <div class="field"><label for="d_q">כמות${n.calc.length?' (מהפירוט)':' (Q=סעיף, R=משאב)'}</label><input id="d_q" class="mono" value="${n.calc.length?fmtQ(calcQty(n)):esc(n.qexpr??'')}" ${n.calc.length?'readonly':''}></div>
+        <div class="field"><label for="d_q">כמות${n.calc.length?' (לפי חישוב ידני)':' (Q=סעיף, R=משאב)'}</label><input id="d_q" class="mono" value="${n.calc.length?fmtQ(calcQty(n)):esc(n.qexpr??'')}" ${n.calc.length?'readonly':''}></div>
         <div class="field"><label for="d_w">פחת %</label><input id="d_w" class="mono" value="${esc(n.w??'')}" placeholder="0" inputmode="decimal"><div class="hint" id="d_wl" style="margin:2px 0 0"></div></div>
       </div>
       ${calcBlock(n)}`;
@@ -1295,7 +1334,7 @@ function drawBody(n){
       <div class="grid2">
         <div class="field"><label for="d_unit">יחידה</label><select id="d_unit"><option></option>${UNITS.map(u=>`<option ${u===n.unit?'selected':''}>${esc(u)}</option>`).join('')}</select></div>
         <div class="field"><label for="d_price">מחיר יחידה ₪</label><input id="d_price" class="mono" value="${esc(n.price??'')}"></div>
-        <div class="field"><label for="d_q">כמות${n.calc.length?' (מהפירוט)':''}</label><input id="d_q" class="mono" value="${n.calc.length?fmtQ(calcQty(n)):esc(n.qexpr??'')}" ${n.calc.length?'readonly':''}></div>
+        <div class="field"><label for="d_q">כמות${n.calc.length?' (לפי חישוב ידני)':''}</label><input id="d_q" class="mono" value="${n.calc.length?fmtQ(calcQty(n)):esc(n.qexpr??'')}" ${n.calc.length?'readonly':''}></div>
         <div class="field"><label for="d_w">פחת %</label><input id="d_w" class="mono" value="${esc(n.w??'')}" placeholder="0" inputmode="decimal"><div class="hint" id="d_wl" style="margin:2px 0 0"></div></div>
       </div>
       ${calcBlock(n)}`;
@@ -1314,35 +1353,37 @@ function drawBody(n){
 function calcBlock(n){
   return `<div class="field"><label>פירוט חישוב כמויות</label>
         <div class="calc"><table>
-          <thead><tr><th style="width:34%">תאור / מיקום</th><th>מס'</th><th>אורך</th><th>רוחב</th><th>גובה/עובי</th><th>כמות</th><th></th></tr></thead>
+          <thead><tr><th style="width:30%">צורה · תאור / מיקום</th><th>ממדים</th><th style="width:90px">כמות</th><th style="width:28px"></th></tr></thead>
           <tbody id="calcBody"></tbody>
-          <tfoot><tr><td colspan="5">סה"כ כמות</td><td class="num" id="calcSum"></td><td></td></tr></tfoot>
+          <tfoot><tr><td colspan="2">סה"כ כמות${n.unit?' ('+esc(n.unit)+')':''}</td><td class="num" id="calcSum"></td><td></td></tr></tfoot>
         </table></div>
         <div style="display:flex;gap:8px;margin-top:6px"><button class="btn small" id="d_addl">+ שורת חישוב</button>${n.calc.length?'<button class="btn small ghost" id="d_clr">בטל פירוט וחזור לכמות ידנית</button>':''}</div>
-        <p class="hint" style="margin:0">שדה ריק נחשב 1. כל תא מקבל גם נוסחה, למשל ‎2*3.5‎.</p>
+        <p class="hint" style="margin:0">בוחרים צורה בכל שורה – מוצגים רק השדות שלה. כל שדה מקבל גם נוסחה (‎2*3.5‎). מס' / אורך ריקים = 1. גליל וטבעת: יחידת מ"ר = מעטפת, מ"א = אורך, אחרת נפח. "ניכוי" = מחסיר (פתחים וכד').</p>
       </div>`;
 }
 function bindCalc(n,key){
-  document.getElementById('d_addl').onclick=()=>{ if(!n.calc.length && n[key]){ n.calc.push({d:'כמות קודמת',n:n[key],l:'',w:'',h:''}); } n.calc.push({d:'',n:'',l:'',w:'',h:''}); save(); drawBody(n); document.querySelector('#calcBody tr:last-child input')?.focus(); };
+  document.getElementById('d_addl').onclick=()=>{ if(!n.calc.length && n[key]){ n.calc.push({d:'כמות קודמת',n:n[key],l:'',w:'',h:''}); } const pv=n.calc[n.calc.length-1]; n.calc.push(Object.assign({d:'',n:'',l:'',w:'',h:''},pv&&pv.s&&pv.s!=='box'?{s:pv.s}:{})); save(); drawBody(n); document.querySelector('#calcBody tr:last-child input')?.focus(); };
   const clr=document.getElementById('d_clr'); if(clr) clr.onclick=()=>{ n[key]=String(Math.round(calcQty(n)*1000)/1000); n.calc=[]; save(); drawBody(n); };
   drawCalc(n);
 }
 function drawCalc(n){
   const body=document.getElementById('calcBody');
-  body.innerHTML=n.calc.map((l,i)=>`<tr>
-    <td><input data-i="${i}" data-k="d" value="${esc(l.d)}"></td>
-    ${['n','l','w','h'].map(k=>`<td class="n"><input data-i="${i}" data-k="${k}" value="${esc(l[k])}" inputmode="decimal"></td>`).join('')}
-    <td class="num" data-line="${i}"></td>
-    <td><button class="ib del" data-rm="${i}" aria-label="מחק שורה">✕</button></td></tr>`).join('');
+  body.innerHTML=n.calc.map((l,i)=>{ const sh=SHAPES[l.s]?l.s:'box'; return `<tr class="${l.neg?'neg':''}">
+    <td><div style="display:flex;gap:4px;align-items:center"><select data-i="${i}" data-sh="1" aria-label="צורה">${Object.entries(SHAPES).map(([k,x])=>`<option value="${k}" ${k===sh?'selected':''}>${esc(x.n)}</option>`).join('')}</select><label style="font-size:11px;white-space:nowrap;color:#b42318" title="השורה מחסירה מהסה&quot;כ"><input type="checkbox" data-i="${i}" data-neg="1" ${l.neg?'checked':''} style="width:auto">ניכוי</label></div>
+      <input data-i="${i}" data-k="d" value="${esc(l.d)}" placeholder="תאור / מיקום"></td>
+    <td><div class="dims">${SHAPES[sh].f.map(([k,t])=>`<label class="cf"><span>${esc(t)}</span><input data-i="${i}" data-k="${k}" value="${esc(l[k]??'')}" inputmode="decimal"></label>`).join('')}</div></td>
+    <td class="num" data-line="${i}" style="vertical-align:bottom"></td>
+    <td><button class="ib del" data-rm="${i}" aria-label="מחק שורה">✕</button></td></tr>`; }).join('');
   body.oninput=e=>{ const el=e.target; if(el.dataset.k){ n.calc[+el.dataset.i][el.dataset.k]=el.value; save(); lineSums(n); updTot(n); } };
+  body.onchange=e=>{ const el=e.target, i=+el.dataset.i; if(el.dataset.sh){ const l=n.calc[i]; if(el.value==='box') delete l.s; else l.s=el.value; save(); drawBody(n); }
+    else if(el.dataset.neg){ const l=n.calc[i]; if(el.checked) l.neg=true; else delete l.neg; save(); drawBody(n); } };
   body.onclick=e=>{ const b=e.target.closest('[data-rm]'); if(b){ n.calc.splice(+b.dataset.rm,1); save(); drawBody(n); } };
   lineSums(n);
 }
 function lineSums(n){
   n.calc.forEach((l,i)=>{
-    const f=['n','l','w','h'].map(k=>{const v=evalExpr(l[k]); return v===null?1:v;});
-    const empty=['n','l','w','h'].every(k=>l[k]===''||l[k]==null);
-    const c=document.querySelector(`[data-line="${i}"]`); if(c) c.textContent= empty?'':(f.some(Number.isNaN)?'שגיאה':fmtQ(f.reduce((a,b)=>a*b,1)));
+    const v=calcLine(l,n.unit);
+    const c=document.querySelector(`[data-line="${i}"]`); if(c){ c.textContent= v===null?'':(Number.isNaN(v)?'שגיאה':fmtQ(v)); c.title=calcFx(l,n.unit); c.style.color=v<0?'#b42318':''; }
   });
   const s=document.getElementById('calcSum'); if(s) s.textContent=fmtQ(calcQty(n));
   const dq=document.getElementById('d_q'); if(dq&&n.calc.length) dq.value=fmtQ(calcQty(n));
@@ -2412,7 +2453,7 @@ function printCard(id){
     <table>${kv('יחידה',esc(n.unit||''))}${kv('כמות נטו',fmtQ(netQ(n)))}${w?kv('פחת',fmt(w,1)+'%'):''}${kv('כמות לחישוב',fmtQ(q))}${kv('מקור הכמות',src)}
       ${n.t==='i'&&q&&t?kv('מחיר יחידה',fmt(t/q,2)+' ₪'):''}${n.t!=='i'&&n.price?kv('מחיר יחידה',esc(n.price)+' ₪'):''}${kv('סה"כ',fmt(t)+' ₪')}${(()=>{ const b=['i','c','s'].includes(n.t)?pbOf(n):null; const F=['i','c','s'].includes(n.t)?liveFiles(n).concat(filesUp(n)):[]; return (b?kv('בסיס מחיר',PB[b.k]):'')+(F.length?kv('מסמכים מצורפים',F.map(x=>esc(fTitle(x))+(x.d?' – '+esc(x.d):'')).join('<br>')):''); })()}</table>`;
   if(n.note) html+=`<h2 style="font-size:13px;margin:12px 0 4px">הערות / מקור הכמות</h2><div style="white-space:pre-wrap;border:1px solid #999;padding:6px 8px">${esc(n.note)}</div>`;
-  if(calc.length) html+=`<h2 style="font-size:13px;margin:12px 0 4px">פירוט חישוב כמויות</h2><table><thead><tr><th>תאור / מיקום</th><th class="n">מס'</th><th class="n">אורך</th><th class="n">רוחב</th><th class="n">גובה/עובי</th><th class="n">כמות</th></tr></thead><tbody>${calc.map(l=>{ const v=['n','l','w','h'].map(k=>{ const x=evalExpr(l[k]); return x===null?1:x; }).reduce((a,b)=>a*b,1); return `<tr><td>${esc(l.d||'')}</td>${['n','l','w','h'].map(k=>`<td class="n">${esc(l[k]??'')}</td>`).join('')}<td class="n">${fmtQ(v)}</td></tr>`; }).join('')}<tr class="tot"><td colspan="5">סה"כ</td><td class="n">${fmtQ(calcQty(n))}</td></tr></tbody></table>`;
+  if(calc.length) html+=`<h2 style="font-size:13px;margin:12px 0 4px">פירוט חישוב כמויות</h2><table><thead><tr><th>תאור / מיקום</th><th>צורה · נוסחה</th><th>ממדים</th><th class="n">כמות</th></tr></thead><tbody>${calc.map(l=>{ const v=calcLine(l,n.unit); return `<tr><td>${esc(l.d||'')}</td><td>${esc((SHAPES[l.s]||SHAPES.box).n)}<div style="font-size:9px">${esc(calcFx(l,n.unit))}</div></td><td>${esc(calcDims(l))}</td><td class="n">${v===null?'':Number.isNaN(v)?'שגיאה':fmtQ(v)}</td></tr>`; }).join('')}<tr class="tot"><td colspan="3">סה"כ</td><td class="n">${fmtQ(calcQty(n))}</td></tr></tbody></table>`;
   if(n.ch&&n.ch.length){ const rows=[]; walk(n.ch,(x)=>{ if(x.t!=='r'&&x.t!=='k') return; const xq=x.t==='r'?rQty(x):kQty(x), xw=wVal(x);
       rows.push(`<tr class="P${x.t==='r'?5:6}"><td class="code">${esc(x.code||'')}${x.lead?' ★':''}</td><td>${esc(nodeName(x))}</td><td>${esc(x.unit||'')}</td><td class="n">${fmtQ(xq)}${xw?`<div style="font-size:9px">כולל פחת ${fmt(xw,1)}%</div>`:''}</td><td class="n">${x.t==='r'?fmt(rUnitCost(x),2):fmt(evalExpr(x.price)||0,2)}</td><td class="n">${fmt(total(x))}</td></tr>`); });
     html+=`<h2 style="font-size:13px;margin:12px 0 4px">${n.t==='i'?'משאבים ומק"טים':'מק"טים'}</h2><table><thead><tr><th>קוד</th><th>תאור</th><th>יח'</th><th class="n">כמות</th><th class="n">מחיר יח'</th><th class="n">סה"כ ₪</th></tr></thead><tbody>${rows.join('')}</tbody></table>`; }
