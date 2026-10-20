@@ -105,7 +105,7 @@ main{padding-block:16px 60px;padding-inline:clamp(6px,1.2vw,1.5cm);max-width:non
 .tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px}
 /* main BOQ table: header row stays visible while the page scrolls (sticky under the top bar) */
 #view-boq .boq thead th{box-shadow:0 1px 0 var(--line)}
-@media (min-width:1100px){ #view-boq .tablewrap{overflow:clip;overflow-clip-margin:0} #view-boq .boq thead th{top:var(--toph,0px)} }
+@media (min-width:1100px){ #view-boq .tablewrap{overflow:clip;overflow-clip-margin:0} #view-boq>.toolbar{position:sticky;top:var(--toph,0px);z-index:15;background:var(--bg);margin-block-end:0;padding-block:8px 10px;box-shadow:0 1px 0 var(--line)} #view-boq .boq thead th{top:calc(var(--toph,0px) + var(--tbh,0px))} }
 @media (max-width:1099.98px){ .top{position:static} #view-boq .tablewrap{overflow:auto;max-height:calc(100dvh - 130px)} }
 @media print{ #view-boq .boq thead th{position:static} }
 table.boq{border-collapse:collapse;width:100%;min-width:980px;table-layout:fixed}
@@ -282,6 +282,7 @@ table.boq.plist{min-width:0!important;width:100%}
     <button class="btn" id="btnEditX" title="קובץ אקסל שאפשר לערוך ולטעון חזרה">אקסל לעריכה</button>
     <button class="btn" id="btnEditImp">טעינת עריכה</button><input type="file" id="fileEditImp" accept=".xlsx,.xls" hidden>
     <button class="btn" id="btnEffi" title="כתב כמויות נקי ברמת סעיף לסקירה">ייצוא לאפי</button>
+    <button class="btn" id="btnOffer" title="הצעת מחיר ללקוח – ברמת סה&quot;כ / מבנה / פרק / תת-פרק / סעיף, עם קיבוץ, שינוי שמות, התאמות ועיגול">הצעת מחיר ללקוח</button>
     <button class="btn" id="btnPull" hidden title="ייבוא מחירים מהמחירון או מפרויקט אחר – עם השוואה, מיון ובחירה">ייבוא מחירים</button>
     <button class="btn" id="btnPrint">הדפסה / PDF</button>
     <button class="btn" id="btnBackup">גיבוי</button>
@@ -926,6 +927,7 @@ function moveSection(n,subCode,bld,keepCode){
   PMAP=null; return true;
 }
 /* ---------- copy / paste (works across projects – clipboard kept in this browser) ---------- */
+(function(){ const t=document.querySelector('#view-boq>.toolbar'); if(!t) return; const set=()=>document.documentElement.style.setProperty('--tbh',(innerWidth>=1100?Math.ceil(t.getBoundingClientRect().height):0)+'px'); set(); if(window.ResizeObserver) new ResizeObserver(set).observe(t); window.addEventListener('resize',set); })();
 (function(){ const t=document.querySelector('.top'); if(!t) return; const set=()=>document.documentElement.style.setProperty('--toph',Math.ceil(t.getBoundingClientRect().height)+'px'); set(); if(window.ResizeObserver) new ResizeObserver(set).observe(t); window.addEventListener('resize',set); })();
 let CLIP=null; try{ CLIP=JSON.parse(localStorage.getItem('ybnir-boq-clip')||'null'); if(CLIP&&!CLIP.nodes) CLIP.nodes=[CLIP.node]; }catch(e){}
 function setClip(c){ CLIP=c; try{ c?localStorage.setItem('ybnir-boq-clip',JSON.stringify(c)):localStorage.removeItem('ybnir-boq-clip'); }catch(e){} updClipBar(); }
@@ -1593,6 +1595,133 @@ function effiExport(o){
   } finally { OHC=was; }
 }
 document.getElementById('btnEffi').onclick=effiDlg;
+/* ---------- הצעת מחיר ללקוח: רמת פירוט, שורות לקוח (קיבוץ / שינוי שם / הסתרה), התאמות, עיגול, תבניות ---------- */
+let OF_DET=false, OF_T=null, OF_BUSY=false;
+const OF_LV={tot:'סה"כ אחד',b:'מבנה',c:'פרק',s:'תת-פרק',i:'סעיף'};
+function ofGet(){ state.offer=state.offer||{lvl:'c',merge:true,oh:true,fin:true,lines:[],round:'1000',vat:false,vatR:'18',title:'הצעת מחיר',client:'',valid:'',terms:''}; return state.offer; }
+function ofAtoms(of){
+  const was=OHC, wasF=state.ohFin; const A=new Map(); const add=(k,label,v,extra)=>{ let a=A.get(k); if(!a){ a=Object.assign({k,label,v:0,ord:A.size},extra||{}); A.set(k,a); } a.v+=v; };
+  try{ state.ohFin=!!(of.oh&&of.fin); OHC=of.oh?ohCalc():null; PCTB=null;
+    const val=n=>OHC?ohTot(n):total(n); const cm=chMap(); const OB=OHC?OHC.OB:new Set();
+    for(const b of state.tree){ if(OHC&&OB.has(b.code)) continue; const bl=b.code+' '+(b.name||'');
+      if(of.lvl==='tot'){ add('T','סה"כ עבודות לפי '+(state.project||'הפרויקט'),val(b)); continue; }
+      if(of.lvl==='b'){ add('b:'+b.code,bl,val(b)); continue; }
+      for(const c of b.ch||[]){ if(c.t!=='c') continue; const cl=c.code+' '+(cm[c.code]||nodeName(c)||'');
+        if(of.lvl==='c'){ add(of.merge?'c:'+c.code:'b:'+b.code+'|c:'+c.code,(of.merge?'':bl+' – ')+cl,val(c)); continue; }
+        for(const s of c.ch||[]){ if(s.t!=='s') continue; const sl=s.code+' '+(nodeName(s)||'');
+          if(of.lvl==='s'){ add(of.merge?'s:'+s.code:'b:'+b.code+'|s:'+s.code,(of.merge?'':bl+' – ')+sl,val(s)); continue; }
+          for(const n of s.ch||[]){ if(n.t!=='i') continue; const q=secQty(n); add('i:'+n.id,(n.code||'')+' '+(n.name||''),val(n),{unit:n.unit||'',qty:Number.isNaN(q)?0:q}); } } } }
+    const loadedFin=!!(OHC&&state.ohFin);
+    if(of.fin&&!loadedFin){ try{ for(const r of finCalc().rows){ if(r.v) add('f:'+r.k,r.name,r.v); } }catch(e){} }
+  } finally { OHC=was; state.ohFin=wasF; PCTB=null; }
+  return [...A.values()].filter(a=>Math.abs(a.v)>0.5); }
+function ofCalc(of){
+  const A=ofAtoms(of); const byK=new Map(A.map(a=>[a.k,a])); const used=new Set();
+  const L=of.lines.map(l=>{ const keys=(l.keys||[]).filter(k=>byK.has(k)); keys.forEach(k=>used.add(k)); const base=keys.reduce((s,k)=>s+byK.get(k).v,0); return Object.assign({},l,{base,keys,miss:(l.keys||[]).length-keys.length}); });
+  const un=A.filter(a=>!used.has(a.k)); const SB=A.reduce((s,a)=>s+a.v,0), US=un.reduce((s,a)=>s+a.v,0);
+  const tg=+String(of.target||'').replace(/,/g,''); const T=tg>0?tg:SB-US;
+  const fixed=L.filter(l=>String(l.adj??'').trim()!==''&&Number.isFinite(+l.adj)), free=L.filter(l=>!fixed.includes(l));
+  fixed.forEach(l=>l.val=l.base*(1+(+l.adj)/100)); const SF=fixed.reduce((s,l)=>s+l.val,0), SFr=free.reduce((s,l)=>s+l.base,0);
+  const fac=SFr?(T-SF)/SFr:1; free.forEach(l=>l.val=l.base*fac);
+  const st=+of.round||0; const R=v=>st>0?Math.round(v/st)*st:Math.round(v*100)/100;
+  L.forEach(l=>{ const q=+String(l.qty||'').replace(/,/g,'')||0; l.q=q; if(q>0){ l.up=st>=1?Math.round(l.val/q):Math.round(l.val/q*100)/100; l.fin=l.up*q; } else { l.up=null; l.fin=R(l.val); } });
+  const goal=free.length?R(T):L.reduce((s,l)=>s+l.fin,0); let resid=goal-L.reduce((s,l)=>s+l.fin,0);
+  if(Math.abs(resid)>=0.005){ const tgt=L.filter(l=>!l.q).sort((a,b)=>b.fin-a.fin)[0]; if(tgt){ tgt.fin+=resid; tgt.res=resid; resid=0; } }
+  const tot=L.reduce((s,l)=>s+l.fin,0); return {A,L,un,SB,T,tot,resid,fac}; }
+function offerDlg(){ if(OF_BUSY) return; OF_BUSY=true; try{ offerDlg0(); } finally { OF_BUSY=false; } }
+function offerDlg0(){
+  const of=ofGet(); const h=document.getElementById('printDlgHost'); const hasOH=typeof ohBlds==='function'&&ohBlds().length;
+  if(!of.lines.length) ofRegen(of);
+  const tpls=(typeof SETTINGS!=='undefined'&&SETTINGS&&SETTINGS.offerTpl)||{};
+  const inp=(a,v,w,ph='',x='')=>`<input ${a} value="${esc(v??'')}" placeholder="${esc(ph)}" style="width:${w}px;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit" ${x}>`;
+  const C=ofCalc(of); const lineSel=k=>`<select data-oa="${esc(k)}" style="max-width:220px;border:1px solid var(--line);border-radius:6px;padding:2px 4px"><option value="">— לא משויך —</option>${of.lines.map((l,i)=>`<option value="${i}" ${(l.keys||[]).includes(k)?'selected':''}>${i+1}. ${esc((l.name||'').slice(0,40))}</option>`).join('')}<option value="NEW">➕ שורה חדשה</option></select>`;
+  const vat=of.vat?C.tot*(+of.vatR||0)/100:0;
+  h.innerHTML=`<div class="pdlg" id="pdlg" style="z-index:90"><div class="box" role="dialog" aria-label="הצעת מחיר ללקוח" style="width:min(1250px,100%);max-height:95vh;overflow:auto">
+   <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">הצעת מחיר ללקוח</h2><div class="row" style="gap:6px"><button class="btn" id="of_print">הדפסה / PDF</button><button class="btn primary" id="of_xls">ייצוא לאקסל</button><button class="btn" id="of_c">סגור</button></div></div>
+   <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px">
+     <label class="hint" style="margin:0">רמת פירוט <select id="of_lvl">${Object.entries(OF_LV).map(([k,l])=>`<option value="${k}" ${of.lvl===k?'selected':''}>${l}</option>`).join('')}</select></label>
+     <label class="hint" style="margin:0"><input type="checkbox" id="of_merge" ${of.merge?'checked':''}> לאחד מבנים (פרק 02 של כל המבנים = שורה אחת)</label>
+     ${hasOH?`<label class="hint" style="margin:0"><input type="checkbox" id="of_oh" ${of.oh?'checked':''}> להעמיס תקורות</label>`:''}
+     <label class="hint" style="margin:0"><input type="checkbox" id="of_fin" ${of.fin?'checked':''}> לכלול עלויות כלכליות ורווח${hasOH?' (מועמס כשתקורות מועמסות)':''}</label>
+     <button class="btn small" id="of_regen" title="בונה מחדש שורה לכל פריט ברמה שנבחרה (השינויים בשורות יימחקו)">↻ שורות לפי הרמה</button>
+     <button class="btn small" id="of_add">+ שורה</button></div>
+   <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px">
+     <label class="hint" style="margin:0">כותרת ${inp('id="of_title"',of.title,200)}</label>
+     <label class="hint" style="margin:0">לקוח ${inp('id="of_client"',of.client,160)}</label>
+     <label class="hint" style="margin:0">תוקף ההצעה ${inp('id="of_valid"',of.valid,120,'למשל 30 יום')}</label>
+     <label class="hint" style="margin:0">סה"כ יעד ₪ ${inp('id="of_target" inputmode="decimal"',of.target,130,fmt(C.SB))}</label>
+     <label class="hint" style="margin:0">עיגול <select id="of_round">${[['0','אגורות'],['1','₪ 1'],['100','₪ 100'],['1000','₪ 1,000'],['10000','₪ 10,000']].map(([k,l])=>`<option value="${k}" ${String(of.round)===k?'selected':''}>${l}</option>`).join('')}</select></label>
+     <label class="hint" style="margin:0"><input type="checkbox" id="of_vat" ${of.vat?'checked':''}> מע"מ ${inp('id="of_vatR" inputmode="decimal"',of.vatR,44)}%</label>
+     <span style="flex:1"></span>
+     <select id="of_tpl"><option value="">תבניות לקוח…</option>${Object.keys(tpls).map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join('')}</select><button class="btn small" id="of_tload">טען</button><button class="btn small" id="of_tsave">💾 שמור כתבנית</button></div>
+   <table class="boq" style="min-width:0;table-layout:auto;font-size:13px;margin-top:10px"><thead><tr><th>#</th><th>תאור בהצעה</th><th>יח'</th><th class="n">כמות</th><th class="n">עלות (חישוב)</th><th class="n" title="ריק = מתאזן אוטומטית כדי שהסה&quot;כ יישאר">התאמה %</th><th class="n">מחיר יח'</th><th class="n">סה"כ בהצעה</th><th class="n">%</th><th class="n">פריטים</th><th></th></tr></thead><tbody>
+   ${C.L.map((l,i)=>`<tr style="${!(l.keys||[]).length?'opacity:.45':''}" title="${!(l.keys||[]).length?'שורה ריקה – לא תופיע בהצעה':''}"><td class="num">${i+1}</td><td>${inp(`data-ol="${i}" data-f="name"`,l.name,330)}</td><td>${inp(`data-ol="${i}" data-f="unit"`,l.unit,62,'קומפ\'')}</td><td class="n">${inp(`data-ol="${i}" data-f="qty" inputmode="decimal"`,l.qty,80)}</td>
+     <td class="n num">${fmt(l.base)}${l.miss?`<div style="font-size:10px;color:#d92d20">${l.miss} פריטים לא קיימים</div>`:''}</td><td class="n">${inp(`data-ol="${i}" data-f="adj" inputmode="decimal"`,l.adj,56,'אוטו\'')}</td>
+     <td class="n num">${l.up!=null?fmt(l.up,(+of.round||0)>=1?0:2):'—'}</td><td class="n num"><b>${fmt(l.fin)}</b>${l.res?`<div style="font-size:10px;color:var(--muted)">כולל הפרש עיגול ${fmt(l.res)}</div>`:''}</td><td class="n num">${C.tot?fmt(l.fin/C.tot*100,1)+'%':''}</td>
+     <td class="n"><button class="ib" data-oshow="${i}">${(l.keys||[]).length}</button></td><td style="white-space:nowrap"><button class="ib" data-oup="${i}">▲</button><button class="ib" data-odn="${i}">▼</button><button class="ib del" data-odel="${i}" title="מחיקת השורה – הפריטים שלה חוזרים ל'לא משויך'">✕</button></td></tr>
+     <tr data-orow="${i}" hidden><td></td><td colspan="10" style="font-size:12px;background:var(--surface-2,#f7f8f7)">${(l.keys||[]).map(k=>{ const a=C.A.find(x=>x.k===k); return a?`<span class="pill" style="margin:2px">${esc(a.label.slice(0,50))} · ${fmt(a.v)} <a href="#" data-orm="${i}|${esc(k)}" title="הוצא מהשורה">✕</a></span>`:''; }).join('')||'<span class="hint">אין פריטים</span>'}</td></tr>`).join('')}
+   <tr style="font-weight:700;border-top:2px solid var(--line)"><td></td><td>סה"כ${of.vat?' לפני מע"מ':''}</td><td></td><td></td><td class="n num">${fmt(C.SB)}</td><td></td><td></td><td class="n num">${fmt(C.tot)}</td><td></td><td></td><td></td></tr>
+   ${of.vat?`<tr><td></td><td>מע"מ ${esc(of.vatR)}%</td><td colspan="5"></td><td class="n num">${fmt(vat)}</td><td colspan="3"></td></tr><tr style="font-weight:700"><td></td><td>סה"כ כולל מע"מ</td><td colspan="5"></td><td class="n num">${fmt(C.tot+vat)}</td><td colspan="3"></td></tr>`:''}
+   </tbody></table>
+   ${Math.abs(C.tot-C.SB)>1?`<div class="hint" style="margin:4px 0 0">פער מול העלות המחושבת: ${C.tot>C.SB?'+':''}${fmt(C.tot-C.SB)} ₪ (${fmt((C.tot-C.SB)/C.SB*100,2)}%)${C.un.length?' · כולל פריטים לא משויכים שלא נכנסו להצעה':''}</div>`:''}
+   ${C.un.length?`<div style="border:1px solid #fda29b;background:#fef3f2;border-radius:8px;padding:8px 10px;margin-top:10px"><b style="color:#b42318">⚠ ${C.un.length} פריטים לא משויכים לשורה – ${fmt(C.un.reduce((s,a)=>s+a.v,0))} ₪ לא נכללים בהצעה</b>
+     <table class="boq" style="min-width:0;table-layout:auto;font-size:12px;margin-top:4px"><tbody>${C.un.map(a=>`<tr><td>${esc(a.label.slice(0,70))}</td><td class="n num">${fmt(a.v)}</td><td>${lineSel(a.k)}</td></tr>`).join('')}</tbody></table>
+     <button class="btn small" id="of_unall">שייך את כולם לשורה הגדולה</button> <button class="btn small" id="of_unnew">צור שורה לכל אחד</button></div>`:''}
+   <details id="of_det" ${OF_DET?'open':''} style="margin-top:10px"><summary class="hint" style="cursor:pointer;margin:0">שיוך כל הפריטים (${C.A.length}) – להעברה בין שורות</summary>
+     <table class="boq" style="min-width:0;table-layout:auto;font-size:12px;margin-top:4px"><tbody>${C.A.map(a=>`<tr><td>${esc(a.label.slice(0,80))}</td><td class="n num">${fmt(a.v)}</td><td>${lineSel(a.k)}</td></tr>`).join('')}</tbody></table></details>
+   <div class="field" style="margin-top:10px"><label>תנאים והערות להצעה</label><textarea id="of_terms" rows="3" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit" placeholder="מחירים צמודים למדד תשומות הבנייה, בסיס: … · לא כולל: … · תנאי תשלום: …">${esc(of.terms||'')}</textarea></div>
+   <p class="hint" style="margin:4px 0 0">"התאמה %" על שורה מעלה או מוריד אותה. השורות בלי התאמה מתאזנות יחסית, כך שהסה"כ נשאר כמו העלות (או כמו "סה"כ יעד"). ההגדרה נשמרת בפרויקט.</p>
+   </div></div>`;
+  const q=i=>document.getElementById(i); const re=()=>{ save(); clearTimeout(OF_T); OF_T=setTimeout(offerDlg,0); };
+  q('of_c').onclick=()=>h.innerHTML=''; q('of_det').ontoggle=e=>{ OF_DET=e.target.open; };
+  q('of_lvl').onchange=e=>{ if(of.lines.length&&!confirm('שינוי הרמה בונה מחדש את שורות ההצעה. להמשיך?')){ e.target.value=of.lvl; return; } of.lvl=e.target.value; ofRegen(of); re(); };
+  q('of_merge').onchange=e=>{ of.merge=e.target.checked; ofRegen(of); re(); };
+  if(q('of_oh')) q('of_oh').onchange=e=>{ of.oh=e.target.checked; re(); }; q('of_fin').onchange=e=>{ of.fin=e.target.checked; re(); };
+  q('of_regen').onclick=()=>{ if(confirm('לבנות מחדש שורה לכל פריט ברמה שנבחרה? שמות, קיבוצים והתאמות יימחקו.')){ ofRegen(of); re(); } };
+  q('of_add').onclick=()=>{ of.lines.push({id:Date.now(),name:'שורה חדשה',unit:"קומפ'",keys:[]}); re(); };
+  [['of_title','title'],['of_client','client'],['of_valid','valid'],['of_target','target'],['of_vatR','vatR'],['of_terms','terms']].forEach(([i,k])=>q(i).onchange=e=>{ of[k]=e.target.value.trim(); re(); });
+  q('of_round').onchange=e=>{ of.round=e.target.value; re(); }; q('of_vat').onchange=e=>{ of.vat=e.target.checked; re(); };
+  h.querySelectorAll('[data-ol]').forEach(x=>x.onchange=()=>{ const l=of.lines[+x.dataset.ol]; const v=x.value.trim(); if(v==='') delete l[x.dataset.f]; else l[x.dataset.f]=v; re(); });
+  h.querySelectorAll('[data-oup]').forEach(x=>x.onclick=()=>{ const i=+x.dataset.oup; if(i>0){ [of.lines[i-1],of.lines[i]]=[of.lines[i],of.lines[i-1]]; re(); } });
+  h.querySelectorAll('[data-odn]').forEach(x=>x.onclick=()=>{ const i=+x.dataset.odn; if(i<of.lines.length-1){ [of.lines[i+1],of.lines[i]]=[of.lines[i],of.lines[i+1]]; re(); } });
+  h.querySelectorAll('[data-odel]').forEach(x=>x.onclick=()=>{ of.lines.splice(+x.dataset.odel,1); re(); });
+  h.querySelectorAll('[data-oshow]').forEach(x=>x.onclick=()=>{ const r=h.querySelector(`[data-orow="${x.dataset.oshow}"]`); r.hidden=!r.hidden; });
+  h.querySelectorAll('[data-orm]').forEach(x=>x.onclick=e=>{ e.preventDefault(); const [i,k]=x.dataset.orm.split('|'); const l=of.lines[+i]; l.keys=(l.keys||[]).filter(y=>y!==k); re(); });
+  h.querySelectorAll('[data-oa]').forEach(x=>x.onchange=()=>{ const k=x.dataset.oa; of.lines.forEach(l=>l.keys=(l.keys||[]).filter(y=>y!==k)); if(x.value==='NEW'){ const a=C.A.find(y=>y.k===k); of.lines.push({id:Date.now(),name:a?a.label:'שורה',unit:"קומפ'",keys:[k]}); } else if(x.value!==''){ of.lines[+x.value].keys.push(k); } re(); });
+  if(q('of_unall')) q('of_unall').onclick=()=>{ const big=C.L.slice().sort((a,b)=>b.base-a.base)[0]; const i=C.L.indexOf(big); if(i<0) return; C.un.forEach(a=>of.lines[i].keys.push(a.k)); re(); };
+  if(q('of_unnew')) q('of_unnew').onclick=()=>{ C.un.forEach(a=>of.lines.push({id:Date.now()+Math.random(),name:a.label,unit:a.unit||"קומפ'",qty:a.qty?String(+a.qty.toFixed(2)):'',keys:[a.k]})); re(); };
+  q('of_tsave').onclick=async()=>{ if(typeof DB==='undefined'||!DB.saveSettings){ toast('שמירת תבנית זמינה בגרסת הענן'); return; } const nm=prompt('שם התבנית (למשל שם הלקוח):',of.client||''); if(!nm) return;
+    const T=Object.assign({},tpls,{[nm]:{lvl:of.lvl,merge:of.merge,oh:of.oh,fin:of.fin,round:of.round,vat:of.vat,vatR:of.vatR,title:of.title,terms:of.terms,lines:of.lines.map(l=>({name:l.name,unit:l.unit,adj:l.adj,keys:(l.keys||[]).filter(k=>!k.startsWith('i:'))}))}});
+    try{ SETTINGS=Object.assign({},SETTINGS,{offerTpl:T}); await DB.saveSettings(SETTINGS); toast('התבנית "'+nm+'" נשמרה'); offerDlg(); }catch(e){ toast('שגיאה: '+e.message); } };
+  q('of_tload').onclick=()=>{ const nm=q('of_tpl').value; const t=tpls[nm]; if(!t) return; if(!confirm(`לטעון את התבנית "${nm}"? השורות הנוכחיות יוחלפו.`)) return; Object.assign(of,JSON.parse(JSON.stringify(t)),{client:of.client||nm}); re(); };
+  q('of_xls').onclick=()=>ofExport(of); q('of_print').onclick=()=>ofPrint(of);
+}
+function ofRegen(of){ const A=ofAtoms(of); if(of.merge&&(of.lvl==='c'||of.lvl==='s')) A.sort((x,y)=>x.k.startsWith('f:')-y.k.startsWith('f:')||x.label.localeCompare(y.label,undefined,{numeric:true})); of.lines=A.map(a=>({id:a.k,name:a.label,unit:a.unit||"קומפ'",qty:a.qty?String(+(+a.qty).toFixed(2)):'',keys:[a.k]})); }
+function ofExport(of){ if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; } const C=ofCalc(of); C.L=C.L.filter(l=>(l.keys||[]).length||Math.abs(l.fin)>0.5); const d=new Date().toLocaleDateString('he-IL');
+  const A=[[of.title||'הצעת מחיר'],[`פרויקט: ${state.project||''}`],[of.client?`לכבוד: ${of.client}`:''],[`תאריך: ${d}${of.valid?' · תוקף: '+of.valid:''}`],[],['#','תאור',"יח'",'כמות',"מחיר יח'",'סה"כ ₪']];
+  const st=+of.round||0; C.L.forEach((l,i)=>A.push([i+1,l.name,l.unit||'',l.q||'',l.up!=null?l.up:'',Math.round(l.fin*100)/100]));
+  const r0=7, rN=6+C.L.length; A.push(['',of.vat?'סה"כ לפני מע"מ':'סה"כ','','','',null]); const totR=A.length;
+  if(of.vat){ A.push(['',`מע"מ ${of.vatR}%`,'','','',null]); A.push(['','סה"כ כולל מע"מ','','','',null]); }
+  if(of.terms){ A.push([]); A.push(['תנאים והערות:']); String(of.terms).split('\n').forEach(t=>A.push([t])); }
+  const ws=XLSX.utils.aoa_to_sheet(A);
+  for(let r=r0;r<=rN;r++){ const e=ws['E'+r], f=ws['F'+r], dq=ws['D'+r]; if(dq&&typeof dq.v==='number') dq.z='#,##0.##'; if(e&&typeof e.v==='number'){ e.z=st>=1?'#,##0':'#,##0.00'; } if(f){ f.z='#,##0'; if(e&&typeof e.v==='number'&&dq&&typeof dq.v==='number') f.f=`D${r}*E${r}`; } }
+  ws['F'+totR]={t:'n',v:C.tot,f:`SUM(F${r0}:F${rN})`,z:'#,##0'};
+  if(of.vat){ ws['F'+(totR+1)]={t:'n',v:C.tot*(+of.vatR)/100,f:`F${totR}*${+of.vatR}/100`,z:'#,##0'}; ws['F'+(totR+2)]={t:'n',v:C.tot*(1+(+of.vatR)/100),f:`F${totR}+F${totR+1}`,z:'#,##0'}; }
+  ws['!cols']=[{wch:5},{wch:60},{wch:8},{wch:10},{wch:12},{wch:16}];
+  const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'הצעת מחיר');
+  let buf=XLSX.write(wb,{type:'array',bookType:'xlsx'}); try{ buf=xlsxPatch(buf,{0:{boldRows:[1,6,totR].concat(of.vat?[totR+2]:[])}}); }catch(e){}
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${of.title||'הצעת מחיר'} ${of.client||''} ${state.project||''} ${d.replace(/\./g,'-')}.xlsx`.replace(/\s+/g,' '); document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500); toast('ההצעה יוצאה'); }
+function ofPrint(of){ const C=ofCalc(of); C.L=C.L.filter(l=>(l.keys||[]).length||Math.abs(l.fin)>0.5); const d=new Date().toLocaleDateString('he-IL'); const st=+of.round||0; const vat=of.vat?C.tot*(+of.vatR)/100:0;
+  const w=window.open('','_blank'); if(!w){ toast('הדפדפן חסם חלון קופץ'); return; }
+  w.document.write(`<!doctype html><html dir="rtl" lang="he"><head><meta charset="utf-8"><title>${esc(of.title||'הצעת מחיר')}</title><style>body{font-family:Arial,sans-serif;margin:28px;color:#111}h1{font-size:22px;margin:0 0 6px}.m{color:#444;font-size:13px;margin-bottom:14px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #999;padding:5px 8px}th{background:#eee}td.n{text-align:left;white-space:nowrap}tr.t td{font-weight:700;background:#f4f4f4}.terms{white-space:pre-wrap;font-size:12px;margin-top:14px;border-top:1px solid #999;padding-top:8px}@media print{body{margin:10mm}}</style></head><body>
+   <h1>${esc(of.title||'הצעת מחיר')}</h1><div class="m">פרויקט: ${esc(state.project||'')}${of.client?' · לכבוד: '+esc(of.client):''} · ${d}${of.valid?' · תוקף: '+esc(of.valid):''}</div>
+   <table><thead><tr><th>#</th><th>תאור</th><th>יח'</th><th>כמות</th><th>מחיר יח'</th><th>סה"כ ₪</th></tr></thead><tbody>
+   ${C.L.map((l,i)=>`<tr><td>${i+1}</td><td>${esc(l.name)}</td><td>${esc(l.unit||'')}</td><td class="n">${l.q?fmt(l.q,2):''}</td><td class="n">${l.up!=null?fmt(l.up,st>=1?0:2):''}</td><td class="n">${fmt(l.fin)}</td></tr>`).join('')}
+   <tr class="t"><td></td><td>${of.vat?'סה"כ לפני מע"מ':'סה"כ'}</td><td></td><td></td><td></td><td class="n">${fmt(C.tot)}</td></tr>
+   ${of.vat?`<tr><td></td><td>מע"מ ${esc(of.vatR)}%</td><td></td><td></td><td></td><td class="n">${fmt(vat)}</td></tr><tr class="t"><td></td><td>סה"כ כולל מע"מ</td><td></td><td></td><td></td><td class="n">${fmt(C.tot+vat)}</td></tr>`:''}
+   </tbody></table>${of.terms?`<div class="terms">${esc(of.terms)}</div>`:''}<script>setTimeout(()=>print(),300)<\/script></body></html>`); w.document.close(); }
+document.getElementById('btnOffer').onclick=offerDlg;
+
 
 document.getElementById('btnBackup').onclick=()=>{
   const blob=new Blob([JSON.stringify(state,null,1)],{type:'application/json'});
