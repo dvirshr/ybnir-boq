@@ -3040,24 +3040,24 @@ function editPlan(rows){
         if(isPct(n)){ /* סעיף אחוז – כמות = בסיס מחושב, מחיר = אחוז; לא מתעדכנים מהקובץ */ }
         else if(isByc(n)){ if(!same(r['כמות'],R2(secQtyNet(n)))) warn.push(`שורה ${line}: סעיף ${n.code} – כמות לפי בטון (${n.byc.k} ק"ג/מ"ק) – לא עודכנה. לשנות את המקדם בטופס הסעיף`); }
         else if(leadOf(n)){ if(!same(r['כמות'],R2(secQty(n)))) warn.push(`שורה ${line}: סעיף ${n.code} – הכמות נלקחת ממשאב מוביל (★ ${leadOf(n).code||''}), לא עודכנה. לשנות את כמות המשאב`); }
-        else if(!same(r['כמות'],n.qty??'')){ if(n.calc&&n.calc.length){ if(!same(r['כמות'],R2(calcQty(n)))) warn.push(`שורה ${line}: סעיף ${n.code} – כמות מחושבת מפירוט, לא עודכנה`); } else ch.qty=S(r['כמות']); }
+        else if(!same(r['כמות'],n.qty??'')){ if(n.calc&&n.calc.length){ if(!same(r['כמות'],R2(calcQty(n)))){ if(/^(תיקון|התאמה)$/.test(act)){ const cq=calcQty(n), d=(+String(r['כמות']).replace(/,/g,''))-cq; if(String(r['כמות']).trim()!==''&&Number.isFinite(d)) ch.calcAdd={d:'התאמה מאקסל '+new Date().toLocaleDateString('he-IL')+' ('+fmtQ(cq)+' ← '+S(r['כמות'])+')',n:String(+d.toFixed(4)),l:'',w:'',h:''}; else warn.push(`שורה ${line}: סעיף ${n.code} – כמות מחושבת מפירוט, כמות לא תקינה – לא עודכנה`); } else warn.push(`שורה ${line}: סעיף ${n.code} – כמות מחושבת מפירוט, לא עודכנה ("תיקון" בעמודת פעולה = שורת התאמה בפירוט)`); } } else ch.qty=S(r['כמות']); }
         if(!same(r['הערות'],n.note||'')) ch.note=S(r['הערות']);
         if(!isPct(n)&&!r.__Lf&&S(r["מחיר יח'"])!==''&&!same(r["מחיר יח'"],n.sp??'')) ch.sp=S(r["מחיר יח'"]);   // formula = derived price (info); typed number = section pricing
       } else if(n.t==='k'){
         const code=S(r['מק"ט משאב']);
         if(code&&code!==n.code){ const it=ITEMS.it&&ITEMS.it[code]; if(!it) warn.push(`שורה ${line}: מק"ט ${code} לא בטבלת המק"טים`); ch.code=code; if(it) ch.name=it[0]; }
         if(!same(S(r["יח'"]),n.unit||'')) ch.unit=S(r["יח'"]);
-        if(!same(r['כמות'],n.qexpr??'')){ if(n.calc&&n.calc.length){ if(!same(r['כמות'],R2(calcQty(n)))) warn.push(`שורה ${line}: מק"ט ${n.code} – כמות מחושבת מפירוט, לא עודכנה`); } else ch.qexpr=S(r['כמות']); }
+        if(!same(r['כמות'],n.qexpr??'')){ if(n.calc&&n.calc.length){ if(!same(r['כמות'],R2(calcQty(n)))){ if(/^(תיקון|התאמה)$/.test(act)){ const cq=calcQty(n), d=(+String(r['כמות']).replace(/,/g,''))-cq; if(String(r['כמות']).trim()!==''&&Number.isFinite(d)) ch.calcAdd={d:'התאמה מאקסל '+new Date().toLocaleDateString('he-IL')+' ('+fmtQ(cq)+' ← '+S(r['כמות'])+')',n:String(+d.toFixed(4)),l:'',w:'',h:''}; else warn.push(`שורה ${line}: מק"ט ${n.code} – כמות מחושבת מפירוט, כמות לא תקינה – לא עודכנה`); } else warn.push(`שורה ${line}: מק"ט ${n.code} – כמות מחושבת מפירוט, לא עודכנה ("תיקון" בעמודת פעולה = שורת התאמה בפירוט)`); } } else ch.qexpr=S(r['כמות']); }
         if(!same(r["מחיר יח'"],n.price??'')){ ch.price=S(r["מחיר יח'"]); ch.pdate=new Date().toISOString().slice(0,10); ch.psrc='ידני (אקסל)'; }
       } else {
         const code=S(r['מק"ט משאב']);
         if(code&&code!==n.code){ if(!state.lists.res.some(x=>x.c===code)) warn.push(`שורה ${line}: מק"ט ${code} לא קיים ברשימת המשאבים – עודכן בכל זאת`); ch.code=code; }
         if(!same(normUnit(S(r["יח'"])),n.unit||'')) ch.unit=normUnit(S(r["יח'"]));
-        if(!same(r['כמות'],n.qexpr??'')){ if(n.calc&&n.calc.length){ if(!same(r['כמות'],R2(calcQty(n)))) warn.push(`שורה ${line}: משאב ${n.code} – כמות מחושבת מפירוט, לא עודכנה`); } else ch.qexpr=S(r['כמות']); }
+        if(!same(r['כמות'],n.qexpr??'')){ if(n.calc&&n.calc.length){ if(!same(r['כמות'],R2(calcQty(n)))){ if(/^(תיקון|התאמה)$/.test(act)){ const cq=calcQty(n), d=(+String(r['כמות']).replace(/,/g,''))-cq; if(String(r['כמות']).trim()!==''&&Number.isFinite(d)) ch.calcAdd={d:'התאמה מאקסל '+new Date().toLocaleDateString('he-IL')+' ('+fmtQ(cq)+' ← '+S(r['כמות'])+')',n:String(+d.toFixed(4)),l:'',w:'',h:''}; else warn.push(`שורה ${line}: משאב ${n.code} – כמות מחושבת מפירוט, כמות לא תקינה – לא עודכנה`); } else warn.push(`שורה ${line}: משאב ${n.code} – כמות מחושבת מפירוט, לא עודכנה ("תיקון" בעמודת פעולה = שורת התאמה בפירוט)`); } } else ch.qexpr=S(r['כמות']); }
         if(!hasItems(n)&&!same(r["מחיר יח'"],n.price??'')){ ch.price=S(r["מחיר יח'"]); }
       }
       if(('פחת %' in r)&&!same(r['פחת %'],n.w??'')){ const v=S(r['פחת %']).replace('%',''); if(v!==''&&!Number.isFinite(+v)) warn.push(`שורה ${line}: פחת "${v}" לא מספר – לא עודכן`); else ch.w=v; }
-      if(Object.keys(ch).length) ops.push({k:'upd',n,ch,line,txt:`${{i:'סעיף',r:'משאב',k:'מק"ט'}[n.t]} ${n.code}: `+Object.entries(ch).map(([k,v])=>({code:'קוד',name:'תאור',unit:'יח\'',qty:'כמות',qexpr:'כמות',note:'הערה',price:'מחיר',sp:'מחיר סעיף',w:'פחת %'}[k]+' → '+(String(v).length>40?String(v).slice(0,40)+'…':v||'(ריק)'))).join(' · ')});
+      if(Object.keys(ch).length) ops.push({k:'upd',n,ch,line,txt:`${{i:'סעיף',r:'משאב',k:'מק"ט'}[n.t]} ${n.code}: `+Object.entries(ch).map(([k,v])=>({code:'קוד',name:'תאור',unit:'יח\'',qty:'כמות',qexpr:'כמות',note:'הערה',price:'מחיר',sp:'מחיר סעיף',w:'פחת %',calcAdd:'שורת התאמה בפירוט'}[k]+' → '+(k==='calcAdd'?(v.n>0?'+':'')+fmtQ(+v.n):String(v).length>40?String(v).slice(0,40)+'…':v||'(ריק)'))).join(' · ')});
       return;
     }
     if(id&&!idMap[id]){ warn.push(`שורה ${line}: מזהה ${id} לא נמצא בפרויקט – דולגה`); return; }
@@ -3188,7 +3188,7 @@ function applyEditPlan(P,delGone){
   const res={upd:0,addS:0,addR:0,del:0}; const secNode=new Map();
   const remove=n=>{ const f=find(n.id); if(!f) return; const p=f.path[f.path.length-1]; const arr=p?p.ch:state.tree; const i=arr.indexOf(n); if(i>=0){ trashNode(n,f.path); arr.splice(i,1); res.del++; } };
   for(const o of P.ops){
-    if(o.k==='upd'){ Object.assign(o.n,o.ch); res.upd++; }
+    if(o.k==='upd'){ const ca=o.ch.calcAdd; const ch=Object.assign({},o.ch); delete ch.calcAdd; Object.assign(o.n,ch); if(ca){ o.n.calc=o.n.calc||[]; o.n.calc.push(ca); } res.upd++; }
     else if(o.k==='addS'){
       const s=o.sec; let blds=state.tree.filter(n=>n.t==='b'); let b=(s.bld&&blds.find(x=>x.code===s.bld))||blds[0];
       if(!b){ b=mk('b',{code:'01',name:state.project||'מבנה 1'}); state.tree.push(b); }
