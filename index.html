@@ -3165,15 +3165,17 @@ function editImportPreview(rows,fname,P0){
   const num=v=>{ const x=+String(v??'').replace(/,/g,''); return String(v??'').trim()!==''&&Number.isFinite(x)?x:null; };
   const cut=v=>{ v=String(v??''); return v.length>60?v.slice(0,60)+'…':v; };
   const oldOf=(n,k)=>{ if(k==='calcAdd') return calcQty(n); if(k==='qty') return n.calc&&n.calc.length?calcQty(n):(n.qty??''); if(k==='qexpr') return n.calc&&n.calc.length?calcQty(n):(n.qexpr??''); return n[k]??''; };
+  const secOfN=n=>n.t==='i'?n:n.t==='r'?parentOf(n.id):n.t==='k'?parentOf((parentOf(n.id)||{}).id):null;
+  const descOf=n=>{ if(!n) return ''; const sc=secOfN(n); const sn=sc?(sc.name||''):''; return n.t==='i'?sn:((sc?sc.code+' '+sn+' › ':'')+(nodeName(n)||'')); };
   // פריט = שדה בודד בעדכון / שורה חדשה / מחיקה / העברה / שורה שהוסרה מהקובץ
   const IT=[];
   P.ops.forEach((o,oi)=>{
     if(o.k==='upd'){ for(const k of Object.keys(o.ch)){ if(k==='pdate'||k==='psrc') continue; const isQ=k==='qty'||k==='qexpr'||k==='calcAdd';
         const ov=oldOf(o.n,k), nv=k==='calcAdd'?calcQty(o.n)+(+o.ch.calcAdd.n):o.ch[k];
-        const a=num(ov), b=num(nv); IT.push({oi,k,o,line:o.line,typ:'upd',code:o.n.code||'',lvl:T[o.n.t]||'',fld:FL[k]||k,ov,nv,isQ,dp:isQ&&a!==null&&b!==null&&a!==0?(b-a)/Math.abs(a)*100:null,on:!o.opt}); } }
-    else IT.push({oi,o,line:o.line,typ:o.k,code:(o.n&&o.n.code)||(o.sec&&o.sec.code)||(o.r&&o.r.code)||'',lvl:o.k==='addS'?'סעיף':o.k==='addR'?'משאב':o.k==='addK'?'מק"ט':(o.n?T[o.n.t]||'':''),fld:'',ov:'',nv:o.txt,isQ:false,dp:null,on:!o.opt});
+        const a=num(ov), b=num(nv); IT.push({oi,k,o,nid:o.n.id,desc:descOf(o.n),line:o.line,typ:'upd',code:o.n.code||'',lvl:T[o.n.t]||'',fld:FL[k]||k,ov,nv,isQ,dp:isQ&&a!==null&&b!==null&&a!==0?(b-a)/Math.abs(a)*100:null,on:!o.opt}); } }
+    else IT.push({oi,o,nid:o.n?o.n.id:null,desc:o.n?descOf(o.n):(o.sec&&o.sec.name)||'',line:o.line,typ:o.k,code:(o.n&&o.n.code)||(o.sec&&o.sec.code)||(o.r&&o.r.code)||'',lvl:o.k==='addS'?'סעיף':o.k==='addR'?'משאב':o.k==='addK'?'מק"ט':(o.n?T[o.n.t]||'':''),fld:'',ov:'',nv:o.txt,isQ:false,dp:null,on:!o.opt});
   });
-  P.gone.forEach((x,gi)=>IT.push({gi,line:'',typ:'gone',code:x.n.code||'',lvl:T[x.n.t]||'',fld:'',ov:cut(x.n.name||nodeName(x.n)),nv:'מחיקה מהכתב',isQ:false,dp:null,on:false}));
+  P.gone.forEach((x,gi)=>IT.push({gi,nid:x.n.id,desc:descOf(x.n),line:'',typ:'gone',code:x.n.code||'',lvl:T[x.n.t]||'',fld:'',ov:cut(x.n.name||nodeName(x.n)),nv:'מחיקה מהכתב',isQ:false,dp:null,on:false}));
   // תלות: משאב/מק"ט חדש תחת סעיף/משאב חדש שלא נבחר – לא ייכנס
   const parentIt=it=>{ if(it.typ==='addR') return IT.find(x=>x.typ==='addS'&&x.o.sec===it.o.sec); if(it.typ==='addK') return IT.find(x=>x.typ==='addR'&&x.o.r===it.o.res); return null; };
   const blocked=it=>{ let p=parentIt(it); while(p){ if(!p.on) return true; p=parentIt(p); } return false; };
@@ -3182,7 +3184,10 @@ function editImportPreview(rows,fname,P0){
   const rowH=(it,ix)=>{ const bl=blocked(it); const cls=it.typ==='gone'||it.typ==='del'?'background:#fef3f2':it.o&&it.o.opt?'background:#fffaeb':'';
     const dp=it.dp===null?'':`<span style="color:${Math.abs(it.dp)>=20?'#b42318;font-weight:700':'var(--muted)'}">${it.dp>0?'+':''}${fmt(it.dp,1)}%</span>`;
     const fq=v=>{ const x=num(v); return x!==null?fmtQ(x):esc(cut(v)); };
-    return `<tr data-ix="${ix}" style="${cls}"><td><input type="checkbox" data-ck="${ix}" ${it.on&&!bl?'checked':''} ${bl?'disabled title="תלוי בשורה חדשה שלא נבחרה"':''}></td><td class="n">${it.line}</td><td>${esc(KN[it.typ]||it.typ)}${it.o&&it.o.opt?' <span class="pill note" style="font-size:10px">לבחירה</span>':''}</td><td class="mono">${esc(it.code)}</td><td>${esc(it.lvl)}${it.fld?' · '+esc(it.fld):''}</td><td class="n">${it.typ==='upd'?fq(it.ov):esc(it.ov)}</td><td class="${it.typ==='upd'?'n':''}">${it.typ==='upd'?fq(it.nv):esc(cut(it.nv))}</td><td class="n">${dp}</td></tr>`; };
+    let ovH=it.typ==='upd'?fq(it.ov):esc(it.ov), nvH=it.typ==='upd'?fq(it.nv):esc(cut(it.nv));
+    if(it.k==='note'||it.k==='name'){ const a=String(it.ov??''), b=String(it.nv??''); if(a&&b.startsWith(a)){ ovH='<span class="hint">(ללא שינוי)</span>'; nvH='<b style="color:#027a48">+ </b>'+esc(b.slice(a.length).replace(/^\s*\|\s*/,'')); } else { ovH=`<span title="${esc(a)}">${esc(cut(a))}</span>`; nvH=`<span title="${esc(b)}">${esc(cut(b))}</span>`; } }
+    const codeH=it.nid&&find(it.nid)?`<button class="ib mono" data-open="${it.nid}" title="פתיחת הטופס (חישוב, משאבים, הערות) – הרשימה תחזור בסגירה" style="color:var(--accent);text-decoration:underline">${esc(it.code)}</button>`:esc(it.code);
+    return `<tr data-ix="${ix}" style="${cls}"><td><input type="checkbox" data-ck="${ix}" ${it.on&&!bl?'checked':''} ${bl?'disabled title="תלוי בשורה חדשה שלא נבחרה"':''}></td><td class="n">${it.line}</td><td>${esc(KN[it.typ]||it.typ)}${it.o&&it.o.opt?' <span class="pill note" style="font-size:10px">לבחירה</span>':''}</td><td class="mono" style="white-space:nowrap">${codeH}</td><td style="max-width:260px"><div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(it.desc||'')}">${esc(it.desc||'')}</div>${esc(it.lvl)}${it.fld?' · <b>'+esc(it.fld)+'</b>':''}</td><td class="n">${ovH}</td><td class="${it.typ==='upd'&&!(it.k==='note'||it.k==='name')?'n':''}">${nvH}</td><td class="n">${dp}</td></tr>`; };
   const vis=it=>!flt||[it.code,it.fld,it.lvl,KN[it.typ],String(it.nv),String(it.ov)].join(' ').toLowerCase().includes(flt);
   h.innerHTML=`<div class="pdlg" style="z-index:9999"><div class="box" style="width:min(1100px,100%);max-height:94vh;overflow:auto">
     <h2>טעינת עריכה – ${esc(fname)}</h2>
@@ -3194,20 +3199,23 @@ function editImportPreview(rows,fname,P0){
       <input id="ei_f" placeholder="סינון: קוד / שדה / טקסט" style="flex:1;min-width:160px">
       <b id="ei_n"></b></div>
     <div style="max-height:52vh;overflow:auto;margin-top:6px;border:1px solid var(--line);border-radius:8px">
-      <table class="boq" style="min-width:0;width:100%;table-layout:auto;font-size:12px"><thead style="position:sticky;top:0;background:var(--bg,#fff);z-index:1"><tr><th style="width:28px"><input type="checkbox" id="ei_vis" title="סימון/ביטול השורות המוצגות"></th><th class="n">שורה</th><th>סוג</th><th>קוד</th><th>רמה · שדה</th><th class="n">אצלך (ישן)</th><th>בקובץ (חדש)</th><th class="n">הפרש</th></tr></thead><tbody id="ei_tb"></tbody></table></div>
-    <p class="hint" style="margin:6px 0 0">צהוב = שינוי לבחירה ("?" בעמודת פעולה) – לא מסומן מראש. אדום = מחיקה. הפרש ≥20% מודגש. לפני הטעינה נשמרת גרסה, כך שאפשר לחזור אחורה דרך "גרסאות".</p>
+      <table class="boq" style="min-width:0;width:100%;table-layout:auto;font-size:12px"><thead style="position:sticky;top:0;background:var(--bg,#fff);z-index:1"><tr><th style="width:28px"><input type="checkbox" id="ei_vis" title="סימון/ביטול השורות המוצגות"></th><th class="n">שורה</th><th>סוג</th><th>קוד</th><th>תאור · שדה</th><th class="n">אצלך (ישן)</th><th>בקובץ (חדש)</th><th class="n">הפרש</th></tr></thead><tbody id="ei_tb"></tbody></table></div>
+    <p class="hint" style="margin:6px 0 0">לחיצה על קוד = פתיחת הטופס (חישוב, משאבים) – הרשימה חוזרת בסגירה. צהוב = שינוי לבחירה ("?" בעמודת פעולה) – לא מסומן מראש. אדום = מחיקה. הפרש ≥20% מודגש. לפני הטעינה נשמרת גרסה, כך שאפשר לחזור אחורה דרך "גרסאות".</p>
     <div class="row" style="justify-content:flex-end"><button class="btn" id="ei_print" title="הדפסת רשימת השינויים וההערות">הדפסה / PDF</button><button class="btn" id="ei_xls">ייצוא לאקסל</button><button class="btn" id="ei_cancel">ביטול</button><button class="btn primary" id="ei_go">החל נבחרים</button></div></div></div>`;
   const tb=$('ei_tb');
   const draw=()=>{ tb.innerHTML=IT.map((it,ix)=>vis(it)?rowH(it,ix):'').join('')||'<tr><td colspan="8" class="hint">אין שינויים</td></tr>'; cntUpd(); };
   const sel=()=>IT.filter(it=>it.on&&!blocked(it));
   const cntUpd=()=>{ const n=sel().length; $('ei_n').textContent=`נבחרו ${n} מתוך ${IT.length}`; $('ei_go').disabled=!n; };
+  tb.addEventListener('click',e=>{ const b=e.target.closest('[data-open]'); if(!b) return; const id=+b.dataset.open; if(!find(id)) return;
+    const box=h.firstElementChild; box.style.display='none'; openDrawer(id);
+    const dh=$('drawerHost'); const mo=new MutationObserver(()=>{ if(!dh.querySelector('.drawer')){ mo.disconnect(); box.style.display=''; PMAP=null; draw(); } }); mo.observe(dh,{childList:true}); });
   tb.addEventListener('change',e=>{ const ix=e.target.dataset.ck; if(ix===undefined) return; IT[+ix].on=e.target.checked; draw(); });
   h.querySelectorAll('[data-sel]').forEach(b=>b.onclick=()=>{ const m=b.dataset.sel;
     IT.forEach(it=>{ it.on= m==='all'?true: m==='none'?false: m==='def'?(it.typ==='gone'?false:!(it.o&&it.o.opt)): m==='q'?it.isQ&&!(it.o&&it.o.opt): m==='new'?/^add/.test(it.typ)&&!(it.o&&it.o.opt): m==='txt'?(it.k==='name'||it.k==='note')&&!(it.o&&it.o.opt):it.on; }); draw(); });
   $('ei_vis').onchange=e=>{ IT.forEach(it=>{ if(vis(it)) it.on=e.target.checked; }); draw(); };
   $('ei_f').oninput=e=>{ flt=e.target.value.trim().toLowerCase(); draw(); };
   $('ei_cancel').onclick=()=>h.innerHTML='';
-  const rowsOf=()=>IT.map(it=>({'נבחר':it.on&&!blocked(it)?'✓':'','שורה בקובץ':it.line,'סוג':KN[it.typ]||it.typ,'קוד':it.code,'רמה':it.lvl,'שדה':it.fld,'אצלך (ישן)':String(it.ov??''),'בקובץ (חדש)':String(it.nv??''),'הפרש %':it.dp===null?'':+it.dp.toFixed(1)})).concat(P.warn.map(w=>({'נבחר':'','שורה בקובץ':(w.match(/^שורה (\d+)/)||[])[1]||'','סוג':'הערה','קוד':'','רמה':'','שדה':'','אצלך (ישן)':'','בקובץ (חדש)':w,'הפרש %':''})));
+  const rowsOf=()=>IT.map(it=>({'נבחר':it.on&&!blocked(it)?'✓':'','שורה בקובץ':it.line,'סוג':KN[it.typ]||it.typ,'קוד':it.code,'תאור':it.desc||'','רמה':it.lvl,'שדה':it.fld,'אצלך (ישן)':String(it.ov??''),'בקובץ (חדש)':String(it.nv??''),'הפרש %':it.dp===null?'':+it.dp.toFixed(1)})).concat(P.warn.map(w=>({'נבחר':'','שורה בקובץ':(w.match(/^שורה (\d+)/)||[])[1]||'','סוג':'הערה','קוד':'','רמה':'','שדה':'','אצלך (ישן)':'','בקובץ (חדש)':w,'הפרש %':''})));
   $('ei_print').onclick=()=>{ const d=new Date().toLocaleDateString('he-IL'); const R=rowsOf();
     $('printArea').innerHTML=`<h1>שינויים מטעינת קובץ – ${esc(state.project||'')}</h1><div class="meta">${esc(fname)} · ${d} · נבחרו ${sel().length} מתוך ${IT.length} · ${P.warn.length} הערות · <b>לפני אישור</b></div>
       <table><thead><tr><th style="width:4%">✓</th><th class="n" style="width:6%">שורה</th><th style="width:9%">סוג</th><th style="width:9%">קוד</th><th style="width:12%">רמה · שדה</th><th>אצלך (ישן)</th><th>בקובץ (חדש)</th><th class="n" style="width:7%">הפרש</th></tr></thead><tbody>${R.map(r=>`<tr${r['סוג']==='הערה'?' class="pn"':''}><td>${r['נבחר']}</td><td class="n">${esc(String(r['שורה בקובץ']))}</td><td>${esc(r['סוג'])}</td><td>${esc(r['קוד'])}</td><td>${esc(r['רמה']+(r['שדה']?' · '+r['שדה']:''))}</td><td>${esc(cut(r['אצלך (ישן)']))}</td><td>${esc(cut(r['בקובץ (חדש)']))}</td><td class="n">${r['הפרש %']===''?'':r['הפרש %']+'%'}</td></tr>`).join('')}</tbody></table>`;
