@@ -282,6 +282,7 @@ table.boq.plist{min-width:0!important;width:100%}
     <button class="btn" id="btnEditX" title="קובץ אקסל שאפשר לערוך ולטעון חזרה">אקסל לעריכה</button>
     <button class="btn" id="btnEditImp">טעינת עריכה</button><input type="file" id="fileEditImp" accept=".xlsx,.xls" hidden>
     <button class="btn" id="btnEffi" title="כתב כמויות נקי ברמת סעיף לסקירה">ייצוא לאפי</button>
+    <button class="btn" id="btnPull" hidden title="ייבוא מחירים מהמחירון או מפרויקט אחר – עם השוואה, מיון ובחירה">ייבוא מחירים</button>
     <button class="btn" id="btnPrint">הדפסה / PDF</button>
     <button class="btn" id="btnBackup">גיבוי</button>
     <button class="btn" id="btnVersions">גרסאות</button>
@@ -328,7 +329,7 @@ table.boq.plist{min-width:0!important;width:100%}
 
   <section id="view-dash" hidden>
     <div class="dash">
-      <div class="chips" id="dashFilter"></div>
+      <div class="row" style="justify-content:space-between;align-items:center;gap:8px"><div class="chips" id="dashFilter" style="flex:1"></div><button class="btn" id="btnCmp" hidden title="השוואת נתונים עיקריים בין פרויקטים, מוצמד למדד, עם איתור חריגים ואומדן מהיר">⚖ השוואת פרויקטים</button></div>
       <div class="kpis" id="kpis"></div>
       <div class="panels"><div class="panel" id="areaPanel"></div><div class="panel" id="gapPanel"></div></div>
       <div class="panels"><div class="panel" id="pbPanel"></div></div>
@@ -345,7 +346,7 @@ table.boq.plist{min-width:0!important;width:100%}
       <h3>מחירון חברה</h3>
       <p class="hint" style="margin-top:0">מחירון אחד לכל המכרזים, לפי מק"ט ויחידה. כל עדכון נשמר כשורה חדשה עם תאריך ומקור – המחירים הקודמים נשארים בהיסטוריה.</p>
       <div class="row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-        <button class="btn primary" id="pr_pull" title="ממלא מחיר רק במשאבים שאין להם מחיר">משוך מחירים לפרויקט</button>
+        <button class="btn primary" id="pr_pull" title="ייבוא מחירים מהמחירון או מפרויקט אחר – עם השוואה, מיון ובחירה">ייבוא מחירים לפרויקט…</button>
         <button class="btn" id="pr_push" title="מוסיף למחירון מחירי משאבים ומק"טים מכתב הכמויות – עם תצוגה מקדימה">עדכן מחירון מכתב הכמויות</button>
         <button class="btn" id="pr_export">ייצוא לאקסל</button>
         <button class="btn" id="pr_import">ייבוא מאקסל</button><input type="file" id="pr_file" accept=".xlsx,.xls" hidden>
@@ -423,6 +424,7 @@ table.boq.plist{min-width:0!important;width:100%}
       <input type="file" id="p_file" accept=".json" hidden>
       <button class="btn" id="p_new">פרויקט חדש ריק</button>
       <button class="btn" id="p_bulk">הוספת סעיפים מרשימה</button>
+      <button class="btn" id="p_cmp">⚖ השוואת פרויקטים</button>
       <label class="hint" style="margin:0;display:flex;gap:4px;align-items:center"><input type="checkbox" id="p_arch"> הצג ארכיון <span id="p_arch_n"></span></label>
       <button class="btn" id="p_users" hidden>משתמשים <span class="pill" id="p_users_n" hidden></span></button>
     </div>
@@ -709,7 +711,7 @@ function attPills(n){ if(!['i','c','s'].includes(n.t)) return '';
 function attDlg(id){
   const f=find(id); if(!f) return; const n=f.n; const h=document.getElementById('printDlgHost'); const can=typeof FILES!=='undefined'&&FILES.enabled();
   const b=pbOf(n); const up=filesUp(n); const own=liveFiles(n); const down=filesDown(n);
-  const fl=(x,ix,mine)=>`<tr><td>${/pdf$/i.test(x.name)?'📄':/\.(png|jpe?g|gif|webp|heic|tiff?)$/i.test(x.name)?'🖼':'📎'} <a href="#" data-fo="${esc(x.k)}" title="${esc(x.name)}">${esc(fTitle(x))}</a>${x.d?`<div class="hint" style="margin:0;font-size:11px;white-space:pre-wrap">${esc(x.d)}</div>`:''}${mine?`<div data-fed="${ix}" hidden style="margin-top:4px"><input data-ft="${ix}" value="${esc(fTitle(x))}" placeholder="שם הקובץ" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit;font-size:13px"><textarea data-fd="${ix}" rows="2" placeholder="תאור (ספק, תאריך הצעה, מה כלול / לא כלול, תוקף…)" style="width:100%;margin-top:3px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit;font-size:12px">${esc(x.d||'')}</textarea><button class="btn small primary" data-fsv="${ix}">שמור</button></div>`:''}</td><td class="num" style="font-size:11px">${x.size?fmt(x.size/1024)+' KB':''}</td><td style="font-size:11px">${new Date(x.at).toLocaleDateString('he-IL')}${x.by?' · '+esc(String(x.by).split('@')[0]):''}</td><td style="font-size:11px">${mine?`<button class="ib" data-fe="${ix}" title="שינוי שם / תאור">✏</button><button class="ib del" data-frm="${ix}" title="הסרה מהרשימה (הקובץ נשמר בארכיון)">הסר</button>`:esc((x.from.t==='s'?'תת-פרק ':x.from.t==='c'?'פרק ':'מבנה ')+(x.from.code||''))}</td></tr>`;
+  const fl=(x,ix,mine)=>`<tr><td>${/pdf$/i.test(x.name)?'📄':/\.(png|jpe?g|gif|webp|heic|tiff?)$/i.test(x.name)?'🖼':'📎'} <a href="#" data-fo="${esc(x.k)}" title="${esc(x.name)}">${esc(fTitle(x))}</a>${x.d?`<div class="hint" style="margin:0;font-size:11px;white-space:pre-wrap">${esc(x.d)}</div>`:''}${x.exp?`<div style="font-size:11px;color:${x.exp<new Date().toISOString().slice(0,10)?'#d92d20':'#667085'}">${x.exp<new Date().toISOString().slice(0,10)?'⚠ פג תוקף':'בתוקף עד'} ${new Date(x.exp).toLocaleDateString('he-IL')}</div>`:''}${mine?`<div data-fed="${ix}" hidden style="margin-top:4px"><input data-ft="${ix}" value="${esc(fTitle(x))}" placeholder="שם הקובץ" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit;font-size:13px"><textarea data-fd="${ix}" rows="2" placeholder="תאור (ספק, תאריך הצעה, מה כלול / לא כלול…)" style="width:100%;margin-top:3px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit;font-size:12px">${esc(x.d||'')}</textarea><label class="hint" style="margin:2px 0;display:flex;gap:6px;align-items:center">בתוקף עד <input type="date" data-fx="${ix}" value="${esc(x.exp||'')}" style="border:1px solid var(--line);border-radius:6px;padding:2px 4px"></label><button class="btn small primary" data-fsv="${ix}">שמור</button></div>`:''}</td><td class="num" style="font-size:11px">${x.size?fmt(x.size/1024)+' KB':''}</td><td style="font-size:11px">${new Date(x.at).toLocaleDateString('he-IL')}${x.by?' · '+esc(String(x.by).split('@')[0]):''}</td><td style="font-size:11px">${mine?`<button class="ib" data-fe="${ix}" title="שינוי שם / תאור">✏</button><button class="ib del" data-frm="${ix}" title="הסרה מהרשימה (הקובץ נשמר בארכיון)">הסר</button>`:esc((x.from.t==='s'?'תת-פרק ':x.from.t==='c'?'פרק ':'מבנה ')+(x.from.code||''))}</td></tr>`;
   h.innerHTML=`<div class="pdlg"><div class="box" role="dialog" aria-label="מסמכים ובסיס מחיר" style="width:min(680px,100%)">
     <h2 style="margin:0 0 2px">מסמכים ובסיס מחיר – ${NAMES[n.t]} ${esc(n.code||'')}</h2><div class="hint" style="margin:0 0 10px">${esc((n.name||nodeName(n)||'').slice(0,90))}</div>
     <div class="field"><label for="at_pb">בסיס המחיר</label><select id="at_pb"><option value="">${b&&!b.own?'לפי '+(b.from.t==='s'?'תת-הפרק':b.from.t==='c'?'הפרק':'המבנה')+': '+PB[b.k]:'— לא סומן —'}</option>${Object.entries(PB).map(([k,l])=>`<option value="${k}" ${n.pb===k?'selected':''}>${l}</option>`).join('')}</select>
@@ -731,7 +733,7 @@ function attDlg(id){
   h.querySelectorAll('[data-fo]').forEach(a=>a.onclick=async ev=>{ ev.preventDefault(); const w=window.open('about:blank','_blank'); try{ const u=await FILES.url(a.dataset.fo); if(w) w.location=u; else location.href=u; }catch(e){ if(w) w.close(); toast('פתיחה נכשלה: '+e.message); } });
   h.querySelectorAll('[data-fe]').forEach(x=>x.onclick=()=>{ const ed=h.querySelector(`[data-fed="${x.dataset.fe}"]`); ed.hidden=!ed.hidden; if(!ed.hidden) ed.querySelector('input').focus(); });
   h.querySelectorAll('[data-fsv]').forEach(x=>x.onclick=async()=>{ const i=x.dataset.fsv, it=(n.files||[])[+i]; if(!it) return; const t=h.querySelector(`[data-ft="${i}"]`).value.trim(), d=h.querySelector(`[data-fd="${i}"]`).value.trim();
-    if(t&&t!==it.name) it.title=t; else delete it.title; if(d) it.d=d; else delete it.d; save();
+    if(t&&t!==it.name) it.title=t; else delete it.title; if(d) it.d=d; else delete it.d; const ex=(h.querySelector(`[data-fx="${i}"]`)||{}).value||''; if(ex) it.exp=ex; else delete it.exp; save();
     let lib=''; if(can&&FILES.meta){ try{ await FILES.meta(it.k,{title:it.title,descr:it.d}); lib=' (גם בספרייה)'; }catch(e){ console.warn(e); } }
     toast('נשמר'+lib); attDlg(id); });
   h.querySelectorAll('[data-frm]').forEach(x=>x.onclick=()=>{ const it=(n.files||[])[+x.dataset.frm]; if(!it||!confirm('להסיר את "'+fTitle(it)+'" מהרשימה?\nהקובץ עצמו נשמר בארכיון ולא נמחק.')) return; it.rm=new Date().toISOString(); save(); attDlg(id); });
@@ -1291,6 +1293,7 @@ function renderDash(){
   document.getElementById('kpis').innerHTML=[
     ['עלות כוללת','₪ '+fmt(G)],['₪ ליח"ד',U?'₪ '+fmt(G/U)+`<small style="display:block;font-size:11px;font-weight:400">${fmt(U)} יח"ד</small>`:'—'],
     ['₪ למ"ר שווה-ערך',eq?'₪ '+fmt(G/eq)+`<small style="display:block;font-size:11px;font-weight:400">${fmt(eq)} מ"ר</small>`:'—'],['₪ למ"ר ברוטו',gross?'₪ '+fmt(G/gross)+`<small style="display:block;font-size:11px;font-weight:400">${fmt(gross)} מ"ר</small>`:'—'],
+    ...(()=>{ const M=projMetrics(); return [['בטון מ"ק ליח"ד',M.conc&&U?fmt(M.conc/U,1)+`<small style="display:block;font-size:11px;font-weight:400">${fmt(M.conc)} מ"ק כולל פחת</small>`:'—'],['בטון מ"ק למ"ר שו"ע',M.conc&&eq?fmt(M.conc/eq,2):'—'],['פלדה ק"ג למ"ק בטון',M.conc&&M.steel?fmt(M.steel*1000/M.conc,0)+`<small style="display:block;font-size:11px;font-weight:400">${fmt(M.steel)} טון</small>`:'—']]; })(),
     ['סעיפים',fmt(nS)],['שורות ללא מחיר',fmt(noPrice)]
   ].map(([k,v])=>`<div class="kpi"><small>${k}</small><b>${v}</b></div>`).join('');
   // ---- מחיר למ"ר לפי חלוקת שטחים ----
@@ -1529,6 +1532,22 @@ document.getElementById('btnBackup').onclick=()=>{
 };
 
 
+/* ---------- מדדים להשוואה בין פרויקטים + הצמדה ---------- */
+const SCOPE={'':'בהיקף',part:'חלקי',oth:'ע"י אחרים',na:'לא רלוונטי'};
+const TSTAT=['בהכנה','הוגש','זכייה','הפסד','בוטל'];
+const IDXN='מדד תשומות הבנייה למגורים';
+function idxTable(){ try{ return (typeof SETTINGS!=='undefined'&&SETTINGS&&SETTINGS.idx)||{}; }catch(e){ return {}; } }
+function idxAt(m){ const T=idxTable(); if(!m) return null; m=String(m).slice(0,7); if(T[m]) return +T[m]; const ks=Object.keys(T).filter(k=>k<=m).sort(); return ks.length?+T[ks[ks.length-1]]:null; }
+function idxLatest(){ const ks=Object.keys(idxTable()).sort(); return ks.length?ks[ks.length-1]:''; }
+function projMetrics(){
+  PCTB=null; if(typeof CONCC!=='undefined') CONCC=null;
+  const B=state.tree, G=B.reduce((a,b)=>a+total(b),0); let grand=G; try{ grand=finCalc().grand||G; }catch(e){}
+  const U=pfV('units')||projU(), eq=pfEq(), gross=pfGross();
+  let conc=0, steel=0; walk(B,(x,p)=>{ if(x.t!=='i') return; const t=sumTopicSec(x,(p[1]||{}).code||''); const q=secQty(x); if(!q||Number.isNaN(q)) return; if(t==='בטון') conc+=q; else if(t==='ברזל') steel+=UNORM(x.unit)==='טון'?q:q/1000; });
+  const ch={}, cm=chMap(); walk(B,n=>{ if(n.t==='c'){ const v=total(n); if(!v) return; (ch[n.code]=ch[n.code]||{name:cm[n.code]||'',v:0}).v+=v; } });
+  const P=state.pf||{}, C=P.char||{};
+  return {name:state.project||'',G,grand,U,eq,gross,main:pfMainNet(),base:pfV('base'),park:pfPark(),fUp:pfV('fUp'),fDown:pfV('fDown'),method:P.method||'',months:pfV('months'),conc,steel,ch,char:C,scope:P.scope||{},tender:P.tender||{},bdate:C.bdate||''};
+}
 /* ---------- טופס פרויקט: נתוני גרמושקה ברמת פרויקט + ניתוח לפי תפקיד המבנה בכתב הכמויות ---------- */
 const PF_A=[['main','עיקרי'],['serv','שירות'],['balc','מרפסות'],['base','מרתפים']];
 const PF_X=[['plot','שטח מגרש'],['dev','פיתוח'],['gardens','גינון'],['roofs','גגות']];
@@ -1552,6 +1571,41 @@ function pfRole(b){ if(b.role) return b.role; const n=b.name||''; if(typeof ohBl
   if(/עפר|ביסוס|חפיר|דיפון/.test(n)) return 'earth'; if(/מרתף|מרתפ/.test(n)) return 'base'; if(/פיתוח|גינון/.test(n)) return 'dev'; if(/תקור/.test(n)) return 'oh'; return 'res'; }
 let pfRendering=false, pfT=null;
 function pfSoon(){ clearTimeout(pfT); pfT=setTimeout(renderProj,0); }
+function pfCharPanel(){ const P=pfP(), C=P.char||{}, S=P.scope||{}, T=P.tender||{}; const cm=chMap();
+  const used={}; walk(state.tree,n=>{ if(n.t==='c'){ used[n.code]=(used[n.code]||0)+total(n); } });
+  const codes=Object.keys(used).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const other=state.lists.chapters.map(c=>c.c).filter(c=>!used[c]);
+  const ti=(k,v,w=200,ph='',type='text')=>`<input type="${type}" data-pt="${k}" value="${esc(v??'')}" placeholder="${esc(ph)}" style="width:${w}px;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit">`;
+  const sel=(attr,opts,v)=>`<select ${attr} style="border:1px solid var(--line);border-radius:6px;padding:3px 6px">${opts.map(([k,l])=>`<option value="${k}" ${String(v??'')===k?'selected':''}>${l}</option>`).join('')}</select>`;
+  const scRow=c=>{ const x=S[c]||{}; return `<tr style="${x.s==='oth'||x.s==='na'?'opacity:.7':''}"><td>${esc(c+' '+(cm[c]||''))}</td><td class="n num">${used[c]?fmt(used[c]):'—'}</td><td>${sel(`data-sc="${c}"`,Object.entries(SCOPE),x.s||'')}</td><td><input data-scn="${c}" value="${esc(x.n||'')}" placeholder="הערה להשוואה" style="width:100%;min-width:220px;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit"></td></tr>`; };
+  const bi=idxAt(C.bdate); let G=0; try{ G=finCalc().grand; }catch(e){ G=state.tree.reduce((a,b)=>a+total(b),0); }
+  const subs=T.subs||[];
+  return `<div class="panel"><h3>מאפיינים להשוואה, היקף והגשה <small class="hint" style="font-weight:400">– משמש להשוואה בין פרויקטים ולהצמדה</small></h3>
+   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px">
+    <div><b style="font-size:13px">מאפיינים</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">
+      <tr><td>מיקום / עיר</td><td>${ti('loc',C.loc,180)}</td></tr>
+      <tr><td>יזם / מזמין</td><td>${ti('client',C.client,180)}</td></tr>
+      <tr><td>דיפון</td><td>${sel('data-pt="shore"',[['',''],['us','ע"י הקבלן (אנחנו)'],['oth','ע"י אחרים'],['none','אין']],C.shore)}</td></tr>
+      <tr><td>חפירה ועפר</td><td>${sel('data-pt="earth"',[['',''],['us','ע"י הקבלן (אנחנו)'],['oth','ע"י אחרים'],['none','אין']],C.earth)}</td></tr>
+      <tr><td>תאריך קובע (מדד בסיס)</td><td>${ti('bdate',C.bdate,150,'','month')}<div class="hint" style="margin:2px 0 0;font-size:11px">${C.bdate?(bi?IDXN+': '+fmt(bi,1):'⚠ אין ערך מדד לחודש הזה בטבלת המדדים (בהשוואת פרויקטים)'):'חודש המחירים של כתב הכמויות'}</div></td></tr>
+      <tr><td colspan="2"><textarea data-pt="notes" rows="3" placeholder="הערות להשוואה: למשל דיפון בוצע ע&quot;י אחרים, אין מרתף, מפרט גבוה, מגבלות אתר…" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:inherit">${esc(C.notes||'')}</textarea></td></tr></table></div>
+    <div><b style="font-size:13px">מכרז / הגשה</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">
+      <tr><td>סטטוס</td><td>${sel('data-tn="status"',[['','']].concat(TSTAT.map(x=>[x,x])),T.status)}</td></tr>
+      <tr><td>מועד הגשה</td><td><input type="date" data-tn="date" value="${esc(T.date||'')}" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px"></td></tr>
+      <tr><td>מחיר שהוגש ₪</td><td><input data-tn="price" value="${esc(T.price||'')}" placeholder="${fmt(G)}" inputmode="decimal" style="width:140px;border:1px solid var(--line);border-radius:6px;padding:3px 6px"></td></tr>
+      <tr><td>מחיר זוכה ₪</td><td><input data-tn="win" value="${esc(T.win||'')}" inputmode="decimal" style="width:140px;border:1px solid var(--line);border-radius:6px;padding:3px 6px">${T.win&&(T.price||G)?`<div class="hint" style="margin:2px 0 0;font-size:11px">פער: ${fmt(((+T.price||G)-(+T.win))/(+T.win)*100,1)}% מעל הזוכה</div>`:''}</td></tr>
+      <tr><td>זוכה</td><td><input data-tn="winner" value="${esc(T.winner||'')}" style="width:160px;border:1px solid var(--line);border-radius:6px;padding:3px 6px"></td></tr>
+      <tr><td colspan="2"><textarea data-tn="notes" rows="2" placeholder="לקחים / הערות" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font:inherit">${esc(T.notes||'')}</textarea></td></tr>
+      <tr><td colspan="2"><button class="btn small" id="pf_sub" title="רושם את מצב כתב הכמויות ברגע ההגשה: סכום + מספר גרסה בענן">📌 רשום הגשה (${fmt(G)} ₪)</button>
+        ${subs.length?`<div style="margin-top:4px;font-size:12px">${subs.map(x=>`<div>📌 ${new Date(x.d).toLocaleDateString('he-IL')} · ${fmt(x.price)} ₪${x.rev?' · גרסה '+x.rev:''}</div>`).join('')}</div>`:''}</td></tr></table></div>
+   </div>
+   <details ${codes.some(c=>S[c])||other.some(c=>S[c])?'open':''} style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;font-size:13px">היקף לפי פרק <span class="hint" style="margin:0;font-weight:400">– מה בהיקף שלנו ומה ע"י אחרים / לא רלוונטי (בהשוואה – לא בהיקף = לא נספר בממוצע)</span></summary>
+    <table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px"><thead><tr><th>פרק</th><th class="n">עלות</th><th>היקף</th><th>הערה</th></tr></thead><tbody>
+    ${codes.map(scRow).join('')}
+    ${other.length?`<tr><td colspan="4" style="font-size:12px;font-weight:600;padding-top:8px">פרקים שאינם בכתב הכמויות</td></tr>`+other.map(scRow).join(''):''}</tbody></table></details></div>`; }
+document.addEventListener('click',e=>{ if(!e.target.closest||!e.target.closest('#pf_sub')) return; const P=pfP(); P.tender=P.tender||{}; let G=0; try{ G=finCalc().grand; }catch(err){}
+  const rev=(typeof CUR!=='undefined'&&CUR)?CUR.rev:null; (P.tender.subs=P.tender.subs||[]).push({d:new Date().toISOString(),price:Math.round(G),rev}); if(!P.tender.price) P.tender.price=String(Math.round(G)); if(!P.tender.date) P.tender.date=new Date().toISOString().slice(0,10); if(!P.tender.status||P.tender.status==='בהכנה') P.tender.status='הוגש';
+  save(); pfSoon(); toast('ההגשה נרשמה'+(rev?' · גרסה '+rev:'')); });
 function renderProj(){ if(pfRendering) return; pfRendering=true; try{ renderProj0(); } finally{ pfRendering=false; } }
 function renderProj0(){
   const el=document.getElementById('view-proj'); if(!el) return; const P=pfP(), C=pfC(), B=state.tree;
@@ -1595,6 +1649,7 @@ function renderProj0(){
        <tr style="font-weight:700"><td>סה"כ</td><td class="n num" ${ms&&U&&ms!==U?'style="color:#d92d20"':''}>${ms||'—'}</td></tr></table></div>
      <div><b style="font-size:13px">מקדמי שווה-ערך</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_A.map(([k,l])=>`<tr><td>${l}</td><td class="n">${inp(`data-pc="${k}"`,(P.coef||{})[k],60,String(PF_COEF[k]))}</td></tr>`).join('')}</table></div>
     </div></div>
+   ${pfCharPanel()}
    ${finPanel()}
    <div class="panel"><h3>ניתוח</h3>
     ${W.length?`<div style="border:1px solid #fec84b;background:#fffaeb;border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:13px">${W.map(x=>'⚠ '+esc(x)).join('<br>')}</div>`:''}
@@ -1614,7 +1669,7 @@ function renderProj0(){
    </div></div>`;
 }
 document.addEventListener('change',e=>{ const x=e.target; if(pfRendering||!x.closest||!x.closest('#view-proj')) return;
-  const raw=String(x.value).replace(/,/g,'').trim(); const isTxt=x.dataset.pp==='method'||x.dataset.role||x.dataset.pf;
+  const raw=String(x.value).replace(/,/g,'').trim(); const isTxt=x.dataset.pp==='method'||x.dataset.role||x.dataset.pf||x.dataset.pt||x.dataset.sc||x.dataset.scn!==undefined||x.dataset.tn;
   if(!isTxt&&raw!==''&&!Number.isFinite(+raw)){ toast('מספר לא תקין'); return; }
   const P=pfP();
   if(x.dataset.pf){ if(x.checked) P[x.dataset.pf]=true; else delete P[x.dataset.pf]; }
@@ -1623,6 +1678,9 @@ document.addEventListener('change',e=>{ const x=e.target; if(pfRendering||!x.clo
   else if(x.dataset.pu){ if(raw==='') delete state.units; else state.units=raw; }
   else if(x.dataset.mix){ P.mix=P.mix||{}; if(raw==='') delete P.mix[x.dataset.mix]; else P.mix[x.dataset.mix]=raw; }
   else if(x.dataset.role){ const b=state.tree.find(y=>String(y.id)===x.dataset.role); if(!b) return; b.role=x.value; }
+  else if(x.dataset.pt){ P.char=P.char||{}; const v=String(x.value).trim(); if(v) P.char[x.dataset.pt]=v; else delete P.char[x.dataset.pt]; }
+  else if(x.dataset.sc||x.dataset.scn!==undefined){ P.scope=P.scope||{}; const c=x.dataset.sc||x.dataset.scn; const o=P.scope[c]||{}; if(x.dataset.sc){ if(x.value) o.s=x.value; else delete o.s; } else { const v=String(x.value).trim(); if(v) o.n=v; else delete o.n; } if(o.s||o.n) P.scope[c]=o; else delete P.scope[c]; }
+  else if(x.dataset.tn){ P.tender=P.tender||{}; const k=x.dataset.tn; let v=String(x.value).trim(); if((k==='price'||k==='win')&&v){ v=v.replace(/,/g,''); if(!Number.isFinite(+v)){ toast('מספר לא תקין'); return; } } if(v) P.tender[k]=v; else delete P.tender[k]; }
   else return;
   save(); pfSoon(); });
 document.addEventListener('click',e=>{ if(!e.target.closest||!e.target.closest('#pf_x')) return; if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; }
@@ -2017,9 +2075,24 @@ function qcRun(){
       if(L.length>1) add({rule:17,sev:'err',msg:`${r.b} · ${r.x.code} ${(r.x.name||'').slice(0,40)}: הבטון (${fmtQ(secQty(r.x))} מ"ק) נספר ב-${L.length} סעיפי ברזל: ${L.map(y=>y.code).join(', ')}`,src:[{id:r.x.id,t:'בטון'}].concat(L.map(y=>({id:y.id,t:'ברזל '+y.code})))});
       else if(!L.length&&(bl.has(r.b)||bl.has('*'))) add({rule:17,sev:'warn',msg:`${r.b} · ${r.x.code} ${(r.x.name||'').slice(0,40)}: ${fmtQ(secQty(r.x))} מ"ק בטון לא מקושר לאף סעיף ברזל`,src:[{id:r.x.id,t:'בטון'}]}); }
       walk(state.tree,(x,p)=>{ if(isByc(x)){ const L=bycLinked(x); add({rule:17,sev:L.length?'ok':'warn',msg:`${(p[0]||{}).code} · ${x.code}: ${x.byc.k} ק"ג/מ"ק × ${fmtQ(bycBase(x))} מ"ק (${L.length} סעיפי בטון) = ${fmtQ(secQtyNet(x))} ${x.unit||''}`,src:[{id:x.id,t:'ברזל'}]}); } }); } }
+  // ---- כלל 18: תוקף הצעות מחיר + מחירים ישנים ----
+  { const today=new Date().toISOString().slice(0,10), soon=new Date(Date.now()+30*864e5).toISOString().slice(0,10);
+    for(const {n,b} of secs){ const pb=typeof pbOf==='function'?pbOf(n):null; if(!pb||pb.k!=='q') continue; const F=liveFiles(n).concat(filesUp(n)).filter(x=>x.exp); if(!F.length) continue; const best=F.map(x=>x.exp).sort().pop();
+      if(best<today) add({rule:18,sev:'warn',msg:`${b.code} · ${n.code} ${(n.name||'').slice(0,40)}: הצעת המחיר פגה ב-${new Date(best).toLocaleDateString('he-IL')} (${fmt(total(n))} ₪)`,src:[{id:n.id,t:'סעיף'}]});
+      else if(best<=soon) add({rule:18,sev:'info',msg:`${b.code} · ${n.code} ${(n.name||'').slice(0,40)}: הצעת המחיר בתוקף עד ${new Date(best).toLocaleDateString('he-IL')}`,src:[{id:n.id,t:'סעיף'}]}); }
+    const old=new Date(Date.now()-365*864e5).toISOString().slice(0,10); const O=[]; walk(state.tree,(x,p)=>{ if(!((x.t==='r'&&!hasItems(x))||x.t==='k')) return; if(!x.pdate||String(x.pdate).slice(0,10)>=old) return; const t=total(x); if(t>0) O.push({x,p,t}); });
+    O.sort((a,c)=>c.t-a.t).slice(0,15).forEach(o=>{ const sec=o.p.find(y=>y.t==='i')||{}; add({rule:18,sev:'info',msg:`${(o.p[0]||{}).code} · ${sec.code||''} · ${o.x.code||''} ${nodeName(o.x).slice(0,30)}: מחיר מ-${new Date(o.x.pdate).toLocaleDateString('he-IL')} (מעל שנה) · ${fmt(o.t)} ₪`,src:[{id:sec.id||o.x.id,t:'סעיף'}]}); });
+    if(O.length>15) add({rule:18,sev:'info',msg:`ועוד ${O.length-15} שורות עם מחיר מעל שנה`}); }
+  // ---- כלל 20: חריגה מבסיס ההשוואה (נשמר מ"השוואת פרויקטים") ----
+  { const BN=(typeof SETTINGS!=='undefined'&&SETTINGS&&SETTINGS.bench)||null; if(BN){ const M=projMetrics(); const tol=30; const f=BN.month&&M.bdate?((idxAt(BN.month)||0)/(idxAt(M.bdate)||0)||1):1;
+    const chk=(lbl,v,ref,unit,d=0)=>{ if(!(v>0)||!(ref>0)) return; const dv=(v-ref)/ref*100; if(Math.abs(dv)>tol) add({rule:20,sev:'warn',msg:`${lbl}: ${fmt(v,d)} ${unit} מול ${fmt(ref,d)} בפרויקטים קודמים (${dv>0?'+':''}${fmt(dv,0)}%)`}); else add({rule:20,sev:'ok',msg:`${lbl}: ${fmt(v,d)} ${unit} · בסיס ${fmt(ref,d)} (${dv>0?'+':''}${fmt(dv,0)}%)`}); };
+    chk('₪ למ"ר שווה-ערך (מוצמד)',M.eq?M.G/M.eq*f:0,BN.k.eqP,'₪'); chk('₪ ליח"ד (מוצמד)',M.U?M.G/M.U*f:0,BN.k.uP,'₪');
+    chk('בטון מ"ק למ"ר שו"ע',M.eq?M.conc/M.eq:0,BN.k.concEq,'מ"ק',2); chk('פלדה ק"ג למ"ק',M.conc?M.steel*1000/M.conc:0,BN.k.kgm3,'ק"ג');
+    for(const c in M.ch){ const sc=(M.scope[c]||{}).s; if(sc==='oth'||sc==='na') continue; const ref=(BN.ch||{})[c]; if(!ref||!M.eq) continue; const v=M.ch[c].v/M.eq*f; const dv=(v-ref)/ref*100; if(Math.abs(dv)>tol&&M.ch[c].v>50000) add({rule:20,sev:'warn',msg:`פרק ${c} ${M.ch[c].name}: ${fmt(v)} ₪ למ"ר שו"ע מול ${fmt(ref)} בפרויקטים קודמים (${dv>0?'+':''}${fmt(dv,0)}%)`}); }
+    add({rule:20,sev:'info',msg:`בסיס השוואה: ${BN.n} פרויקטים (${(BN.names||[]).join(', ')}) · נשמר ${new Date(BN.at).toLocaleDateString('he-IL')}${BN.month?' · מוצמד ל-'+BN.month:''}`}); } }
   return F;
 }
-const QC_RULES={17:'קישור ברזל ↔ בטון',1:'שאיבה ≤ בטון',2:'ריצוף / חיפוי מול שטח',15:'סעיפי אחוז (רווח / ביטוח / בצ"מ)',16:'מחיר חריג – חשד להקלדה',12:'סעיף בלי עלות / בלי כמות',13:'יחידות סעיף ↔ מוביל',14:'פחת'};
+const QC_RULES={18:'תוקף הצעות מחיר ומחירים ישנים',20:'חריגה מפרויקטים קודמים',17:'קישור ברזל ↔ בטון',1:'שאיבה ≤ בטון',2:'ריצוף / חיפוי מול שטח',15:'סעיפי אחוז (רווח / ביטוח / בצ"מ)',16:'מחיר חריג – חשד להקלדה',12:'סעיף בלי עלות / בלי כמות',13:'יחידות סעיף ↔ מוביל',14:'פחת'};
 function qcGo(id){ const f=find(+id); if(!f) return; f.path.forEach(p=>state.collapsed[p.id]=false); if(query){ query=''; const q=document.getElementById('q'); if(q) q.value=''; }
   document.getElementById('printDlgHost').innerHTML=''; render();
   setTimeout(()=>{ const tr=document.querySelector(`tr[data-id="${f.n.id}"]`); if(tr){ tr.scrollIntoView({block:'center'}); tr.style.outline='2px solid #d92d20'; setTimeout(()=>tr.style.outline='',3000); } },60); }
@@ -3253,13 +3326,176 @@ $('pr_tb').onclick=async e=>{
       <div class="row" style="justify-content:flex-end"><button class="btn" id="h_close">סגור</button></div></div></div>`; $('h_close').onclick=()=>h.innerHTML=''; }
 };
 $('pr_q').oninput=renderPrices;
-$('pr_pull').onclick=()=>{
-  let k=0,miss=0;
-  walk(state.tree,n=>{ if(!n.code) return;
-    if(n.t==='k'){ if(evalExpr(n.price)!==null) return; const bp=itemPrice(n.code,n.unit); if(!bp){ miss++; return; } n.price=String(bp.price); n.pdate=bp.date; n.psrc=bp.src; k++; return; }
-    if(n.t!=='r'||hasItems(n)) return; if(evalExpr(n.price)!==null) return; const cp=curPrice(n); if(!cp){ miss++; return; } n.price=String(+cp.price); n.psrc='מחירון '+fmtD(cp.valid_from); k++; });
-  save(); render(); renderPrices(); toast(`${k} מחירים נמשכו מהמחירון`+(miss?` · ${miss} משאבים בלי מחיר במחירון`:''));
-};
+/* ---------- ייבוא מחירים לכתב הכמויות: מהמחירון או מפרויקט אחר, עם השוואה / מיון / בחירה ---------- */
+const normNm=t=>String(t||'').replace(/["'״׳`]/g,'').replace(/[\s,.;:()\-–]+/g,' ').trim().toLowerCase();
+function pullTargets(){ // קבוצות לפי מפתח: משאבים (code|unit), מק"טים, סעיפים בתמחור סעיף (תאור|יח')
+  const G=new Map(), RM=resMap(); const add=(k,o,n,q,cur)=>{ let g=G.get(k); if(!g){ g=Object.assign({k,nodes:[],q:0,curs:new Map()},o); G.set(k,g); } g.nodes.push(n); g.q+=q||0; const c=cur===null?'—':Math.round(cur*100)/100; g.curs.set(c,(g.curs.get(c)||0)+1); };
+  walk(state.tree,(n,p)=>{
+    if(n.t==='k'&&n.code){ add('k|'+pkey(n.code,n.unit),{t:'k',code:n.code,unit:n.unit||'',name:nodeName(n)},n,kQty(n),evalExpr(n.price)); return; }
+    if(n.t==='r'&&n.code&&!hasItems(n)){ add('r|'+pkey(n.code,n.unit),{t:'r',code:n.code,unit:n.unit||'',name:RM[n.code]||nodeName(n)||''},n,rQty(n),evalExpr(n.price)); return; }
+    if(n.t==='i'&&n.name&&!isPct(n)&&n.sp!==undefined&&String(n.sp).trim()!==''){ add('s|'+normNm(n.name)+'|'+UNORM(n.unit),{t:'s',code:n.code||'',unit:n.unit||'',name:n.name},n,secQty(n),evalExpr(n.sp)); }
+  });
+  for(const g of G.values()){ const cs=[...g.curs.entries()].sort((a,b)=>b[1]-a[1]); g.cur=cs[0][0]==='—'?null:cs[0][0]; g.mixed=cs.length>1; }
+  return G; }
+async function pullSource(src){ // מחזיר Map key -> {v,date,from,alts}
+  const M=new Map();
+  if(src==='pl'){ for(const k in PRICE_CUR){ if(isPkg(k)) continue; const p=PRICE_CUR[k]; M.set('r|'+k,{v:+p.price,date:p.valid_from,from:'מחירון'+(p.source?' · '+p.source:'')}); }
+    walk(state.tree,n=>{ if(n.t==='k'&&n.code){ const bp=itemPrice(n.code,n.unit); if(bp) M.set('k|'+pkey(n.code,n.unit),{v:+bp.price,date:bp.date,from:bp.src||'מחירון'}); } });
+    return M; }
+  const P=await DB.getProject(src); const st=P.state; const acc=new Map(); const nm=P.name;
+  const W=(arr,cb,path=[])=>arr.forEach(n=>{ cb(n,path); if(n.ch) W(n.ch,cb,path.concat(n)); });
+  const putv=(k,v,date)=>{ if(!(v>0)) return; let a=acc.get(k); if(!a){ a=new Map(); acc.set(k,a); } const vv=Math.round(v*100)/100; const e=a.get(vv)||{c:0,date}; e.c++; if(date&&(!e.date||date>e.date)) e.date=date; a.set(vv,e); };
+  const ev=x=>{ const v=evalExpr(x); return v===null||Number.isNaN(v)?null:v; };
+  W(st.tree,(n)=>{ const leafR=n.t==='r'&&!(n.ch||[]).some(c=>c.t==='k');
+    if(n.t==='k'&&n.code) putv('k|'+pkey(n.code,n.unit),ev(n.price),n.pdate);
+    else if(leafR&&n.code) putv('r|'+pkey(n.code,n.unit),ev(n.price),n.pdate);
+    if(n.t==='i'&&n.name&&n.sp!==undefined&&String(n.sp).trim()!=='') putv('s|'+normNm(n.name)+'|'+UNORM(n.unit),ev(n.sp),null); });
+  for(const [k,a] of acc){ const L=[...a.entries()].sort((x,y)=>y[1].c-x[1].c); M.set(k,{v:L[0][0],date:L[0][1].date,from:'פרויקט '+nm,alts:L.length>1?L.map(([v,e])=>[v,e.c]):null}); }
+  return M; }
+async function pullDlg(){
+  if(!CUR){ toast('יש לפתוח פרויקט'); return; }
+  const h=$('printDlgHost'); let rows=[], sortK='impact', sortD=-1;
+  const projs=(P_ROWS&&P_ROWS.length?P_ROWS:await DB.listProjects()).filter(r=>r.id!==CUR.id&&!r.archived);
+  h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="ייבוא מחירים" style="width:min(1150px,100%);max-height:94vh;overflow:auto">
+    <h2 style="margin:0 0 4px">ייבוא מחירים לכתב הכמויות – ${esc(state.project||'')}</h2>
+    <p class="hint" style="margin:0 0 8px">השוואה מול מקור, בחירת שורות ועדכון. ההתאמה: משאב / מק"ט לפי קוד + יחידה; סעיף בתמחור סעיף לפי תאור זהה + יחידה. כל שינוי נרשם ביומן השינויים.</p>
+    <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center">
+      <label class="hint" style="margin:0">מקור <select id="pl_src"><option value="pl">מחירון – המחיר העדכני</option>${projs.map(r=>`<option value="${r.id}">פרויקט: ${esc(r.name)}</option>`).join('')}</select></label>
+      <label class="hint" style="margin:0">הצג <select id="pl_f"><option value="diff">חסרי מחיר + שונים</option><option value="miss">רק חסרי מחיר</option><option value="chg">רק מחיר שונה</option><option value="all">הכל (כולל זהים)</option></select></label>
+      <label class="hint" style="margin:0">סוג <select id="pl_t"><option value="">הכל</option><option value="r">משאבים</option><option value="k">מק"טים</option><option value="s">סעיפים (תמחור סעיף)</option></select></label>
+      <input id="pl_q" placeholder="חיפוש קוד / תאור" style="border:1px solid var(--line);border-radius:6px;padding:4px 8px;min-width:200px">
+      <label class="hint" style="margin:0"><input type="checkbox" id="pl_big"> רק פער מעל 30%</label>
+    </div>
+    <div id="pl_body" style="margin-top:8px"><p class="hint">טוען…</p></div>
+    <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px;position:sticky;bottom:0;background:var(--surface);padding:6px 0;border-top:1px solid var(--line)">
+      <span id="pl_sum" class="hint" style="margin:0"></span>
+      <div class="row" style="gap:6px"><button class="btn" id="pl_c">ביטול</button><button class="btn primary" id="pl_go">עדכן</button></div></div></div></div>`;
+  $('pl_c').onclick=()=>h.innerHTML='';
+  const vis=()=>{ const f=$('pl_f').value, t=$('pl_t').value, q=$('pl_q').value.trim().toLowerCase(), big=$('pl_big').checked;
+    return rows.filter(r=>(!t||r.g.t===t)&&(!q||(r.g.code+' '+r.g.name).toLowerCase().includes(q))&&(!big||(r.pct!==null&&Math.abs(r.pct)>30))
+      &&(f==='all'||(f==='miss'&&r.g.cur===null)||(f==='chg'&&r.g.cur!==null&&!r.same)||(f==='diff'&&!r.same))); };
+  const draw=()=>{ const V=vis().sort((a,b)=>{ const A=a[sortK], B=b[sortK]; if(typeof A==='string'||typeof B==='string') return sortD*String(A??'').localeCompare(String(B??''),undefined,{numeric:true}); return sortD*((A??-1e18)-(B??-1e18)); });
+    const th=(k,l,c='')=>`<th class="${c}" data-sk="${k}" style="cursor:pointer;white-space:nowrap">${l}${sortK===k?(sortD>0?' ▲':' ▼'):''}</th>`;
+    $('pl_body').innerHTML=V.length?`<table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><thead><tr><th><input type="checkbox" id="pl_all" title="סמן את כל המוצגים"></th>${th('tp','סוג')}${th('code','קוד')}${th('name','תאור')}<th>יח'</th>${th('uses','שימושים','n')}${th('q','כמות','n')}${th('cur','נוכחי','n')}${th('v','מהמקור','n')}${th('pct','פער %','n')}${th('impact','השפעה ₪','n')}</tr></thead><tbody>
+      ${V.map(r=>{ const i=rows.indexOf(r); const warn=r.pct!==null&&Math.abs(r.pct)>30; return `<tr style="${r.same?'opacity:.5':''}"><td><input type="checkbox" data-pli="${i}" ${r.sel?'checked':''} ${r.same?'disabled':''}></td><td style="font-size:11px">${r.tp}</td><td class="num">${esc(r.g.code)}</td><td>${esc((r.g.name||'').slice(0,60))}${r.g.mixed?'<div class="hint" style="margin:0;font-size:11px;color:#b54708">מחירים שונים בפרויקט – כולם יעודכנו</div>':''}</td><td>${esc(r.g.unit)}</td><td class="n num">${r.uses}</td><td class="n num">${fmtQ(r.q)}</td>
+        <td class="n num">${r.g.cur===null?'<span style="color:#d92d20">חסר</span>':fmt(r.g.cur,2)}</td>
+        <td class="n">${r.s.alts?`<select data-plv="${i}">${r.s.alts.map(([v,c])=>`<option value="${v}" ${v===r.v?'selected':''}>${fmt(v,2)} (${c})</option>`).join('')}</select>`:`<b class="num">${fmt(r.v,2)}</b>`}${r.s.alts?`<div style="font-size:10px;color:#b54708">⚠ ${r.s.alts.length} מחירים במקור – לבחור</div>`:''}<div class="hint" style="margin:0;font-size:10px">${esc(r.s.from)}${r.s.date?' · '+esc(fmtD(r.s.date)):''}</div></td>
+        <td class="n num" style="${warn?'color:#d92d20;font-weight:700':''}">${r.pct===null?'—':(r.pct>0?'+':'')+fmt(r.pct,1)+'%'}${warn?' ⚠':''}</td><td class="n num" style="color:${r.impact>0?'#b42318':r.impact<0?'#067647':'inherit'}">${r.impact?(r.impact>0?'+':'')+fmt(r.impact):''}</td></tr>`; }).join('')}</tbody></table>`
+      :'<p class="hint">אין שורות להצגה בסינון הזה.</p>';
+    const all=$('pl_all'); if(all){ all.checked=V.filter(r=>!r.same).every(r=>r.sel); all.onchange=e=>{ V.forEach(r=>{ if(!r.same) r.sel=e.target.checked; }); draw(); }; }
+    h.querySelectorAll('[data-sk]').forEach(x=>x.onclick=()=>{ const k=x.dataset.sk; if(sortK===k) sortD=-sortD; else { sortK=k; sortD=['code','name','tp'].includes(k)?1:-1; } draw(); });
+    h.querySelectorAll('[data-pli]').forEach(x=>x.onchange=()=>{ rows[+x.dataset.pli].sel=x.checked; summ(); });
+    h.querySelectorAll('[data-plv]').forEach(x=>x.onchange=()=>{ const r=rows[+x.dataset.plv]; r.v=+x.value; calc(r); draw(); });
+    summ(); };
+  const calc=r=>{ const c=r.g.cur; r.same=c!==null&&Math.abs(c-r.v)<0.005; r.pct=c?((r.v-c)/c*100):null; r.impact=(r.v-(c||0))*r.q; };
+  const summ=()=>{ const S=rows.filter(r=>r.sel&&!r.same); const imp=S.reduce((a,r)=>a+r.impact,0); $('pl_sum').innerHTML=`נבחרו <b>${S.length}</b> שורות (${S.reduce((a,r)=>a+r.uses,0)} מופעים בכ"כ) · השפעה על הסה"כ: <b style="color:${imp>0?'#b42318':'#067647'}">${imp>0?'+':''}${fmt(imp)} ₪</b>`; $('pl_go').textContent=`עדכן ${S.length} מחירים`; };
+  const load=async()=>{ $('pl_body').innerHTML='<p class="hint">טוען מקור…</p>';
+    try{ const T=pullTargets(), M=await pullSource($('pl_src').value); rows=[];
+      for(const [k,g] of T){ const s=M.get(k); if(!s) continue; const r={g,s,v:s.v,tp:g.t==='k'?'מק"ט':g.t==='r'?'משאב':'סעיף',code:g.code,name:g.name,q:g.q,uses:g.nodes.length,cur:g.cur}; calc(r); r.sel=!r.same&&g.cur===null&&!s.alts; rows.push(r); }
+      const miss=[...T.values()].filter(g=>!M.has(g.k)&&g.cur===null).length;
+      draw(); if(!rows.length) $('pl_body').innerHTML='<p class="hint">לא נמצאו התאמות בין המקור לפרויקט.</p>';
+      $('pl_body').insertAdjacentHTML('afterbegin',`<div class="hint" style="margin:0 0 4px">${rows.length} התאמות · ${rows.filter(r=>r.g.cur===null).length} חסרי מחיר שיש להם מחיר במקור (מסומנים, חוץ ממה שיש לו כמה מחירים במקור) · ${rows.filter(r=>r.g.cur!==null&&!r.same).length} במחיר שונה (לא מסומנים – לבחירה) · ${miss} שורות בלי מחיר שלא נמצאו במקור</div>`);
+    }catch(e){ $('pl_body').innerHTML='<p style="color:#d92d20">שגיאה: '+esc(e.message)+'</p>'; } };
+  ['pl_f','pl_t','pl_big'].forEach(i=>$(i).onchange=draw); $('pl_q').oninput=draw; $('pl_src').onchange=load;
+  $('pl_go').onclick=()=>{ const S=rows.filter(r=>r.sel&&!r.same); if(!S.length){ toast('לא נבחרו שורות'); return; }
+    const d=new Date().toISOString().slice(0,10); let n=0;
+    for(const r of S){ for(const x of r.g.nodes){ const v=String(r.v);
+      if(r.g.t==='s'){ x.sp=v; x.note=((x.note||'')+` · מחיר סעיף ${v} ₪ יובא מ${r.s.from} (${new Date().toLocaleDateString('he-IL')})`).replace(/^ · /,''); }
+      else { x.price=v; x.psrc=r.s.from; x.pdate=r.s.date||d; } n++; } }
+    save(); render(); h.innerHTML=''; toast(`${S.length} מחירים עודכנו (${n} שורות בכתב הכמויות)`); };
+  load(); }
+$('pr_pull').onclick=()=>pullDlg();
+document.addEventListener('click',e=>{ if(e.target&&e.target.id==='btnPull') pullDlg(); });
+setInterval(()=>{ const b=document.getElementById('btnPull'); if(b) b.hidden=!CUR; const c=document.getElementById('btnCmp'); if(c) c.hidden=!CUR; },1500);
+
+/* ---------- השוואת פרויקטים: מכנה משותף (יח"ד / מ"ר שו"ע / מ"ר ברוטו), הצמדה למדד, היקף, חריגים, אומדן מהיר ---------- */
+function metricsOf(st){ const keep=state, kOH=OHC; try{ state=st; PMAP=null; PCTB=null; CONCC=null; OHC=null; return projMetrics(); } finally { state=keep; PMAP=null; PCTB=null; CONCC=null; OHC=kOH; } }
+const med=a=>{ const v=a.filter(x=>x>0).sort((x,y)=>x-y); if(!v.length) return null; const m=Math.floor(v.length/2); return v.length%2?v[m]:(v[m-1]+v[m])/2; };
+let CMP_CACHE=new Map();
+async function cmpDlg(){
+  const h=$('printDlgHost'); const all=(await DB.listProjects()).filter(r=>!r.archived);
+  let sel=new Set(JSON.parse(lsGet('ybnir-cmp-sel')||'null')||all.map(r=>r.id)); if(CUR) sel.add(CUR.id);
+  let target=idxLatest(), den='eq';
+  const shell=()=>{ h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="השוואת פרויקטים" style="width:min(1300px,100%);max-height:95vh;overflow:auto">
+    <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">⚖ השוואת פרויקטים</h2><button class="btn" id="cm_c">סגור</button></div>
+    <p class="hint" style="margin:2px 0 8px">מכנה משותף: יח"ד, מ"ר שווה-ערך ומ"ר ברוטו (מטופס הפרויקט). העלויות מוצמדות ל${IDXN} לפי התאריך הקובע של כל פרויקט. פרקים שסומנו "ע"י אחרים" / "לא רלוונטי" לא נספרים בחציון. חריגה מעל 25% מהחציון של האחרים מסומנת.</p>
+    <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${all.map(r=>`<label class="hint" style="margin:0;display:flex;gap:4px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:2px 6px"><input type="checkbox" data-cp="${r.id}" ${sel.has(r.id)?'checked':''}>${esc(r.name)}${CUR&&CUR.id===r.id?' <b>(פתוח)</b>':''}</label>`).join('')}</div></div>
+    <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center">
+      <label class="hint" style="margin:0">הצמדה לחודש <select id="cm_t"><option value="">ללא הצמדה (נומינלי)</option>${Object.keys(idxTable()).sort().reverse().map(k=>`<option value="${k}" ${k===target?'selected':''}>${k} · ${fmt(+idxTable()[k],1)}</option>`).join('')}</select></label>
+      <button class="btn small" id="cm_idx">טבלת מדדים (${Object.keys(idxTable()).length})</button>
+      <label class="hint" style="margin:0">פרקים לפי <select id="cm_d"><option value="eq">₪ למ"ר שווה-ערך</option><option value="u">₪ ליח"ד</option><option value="g">₪ למ"ר ברוטו</option></select></label>
+      <button class="btn small" id="cm_bench" title="החציונים נשמרים כבסיס לכלל בקרה 20 – כל פרויקט חדש יושווה אליהם אוטומטית">💾 שמור כבסיס לבקרה</button>
+      <button class="btn small" id="cm_x">ייצוא לאקסל</button></div>
+    <div id="cm_idxbox" hidden></div>
+    <div id="cm_body" style="margin-top:8px"><p class="hint">טוען…</p></div></div></div>`;
+    $('cm_c').onclick=()=>h.innerHTML='';
+    h.querySelectorAll('[data-cp]').forEach(x=>x.onchange=()=>{ if(x.checked) sel.add(x.dataset.cp); else sel.delete(x.dataset.cp); lsSet('ybnir-cmp-sel',JSON.stringify([...sel])); run(); });
+    $('cm_t').onchange=e=>{ target=e.target.value; draw(); }; $('cm_d').onchange=e=>{ den=e.target.value; draw(); };
+    $('cm_idx').onclick=idxEd; $('cm_bench').onclick=bench; $('cm_x').onclick=xls; };
+  let M=[];
+  const run=async()=>{ $('cm_body').innerHTML='<p class="hint">טוען פרויקטים…</p>'; M=[];
+    for(const r of all){ if(!sel.has(r.id)) continue; let m;
+      if(CUR&&CUR.id===r.id) m=projMetrics(); else { let c=CMP_CACHE.get(r.id); if(!c||c.rev!==r.rev){ const P=await DB.getProject(r.id); c={rev:r.rev,m:metricsOf(P.state)}; CMP_CACHE.set(r.id,c); } m=c.m; }
+      M.push(Object.assign({id:r.id,cur:!!(CUR&&CUR.id===r.id)},m,{name:r.name})); }
+    draw(); };
+  const fOf=m=>{ if(!target) return {f:1,ok:true}; const a=idxAt(target), b=idxAt(m.bdate); return a&&b?{f:a/b,ok:true}:{f:1,ok:false}; };
+  const D={eq:m=>m.eq,u:m=>m.U,g:m=>m.gross}, DL={eq:'₪ למ"ר שו"ע',u:'₪ ליח"ד',g:'₪ למ"ר ברוטו'};
+  let LAST=null;
+  const draw=()=>{ if(!M.length){ $('cm_body').innerHTML='<p class="hint">בחר לפחות פרויקט אחד</p>'; return; }
+    const F=M.map(fOf); const r=(a,b)=>a&&b?a/b:null;
+    const KR=[['עלות כתב כמויות ₪',(m,i)=>m.G*F[i].f,0,1],['כולל עלויות כלכליות ₪',(m,i)=>m.grand*F[i].f,0,1],['₪ ליח"ד',(m,i)=>r(m.G*F[i].f,m.U),0,1],['₪ למ"ר שווה-ערך',(m,i)=>r(m.G*F[i].f,m.eq),0,1],['₪ למ"ר ברוטו',(m,i)=>r(m.G*F[i].f,m.gross),0,1],
+      ['מ"ר שו"ע ליח"ד',m=>r(m.eq,m.U),1],['בטון מ"ק ליח"ד',m=>r(m.conc,m.U),1],['בטון מ"ק למ"ר שו"ע',m=>r(m.conc,m.eq),2],['פלדה ק"ג למ"ק בטון',m=>r(m.steel*1000,m.conc),0],['פלדה ק"ג למ"ר שו"ע',m=>r(m.steel*1000,m.eq),1],['משך ביצוע (חודשים)',m=>m.months||null,0]];
+    const sh={us:'ע"י הקבלן',oth:'ע"י אחרים',none:'אין'};
+    const TR=[['מיקום',m=>m.char.loc||''],['יזם',m=>m.char.client||''],['שיטת ביצוע',m=>m.method||''],['קומות מעל / מרתף',m=>(m.fUp||'—')+' / '+(m.fDown||'—')],['יח"ד',m=>m.U?fmt(m.U):'—'],['ברוטו / שו"ע מ"ר',m=>(m.gross?fmt(m.gross):'—')+' / '+(m.eq?fmt(m.eq):'—')],['חניות',m=>m.park?fmt(m.park):'—'],
+      ['דיפון / עפר',m=>(sh[m.char.shore]||'—')+' / '+(sh[m.char.earth]||'—')],['תאריך קובע',(m,i)=>(m.bdate||'<span style="color:#d92d20">חסר</span>')+(target?`<div class="hint" style="margin:0;font-size:11px">${F[i].ok?'מקדם '+fmt(F[i].f,4):'⚠ לא הוצמד'}</div>`:'')],['מכרז',m=>{ const t=m.tender||{}; return esc(t.status||'—')+(t.win?`<div class="hint" style="margin:0;font-size:11px">זוכה ${fmt(+t.win)}${t.price?' · פער '+fmt((+t.price-+t.win)/+t.win*100,1)+'%':''}</div>`:''); }]];
+    const cell=(v,ref,d)=>{ if(v===null||v===undefined||!(v>0)) return '<td class="n num" style="color:var(--muted)">—</td>'; const dv=ref?((v-ref)/ref*100):null; const bad=dv!==null&&Math.abs(dv)>25; return `<td class="n num" style="${bad?`background:${dv>0?'#fef3f2':'#ecfdf3'};color:${dv>0?'#b42318':'#067647'};font-weight:600`:''}" title="${dv!==null?'מול חציון האחרים: '+(dv>0?'+':'')+fmt(dv,1)+'%':''}">${fmt(v,d)}${bad?`<div style="font-size:10px">${dv>0?'+':''}${fmt(dv,0)}%</div>`:''}</td>`; };
+    const hdr=`<tr><th style="min-width:160px"></th>${M.map(m=>`<th class="n" style="white-space:normal;min-width:110px">${esc(m.name)}${m.cur?' <span class="pill">פתוח</span>':''}</th>`).join('')}<th class="n">חציון</th></tr>`;
+    const kv=KR.map(([l,fn,d])=>{ const V=M.map((m,i)=>fn(m,i)); return `<tr><td>${l}</td>${V.map((v,i)=>cell(v,med(V.filter((x,j)=>j!==i)),d)).join('')}<td class="n num" style="font-weight:700">${med(V)!==null?fmt(med(V),d):'—'}</td></tr>`; }).join('');
+    // פרקים
+    const codes=[...new Set(M.flatMap(m=>Object.keys(m.ch)))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+    const cmn={}; M.forEach(m=>Object.entries(m.ch).forEach(([c,x])=>{ if(!cmn[c]) cmn[c]=x.name; }));
+    const curI=M.findIndex(m=>m.cur); const est=[];
+    const chRows=codes.map(c=>{ const V=M.map((m,i)=>{ const sc=(m.scope[c]||{}).s; if(sc==='oth'||sc==='na') return {sc}; const x=m.ch[c]; const dd=D[den](m); return {v:x&&dd?x.v*F[i].f/dd:null,sc}; });
+      const tds=V.map((o,i)=>{ const note=(M[i].scope[c]||{}).n; if(o.sc==='oth'||o.sc==='na') return `<td class="n" style="color:var(--muted);font-size:11px" title="${esc(note||'')}">${SCOPE[o.sc]}${note?' ⓘ':''}</td>`; const ref=med(V.filter((x,j)=>j!==i&&x.v).map(x=>x.v)); return cell(o.v,ref,0).replace('<td ',`<td data-n="${esc(note||'')}" `).replace(/<\/td>$/,(note?`<div class="hint" style="margin:0;font-size:10px" title="${esc(note)}">ⓘ ${esc(note.slice(0,24))}</div>`:'')+(o.sc==='part'?'<div class="hint" style="margin:0;font-size:10px">חלקי</div>':'')+'</td>'); }).join('');
+      const others=V.filter((x,j)=>j!==curI&&x.v).map(x=>x.v); const mo=med(others);
+      if(curI>=0&&mo&&D[den](M[curI])){ const sc=(M[curI].scope[c]||{}).s; if(sc!=='oth'&&sc!=='na'){ const e=mo*D[den](M[curI]); const a=(M[curI].ch[c]||{}).v*F[curI].f||0; est.push({c,e,a}); } }
+      return `<tr><td>${esc(c+' '+(cmn[c]||''))}</td>${tds}<td class="n num" style="font-weight:700">${med(V.filter(x=>x.v).map(x=>x.v))!==null?fmt(med(V.filter(x=>x.v).map(x=>x.v))):'—'}</td></tr>`; }).join('');
+    const notes=M.filter(m=>m.char.notes||Object.values(m.scope).some(x=>x.n)).map(m=>`<div style="margin-top:4px"><b>${esc(m.name)}:</b> ${esc(m.char.notes||'')}${Object.entries(m.scope).filter(([,x])=>x.n||x.s).map(([c,x])=>` <span class="pill" title="${esc(x.n||'')}">${esc(c)} ${SCOPE[x.s||'']}${x.n?': '+esc(x.n):''}</span>`).join('')}</div>`).join('');
+    const ET=est.reduce((a,x)=>a+x.e,0), EA=est.reduce((a,x)=>a+x.a,0);
+    LAST={M,F,KR,codes,cmn,est,den};
+    $('cm_body').innerHTML=`${M.some((m,i)=>!F[i].ok)&&target?`<div style="border:1px solid #fec84b;background:#fffaeb;border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:13px">⚠ חלק מהפרויקטים לא הוצמדו – חסר תאריך קובע בטופס הפרויקט או ערך מדד בטבלת המדדים: ${M.filter((m,i)=>!F[i].ok).map(m=>esc(m.name)).join(', ')}</div>`:''}
+      <h3 style="margin:6px 0">מאפיינים</h3><table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><thead>${hdr}</thead><tbody>${TR.map(([l,fn])=>`<tr><td>${l}</td>${M.map((m,i)=>`<td class="n" style="white-space:normal">${fn(m,i)}</td>`).join('')}<td></td></tr>`).join('')}</tbody></table>
+      <h3 style="margin:12px 0 6px">נתונים עיקריים ${target?'(מוצמד ל-'+target+')':'(נומינלי)'}</h3><table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><thead>${hdr}</thead><tbody>${kv}</tbody></table>
+      <h3 style="margin:12px 0 6px">לפי פרק – ${DL[den]} ${target?'(מוצמד)':''}</h3><table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><thead>${hdr}</thead><tbody>${chRows}</tbody></table>
+      ${curI>=0&&est.length&&M.length>1?`<h3 style="margin:12px 0 6px">אומדן מהיר ל"${esc(M[curI].name)}" – לפי חציון הפרויקטים האחרים × ${DL[den].replace('₪ ל','')} של הפרויקט</h3>
+        <table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><thead><tr><th>פרק</th><th class="n">אומדן מפרויקטים קודמים</th><th class="n">בכתב הכמויות</th><th class="n">פער</th></tr></thead><tbody>
+        ${est.map(x=>{ const dv=x.e?(x.a-x.e)/x.e*100:0; const bad=Math.abs(dv)>30; return `<tr><td>${esc(x.c+' '+(cmn[x.c]||''))}</td><td class="n num">${fmt(x.e)}</td><td class="n num">${x.a?fmt(x.a):'<span style="color:#d92d20">אין</span>'}</td><td class="n num" style="${bad?'color:#b42318;font-weight:700':''}">${x.a?(dv>0?'+':'')+fmt(dv,0)+'%':'—'}</td></tr>`; }).join('')}
+        <tr style="font-weight:700;border-top:2px solid var(--line)"><td>סה"כ (פרקים בהיקף)</td><td class="n num">${fmt(ET)}</td><td class="n num">${fmt(EA)}</td><td class="n num">${ET?((EA-ET)/ET*100>0?'+':'')+fmt((EA-ET)/ET*100,1)+'%':''}</td></tr></tbody></table>`:''}
+      ${notes?`<h3 style="margin:12px 0 4px">הערות להשוואה</h3><div style="font-size:13px">${notes}</div>`:''}`; };
+  const idxEd=()=>{ const box=$('cm_idxbox'); box.hidden=!box.hidden; if(box.hidden) return; const T=Object.assign({},idxTable());
+    const rows=()=>Object.keys(T).sort().reverse().map(k=>`<tr><td class="num">${k}</td><td><input data-iv="${k}" value="${T[k]}" inputmode="decimal" style="width:90px;border:1px solid var(--line);border-radius:6px;padding:2px 6px"></td></tr>`).join('');
+    box.innerHTML=`<div style="border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:8px"><b>${IDXN}</b> <span class="hint" style="margin:0">– ערכים חודשיים מהלמ"ס (<a href="https://www.cbs.gov.il" target="_blank" rel="noopener">cbs.gov.il</a>). מספיק להזין את חודשי התאריך הקובע של כל פרויקט ואת החודש האחרון.</span>
+      <div class="row" style="gap:6px;margin:6px 0;align-items:center"><input type="month" id="ix_m" style="border:1px solid var(--line);border-radius:6px;padding:2px 6px"><input id="ix_v" placeholder="ערך מדד" inputmode="decimal" style="width:100px;border:1px solid var(--line);border-radius:6px;padding:2px 6px"><button class="btn small" id="ix_add">הוסף</button><button class="btn small primary" id="ix_sv">שמור טבלה</button></div>
+      <table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><tbody id="ix_rows">${rows()}</tbody></table></div>`;
+    $('ix_add').onclick=()=>{ const m=$('ix_m').value, v=+String($('ix_v').value).replace(/,/g,''); if(!m||!(v>0)){ toast('חודש וערך'); return; } T[m]=v; $('ix_rows').innerHTML=rows(); $('ix_v').value=''; };
+    $('ix_sv').onclick=async()=>{ box.querySelectorAll('[data-iv]').forEach(x=>{ const v=+String(x.value).replace(/,/g,''); if(v>0) T[x.dataset.iv]=v; else delete T[x.dataset.iv]; });
+      try{ SETTINGS=Object.assign({},SETTINGS,{idx:T}); await DB.saveSettings(SETTINGS); toast('טבלת המדדים נשמרה'); if(!target) target=idxLatest(); shell(); run(); }catch(e){ toast('שגיאה: '+e.message); } }; };
+  const bench=async()=>{ if(!LAST||LAST.M.length<1) return; const {M,F}=LAST; const others=M.filter(m=>!m.cur); const use=others.length?others:M; const fi=m=>F[M.indexOf(m)].f;
+    const k={eqP:med(use.map(m=>m.eq?m.G*fi(m)/m.eq:0)),uP:med(use.map(m=>m.U?m.G*fi(m)/m.U:0)),concEq:med(use.map(m=>m.eq?m.conc/m.eq:0)),kgm3:med(use.map(m=>m.conc?m.steel*1000/m.conc:0))};
+    const ch={}; LAST.codes.forEach(c=>{ const v=med(use.map(m=>{ const sc=(m.scope[c]||{}).s; if(sc==='oth'||sc==='na'||!m.ch[c]||!m.eq) return 0; return m.ch[c].v*fi(m)/m.eq; })); if(v) ch[c]=Math.round(v); });
+    if(!confirm(`לשמור כבסיס השוואה לבקרה (כלל 20)?\n${use.length} פרויקטים: ${use.map(m=>m.name).join(', ')}\n${target?'מוצמד ל-'+target:'נומינלי'}`)) return;
+    try{ SETTINGS=Object.assign({},SETTINGS,{bench:{at:new Date().toISOString(),month:target||'',n:use.length,names:use.map(m=>m.name),k,ch}}); await DB.saveSettings(SETTINGS); toast('בסיס ההשוואה נשמר – כלל בקרה 20 פעיל'); }catch(e){ toast('שגיאה: '+e.message); } };
+  const xls=()=>{ if(!LAST) return; const {M,F,KR,codes,cmn,den:dn}=LAST; const H=['',...M.map(m=>m.name)]; const A=[[`השוואת פרויקטים · ${target?'מוצמד ל-'+target+' ('+IDXN+')':'נומינלי'} · ${new Date().toLocaleDateString('he-IL')}`],H];
+    A.push(['תאריך קובע',...M.map(m=>m.bdate||'')]); A.push(['מקדם הצמדה',...F.map(f=>f.ok?+f.f.toFixed(4):'לא הוצמד')]);
+    KR.forEach(([l,fn,d])=>A.push([l,...M.map((m,i)=>{ const v=fn(m,i); return v>0?+v.toFixed(d||0):''; })]));
+    A.push([]); A.push(['פרק – '+DL[dn],...M.map(m=>m.name)]);
+    codes.forEach(c=>A.push([c+' '+(cmn[c]||''),...M.map((m,i)=>{ const sc=(m.scope[c]||{}).s; if(sc==='oth'||sc==='na') return SCOPE[sc]; const x=m.ch[c], d=D[dn](m); return x&&d?Math.round(x.v*F[i].f/d):''; })]));
+    A.push([]); A.push(['הערות',...M.map(m=>[m.char.notes||'',...Object.entries(m.scope).filter(([,x])=>x.n||x.s).map(([c,x])=>c+' '+SCOPE[x.s||'']+(x.n?': '+x.n:''))].filter(Boolean).join(' | '))]);
+    const ws=XLSX.utils.aoa_to_sheet(A); ws['!cols']=[{wch:34},...M.map(()=>({wch:18}))]; const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'השוואה'); XLSX.writeFile(wb,`השוואת פרויקטים ${new Date().toLocaleDateString('he-IL').replace(/\./g,'-')}.xlsx`); };
+  shell(); run(); }
+$('p_cmp').onclick=()=>cmpDlg().catch(e=>toast(e.message));
+document.addEventListener('click',e=>{ if(e.target&&e.target.id==='btnCmp') cmpDlg().catch(err=>toast(err.message)); });
 $('pr_push').onclick=()=>pushDlg();
 function pushDlg(){
   const C=new Map(); let noCode=0, secOnly=0;
