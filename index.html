@@ -304,6 +304,7 @@ table.boq.plist{min-width:0!important;width:100%}
       <select id="qf" class="search" style="width:auto;min-width:170px" title="סינון שורות"><option value="">סינון: הכל</option></select>
       <label class="label" style="display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="showNotes"> הצג הערות</label>
       <button class="btn" id="btnAddB">+ מבנה</button>
+      <button class="btn" id="btnSel" title="בחירת כמה סעיפים / תתי-פרקים / פרקים והעברה או העתקה שלהם יחד">☑ בחירה מרובה</button>
       <button class="btn" id="btnTrash" title="שחזור שורות שנמחקו">סל מחזור</button>
       <button class="btn" id="btnQchk" title="סעיפים בלי כמות / כמות סעיף שונה מהמשאב – בחירת משאב מוביל ★">כמות סעיף ★</button>
       <button class="btn" id="btnSum" title="ריכוז כמויות לפי נושא (בטון, ברזל, טפסנות...) להדפסה ולאקסל">ריכוזים</button>
@@ -645,7 +646,7 @@ function qfOptions(){ const sel=document.getElementById('qf'); if(!sel) return; 
   sel.style.borderColor=qf?'#d92d20':''; sel.style.fontWeight=qf?'700':''; }
 
 function render(){
-  PCTB=null; CONCC=null;
+  PCTB=null; CONCC=null; if(typeof selBar==='function') setTimeout(selBar,0);
   const G=state.tree.reduce((a,n)=>a+total(n),0);
   { const fb=document.getElementById('grandFinBox'); if(fb&&typeof finCalc==='function'){ const C=finCalc(); fb.hidden=!C.sum; document.getElementById('grandFin').textContent='₪ '+fmt(C.grand); } }
   OHC=state.ohView?ohCalc():null;
@@ -690,7 +691,8 @@ function codeCell(n){
     code=`<select class="cell-in mono" data-f="code" data-id="${n.id}" aria-label="תת-פרק"><option value="">בחר</option>${opts.map(s=>`<option value="${s.c}" ${s.c===n.code?'selected':''}>${s.c}</option>`).join('')}${n.code&&!opts.some(s=>s.c===n.code)?`<option selected>${esc(n.code)}</option>`:''}</select>`;
   }
   else code=`<span class="mono" title="${n.oldCodes&&n.oldCodes.length?'קוד קודם: '+esc(n.oldCodes.join(' → ')):''}">${esc(n.code||'')}</span>`;
-  return `<td class="code" style="padding-inline-start:${4+(L-1)*12}px"><span style="display:inline-flex;align-items:center;gap:2px">${car}${code}</span>${!leaf&&cnt&&closed?`<span class="pill">${cnt}</span>`:''}</td>`;
+  const sb=SELMODE&&['c','s','i'].includes(n.t)?`<input type="checkbox" data-sel="${n.id}" ${SEL.has(n.id)?'checked':''} ${selAnc(n.id)?'disabled title="נבחר דרך הרמה שמעל"':''} style="margin:0 0 0 2px;width:14px;height:14px;flex:none;accent-color:var(--accent)" aria-label="בחירה">`:'';
+  return `<td class="code" style="padding-inline-start:${4+(L-1)*12}px"><span style="display:inline-flex;align-items:center;gap:2px">${sb}${car}${code}</span>${!leaf&&cnt&&closed?`<span class="pill">${cnt}</span>`:''}</td>`;
 }
 
 /* ---------- בסיס מחיר + מסמכים מצורפים (הצעות מחיר סרוקות) ---------- */
@@ -985,6 +987,74 @@ function pasteOne(id,into,multi){
   return node.id;
 }
 function cloneNode(n){ const o=JSON.parse(JSON.stringify(n)); const re=x=>{ state.nid++; x.id=state.nid; (x.ch||[]).forEach(re); return x; }; return re(o); }
+/* ---------- בחירה מרובה והעברה / העתקה מרוכזת ---------- */
+let SELMODE=false; const SEL=new Set();
+function selAnc(id){ const f=find(id); return !!(f&&f.path.some(p=>SEL.has(p.id))); }
+function selTop(){ return [...SEL].map(id=>find(id)).filter(f=>f&&!f.path.some(p=>SEL.has(p.id))); }
+function selBar(){ let b=document.getElementById('selBar'); if(!b){ b=document.createElement('div'); b.id='selBar'; b.style.cssText='position:fixed;bottom:14px;inset-inline-end:14px;z-index:55;background:var(--surface);border:2px solid var(--accent);padding:8px 12px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.2);font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:min(760px,calc(100vw - 28px))'; document.body.appendChild(b); }
+  const btn=document.getElementById('btnSel'); if(btn){ btn.classList.toggle('primary',SELMODE); btn.textContent=SELMODE?'☑ בחירה מרובה (פעיל)':'☑ בחירה מרובה'; }
+  if(!SELMODE){ b.hidden=true; return; } b.hidden=false;
+  const T=selTop(); const cnt={c:0,s:0,i:0}; let secs=0, sum=0; T.forEach(f=>{ cnt[f.n.t]++; sum+=total(f.n); if(f.n.t==='i') secs++; else walk(f.n.ch,x=>{ if(x.t==='i') secs++; }); });
+  b.innerHTML=T.length?`<b>נבחרו:</b> ${[cnt.c?cnt.c+' פרקים':'',cnt.s?cnt.s+' תתי-פרקים':'',cnt.i?cnt.i+' סעיפים':''].filter(Boolean).join(' · ')} <span class="hint" style="margin:0">(${secs} סעיפים · ${fmt(sum)} ₪)</span>
+    <button class="btn small primary" id="sel_mv">העבר / העתק…</button><button class="btn small" id="sel_clr">נקה בחירה</button><button class="btn small" id="sel_off">סגור</button>`
+    :`<b>בחירה מרובה:</b> <span class="hint" style="margin:0">סמן בתיבות שליד הקוד – פרקים, תתי-פרקים וסעיפים, גם ממבנים שונים. בחירה של פרק / תת-פרק כוללת את כל מה שמתחתיו.</span><button class="btn small" id="sel_off">סגור</button>`;
+  const q=i=>document.getElementById(i);
+  if(q('sel_mv')) q('sel_mv').onclick=bulkMoveDlg; if(q('sel_clr')) q('sel_clr').onclick=()=>{ SEL.clear(); render(); };
+  q('sel_off').onclick=()=>{ SELMODE=false; SEL.clear(); render(); }; }
+document.getElementById('btnSel').onclick=()=>{ SELMODE=!SELMODE; if(!SELMODE) SEL.clear(); render(); };
+document.getElementById('tb').addEventListener('change',e=>{ const x=e.target; if(!x.dataset||!x.dataset.sel) return; const id=+x.dataset.sel;
+  if(x.checked){ SEL.add(id); const f=find(id); walk(f.n.ch||[],y=>SEL.delete(y.id)); } else SEL.delete(id); render(); });
+function subOptions(selCode){ const o=[]; for(const ch of state.lists.chapters.slice().sort((a,b)=>a.c.localeCompare(b.c))){ const ss=state.lists.subs.filter(x=>x.ch===ch.c).sort((a,b)=>a.c.localeCompare(b.c)); if(!ss.length) continue;
+  o.push(`<optgroup label="${esc(ch.c+' '+ch.n)}">`+ss.map(x=>`<option value="${esc(x.c)}" ${x.c===selCode?'selected':''}>${esc(x.c+' '+x.n)}</option>`).join('')+'</optgroup>'); } return o.join(''); }
+function mergeSub(src,dst,keep){ let m=0; for(const sec of src.ch.slice()){ if(sec.t!=='i'){ dst.ch.push(sec); continue; } const used=new Set(dst.ch.map(x=>x.code)); const old=sec.code; if(!keep||used.has(sec.code)||(sec.code||'').slice(0,5)!==dst.code) sec.code=nextSecCode(dst); if(old&&old!==sec.code){ (sec.oldCodes=sec.oldCodes||[]).push(old); sec.note=((sec.note?sec.note+' | ':'')+'הועבר מ-'+old).trim(); } dst.ch.push(sec); m++; } src.ch.length=0; return m; }
+function getCh(b,code){ let c=b.ch.find(x=>x.t==='c'&&x.code===code); if(!c){ c=mk('c',{code}); b.ch.push(c); sortByCode(b.ch); } return c; }
+function getSub(b,code){ const c=getCh(b,code.slice(0,2)); let s=c.ch.find(x=>x.t==='s'&&x.code===code); if(!s){ s=mk('s',{code}); c.ch.push(s); sortByCode(c.ch); } return s; }
+function bulkMoveDlg(){
+  const T=selTop(); if(!T.length) return; const h=document.getElementById('printDlgHost');
+  const has={c:T.some(f=>f.n.t==='c'),s:T.some(f=>f.n.t==='s'),i:T.some(f=>f.n.t==='i')};
+  const firstSub=(T.find(f=>f.n.t==='i')||{path:[]}).path.slice(-1)[0];
+  h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="העברה מרוכזת" style="width:min(640px,100%)">
+    <h2>העברה / העתקה מרוכזת</h2>
+    <div class="hint" style="margin:0 0 6px;max-height:120px;overflow:auto">${T.map(f=>`<div>${f.n.t==='c'?'📁 פרק':f.n.t==='s'?'📂 תת-פרק':'• סעיף'} ${esc((f.path[0]||f.n).code||'')} · ${esc(f.n.code||'')} ${esc((nodeName(f.n)||f.n.name||'').slice(0,50))}</div>`).join('')}</div>
+    <div class="field"><label>פעולה</label><div class="row" style="gap:14px"><label style="display:flex;gap:6px;align-items:center"><input type="radio" name="bm_op" value="move" checked> העבר</label><label style="display:flex;gap:6px;align-items:center"><input type="radio" name="bm_op" value="copy"> העתק (המקור נשאר)</label></div></div>
+    <div class="field"><label for="bm_b">למבנה</label><select id="bm_b"><option value="">— כל אחד נשאר במבנה שלו —</option>${state.tree.map(b=>`<option value="${b.id}">${esc(b.code+' '+(b.name||''))}</option>`).join('')}<option value="NEW">➕ מבנה חדש</option></select><input id="bm_bn" hidden placeholder="שם המבנה החדש" style="margin-top:4px"></div>
+    ${has.c?`<p class="hint" style="margin:4px 0">📁 <b>פרקים</b> עוברים למבנה שנבחר עם אותו קוד. אם הפרק כבר קיים שם – התוכן מצטרף אליו.</p>`:''}
+    ${has.s?`<div class="field"><label for="bm_s">📂 תתי-פרקים – לאן</label><select id="bm_s"><option value="">אותו קוד תת-פרק (במבנה שנבחר) – מצטרף אם קיים</option>${subOptions('')}</select><div class="hint" style="margin:2px 0 0">בחירת תת-פרק = כל הסעיפים של תתי-הפרקים שנבחרו מצטרפים אליו</div></div>`:''}
+    ${has.i?`<div class="field"><label for="bm_i">• סעיפים – לתת-פרק</label><select id="bm_i"><option value="">אותו תת-פרק (במבנה שנבחר)</option>${subOptions('')}</select></div>`:''}
+    ${has.s||has.i?`<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bm_keep"> לשמור קודי סעיפים כשאפשר (אחרת מספור המשך בתת-פרק היעד)</label>`:''}
+    <label style="display:flex;gap:6px;align-items:center;margin-top:4px"><input type="checkbox" id="bm_clean" checked> להסיר פרקים / תתי-פרקים שנשארו ריקים</label>
+    <p class="hint">המשאבים, המק"טים, הכמויות, המחירים, הפחת והקבצים עוברים יחד. קוד קודם נרשם בהערה. אפשר לבטל דרך "גרסאות".</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" id="bm_c">ביטול</button><button class="btn primary" id="bm_go">בצע</button></div></div></div>`;
+  const q=i=>document.getElementById(i); q('bm_c').onclick=()=>h.innerHTML='';
+  q('bm_b').onchange=()=>{ q('bm_bn').hidden=q('bm_b').value!=='NEW'; };
+  q('bm_go').onclick=()=>{
+    const copy=document.querySelector('input[name="bm_op"]:checked').value==='copy'; const keep=!!(q('bm_keep')&&q('bm_keep').checked);
+    if(q('bm_b').value===''&&has.c&&!copy&&!(q('bm_s')&&q('bm_s').value)&&!(q('bm_i')&&q('bm_i').value)){ toast('בחר מבנה יעד או תת-פרק יעד'); return; }
+    let B2=null; if(q('bm_b').value==='NEW'){ const max=Math.max(0,...state.tree.map(b=>+b.code||0)); B2=mk('b',{code:String(max+(max%10===0?10:1)).padStart(2,'0'),name:q('bm_bn').value.trim()||'מבנה חדש'}); state.tree.push(B2); }
+    else if(q('bm_b').value) B2=state.tree.find(b=>String(b.id)===q('bm_b').value);
+    const tS=q('bm_s')?q('bm_s').value:'', tI=q('bm_i')?q('bm_i').value:'';
+    const empt=new Set(); const out={c:0,s:0,i:0,secs:0};
+    const take=(n)=>{ if(copy) return cloneNode(n); const pl=parentList(n.id); const par=find(n.id).path.slice(-1)[0]; pl.splice(pl.indexOf(n),1); if(par) empt.add(par.id); return n; };
+    // פרקים
+    for(const f of T.filter(f=>f.n.t==='c')){ const b2=B2||f.path[0]; if(!copy&&b2===f.path[0]) continue; const n=take(f.n); const ex=b2.ch.find(x=>x.t==='c'&&x.code===n.code&&x!==n);
+      if(!ex){ b2.ch.push(n); sortByCode(b2.ch); } else { for(const sub of n.ch.slice()){ const s2=ex.ch.find(x=>x.t==='s'&&x.code===sub.code); if(!s2){ ex.ch.push(sub); continue; } out.secs+=mergeSub(sub,s2,true); } sortByCode(ex.ch); }
+      out.c++; state.collapsed[b2.id]=false; }
+    // תתי-פרקים
+    for(const f of T.filter(f=>f.n.t==='s')){ const b2=B2||f.path[0]; const code=tS||f.n.code; const same=!tS&&b2===f.path[0]; if(same&&!copy) continue;
+      if(!tS){ const c2=getCh(b2,code.slice(0,2)); const ex=c2.ch.find(x=>x.t==='s'&&x.code===code&&x!==f.n); const n=take(f.n);
+        if(!ex){ c2.ch.push(n); sortByCode(c2.ch); state.collapsed[c2.id]=false; } else out.secs+=mergeSub(n,ex,keep); }
+      else { const dst=getSub(b2,code); if(dst===f.n) continue; const n=take(f.n); out.secs+=mergeSub(n,dst,keep); state.collapsed[dst.id]=false; }
+      out.s++; }
+    // סעיפים
+    for(const f of T.filter(f=>f.n.t==='i')){ const src=f.path.slice(-1)[0]; const b2=B2||f.path[0]; const code=tI||src.code; const dst=getSub(b2,code); if(dst===src&&!copy) continue;
+      const n=take(f.n); const old=f.n.code; if(copy||!keep||dst.ch.some(x=>x!==n&&x.code===n.code)||(n.code||'').slice(0,5)!==dst.code) n.code=nextSecCode(dst);
+      if(!copy&&old&&old!==n.code){ (n.oldCodes=n.oldCodes||[]).push(old); n.note=((n.note?n.note+' | ':'')+'הועבר מ-'+old).trim(); }
+      dst.ch.push(n); state.collapsed[dst.id]=false; out.i++; }
+    if(!copy&&q('bm_clean').checked){ let again=true; while(again){ again=false; const L=[]; walk(state.tree,(x,p)=>{ if((x.t==='s'||x.t==='c')&&x.ch.length===0&&empt.has(x.id)) L.push({x,par:p[p.length-1]}); });
+      for(const o of L){ const pl=parentList(o.x.id); if(pl){ pl.splice(pl.indexOf(o.x),1); if(o.par) empt.add(o.par.id); again=true; } } } }
+    h.innerHTML=''; SEL.clear(); PMAP=null; save(); render();
+    toast(`${copy?'הועתקו':'הועברו'}: ${[out.c?out.c+' פרקים':'',out.s?out.s+' תתי-פרקים':'',out.i?out.i+' סעיפים':''].filter(Boolean).join(' · ')||'אין שינוי (היעד זהה למקור)'}`); };
+}
 function moveChDlg(id){
   const {n,path}=find(id); const cb=path[0]; const h=document.getElementById('printDlgHost');
   let cnt=0; walk(n.ch,x=>{ if(x.t==='i') cnt++; });
