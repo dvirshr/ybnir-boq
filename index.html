@@ -2875,7 +2875,7 @@ $('p_new').onclick=async()=>{
 };
 
 /* ---------- bulk add sections from pasted list (to several projects) ---------- */
-const UNIT_MAP={'חוד':'חודש','חודש':'חודש','אחו':'%','%':'%','יח':'יח\'','יח\'':'יח\'','קומפ':'קומפ\'','קומפ\'':'קומפ\'','קומפלט':'קומפ\'','טון':'טון','מ"ר':'מ"ר','מ"ק':'מ"ק','מ"א':'מ"א','ק"ג':'ק"ג','ש"ע':'ש"ע','י"ע':'י"ע','נק\'':'נק\''};
+const UNIT_MAP={'קמפ':'קומפ\'','קמפ\'':'קומפ\'','מטר':'מ"א','מ\'':'מ"א','חוד':'חודש','חודש':'חודש','אחו':'%','%':'%','יח':'יח\'','יח\'':'יח\'','קומפ':'קומפ\'','קומפ\'':'קומפ\'','קומפלט':'קומפ\'','טון':'טון','מ"ר':'מ"ר','מ"ק':'מ"ק','מ"א':'מ"א','ק"ג':'ק"ג','ש"ע':'ש"ע','י"ע':'י"ע','נק\'':'נק\''};
 function normUnit(u){ u=(u||'').trim().replace(/[׳`]/g,'\'').replace(/[״]/g,'"'); return UNIT_MAP[u]||UNIT_MAP[u.replace(/'$/,'')]||u; }
 function parseBulk(text,defSub){
   const rows=[];
@@ -3143,6 +3143,14 @@ $('fileEditImp').onchange=async e=>{
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
   try{ const wb=XLSX.read(await f.arrayBuffer());
     // קובץ "ייצוא לאפי": מחפשים גיליון עם כותרת "מזהה" + "הערות מערכת" באחת מ-10 השורות הראשונות (גם אם נוספה שורת כותרת מעל)
+    // קובץ פריוריטי (DataSheet של כתב כמויות): ספריית סעיפים – תאור + יחידה + מחיר יח' (עלות), בלי כמות. הכל לבחירה, לא מסומן מראש
+    for(const sn of wb.SheetNames){ const w=wb.Sheets[sn]; if(!w||!w['!ref']) continue; const R=XLSX.utils.decode_range(w['!ref']);
+      for(let r=R.s.r;r<=Math.min(R.s.r+9,R.e.r);r++){ const vals=[]; for(let c=R.s.c;c<=R.e.c;c++){ const x=w[XLSX.utils.encode_cell({r,c})]; vals.push(x?String(x.v).trim():''); }
+        if(vals.includes('מב')&&vals.includes('סעיף')&&vals.includes('תאור סעיף')&&vals.includes("מחיר יח'")&&!vals.includes('מזהה')){
+          const src=XLSX.utils.sheet_to_json(w,{defval:'',raw:true,range:r}); const S=v=>String(v??'').trim();
+          const rows=src.filter(x=>S(x['תאור סעיף'])&&S(x['סעיף'])).map(x=>{ const c=S(x['פרק']).padStart(2,'0'), e=S(x['תת-פרק']).padStart(2,'0'); const pr=+S(x["מחיר יח'"]).replace(/,/g,'')||0, cl=+S(x['מחיר יחידה']).replace(/,/g,'')||0;
+            return {'מזהה':'','רמה':'סעיף','מבנה':S(x['מב']),'פרק':c,'תת-פרק':c+'.'+e,'שם תת-פרק':(()=>{ const F=S(x['תאור תת-פרק']); return e==='00'||!F||/^\d+$/.test(F)?S(x['תאור פרק']):F; })(),'קוד סעיף':'','תאור סעיף':S(x['תאור סעיף']),"יח'":S(x['יחידה']),'כמות':'',"מחיר יח'":pr?String(pr):'','הערות':`פריוריטי ${S(x['סעיף'])}`+(cl?` · מחיר ללקוח ${cl}`:'')+(pr?'':' · ללא מחיר עלות'),'מק"ט משאב':'','שם משאב (מהרשימה)':'','פעולה':'?'}; });
+          const P=editPlan(rows); P.gone=[]; P.ops.forEach(o=>o.opt=true); P.lib=true; editImportPreview(rows,f.name,P); return; } } }
     let we=null, hr=0;
     for(const sn of ['כתב כמויות',...wb.SheetNames]){ const w=wb.Sheets[sn]; if(!w||!w['!ref']) continue; const R=XLSX.utils.decode_range(w['!ref']);
       for(let r=R.s.r;r<=Math.min(R.s.r+9,R.e.r);r++){ const vals=[]; for(let c=R.s.c;c<=R.e.c;c++){ const x=w[XLSX.utils.encode_cell({r,c})]; vals.push(x?String(x.v).trim():''); }
@@ -3239,9 +3247,9 @@ function editPlan(rows){
     if(!name){ if(Object.values(r).some(v=>S(v))) warn.push(`שורה ${line}: בלי תאור – דולגה`); return; }
     let sub=S(r['תת-פרק']); const code=S(r['קוד סעיף']); if(!/^\d{2}\.\d{2}$/.test(sub)){ const m=/^(\d{2}\.\d{2})/.exec(code); sub=m?m[1]:''; }
     if(!sub){ warn.push(`שורה ${line}: סעיף חדש בלי תת-פרק – דולג`); return; }
-    const sec={code,name,unit:normUnit(S(r["יח'"])),qty:S(r['כמות']),note:S(r['הערות']),sub,bld:S(r['מבנה'])};
+    const sec={code,name,unit:normUnit(S(r["יח'"])),qty:S(r['כמות']),note:S(r['הערות']),sub,bld:S(r['מבנה']),subName:S(r['שם תת-פרק'])}; { const pv=+S(r["מחיר יח'"]).replace(/,/g,''); if(S(r["מחיר יח'"])!==''&&Number.isFinite(pv)&&pv) sec.sp=String(pv); }
     curSecNew=sec; curSec=null; curRes=null; curResNew=null;
-    ops.push({k:'addS',sec,line,txt:`סעיף חדש ${code||sub+'.xxx'} – ${name.slice(0,50)}`});
+    ops.push({k:'addS',sec,line,txt:`סעיף חדש ${code||sub+'.xxx'} – ${name.slice(0,50)} · ${sec.unit||'—'}${sec.qty?' · כמות '+sec.qty:''}${sec.sp?' · ₪'+fmt(+sec.sp,2):''}${sec.bld?' · מבנה '+sec.bld:''}`});
   });
   const gone=Object.values(idMap).filter(x=>!seen.has(x.n.id)&&!(x.n.t==='r'&&!seen.has(x.p[x.p.length-1]?.id)&&false));
   // only report rows whose section is still in the file (or sections themselves)
@@ -3357,6 +3365,7 @@ function editImportPreview(rows,fname,P0){
       <button class="btn" data-sel="q">רק כמויות</button><button class="btn" data-sel="new">רק חדשים</button><button class="btn" data-sel="txt">רק תאור/הערות</button>
       <input id="ei_f" placeholder="סינון: קוד / שדה / טקסט" style="flex:1;min-width:160px">
       <b id="ei_n"></b></div>
+    ${cnt('addS')?`<div class="row" style="gap:6px;align-items:center;margin-top:6px"><label for="ei_bt" style="font-size:13px">סעיפים חדשים – למבנה:</label><select id="ei_bt"><option value="">לפי הקובץ (אם המבנה לא קיים – למבנה הראשון)</option>${state.tree.filter(b=>b.t==='b').map(b=>`<option value="${esc(b.code)}">${esc(b.code+' '+(b.name||''))}</option>`).join('')}</select>${P.lib?'<span class="hint" style="margin:0">ספריית סעיפים מפריוריטי: בלי כמות, מחיר = עלות יח\' (מחיר יח\'). אפשר להעביר אחר כך עם "בחירה מרובה"</span>':''}</div>`:''}
     <div style="max-height:52vh;overflow:auto;margin-top:6px;border:1px solid var(--line);border-radius:8px">
       <table class="boq" style="min-width:0;width:100%;table-layout:auto;font-size:12px"><thead style="position:sticky;top:0;background:var(--bg,#fff);z-index:1"><tr><th style="width:28px"><input type="checkbox" id="ei_vis" title="סימון/ביטול השורות המוצגות"></th><th class="n">שורה</th><th>סוג</th><th>קוד</th><th>תאור · שדה</th><th class="n">אצלך (ישן)</th><th>בקובץ (חדש)</th><th class="n">הפרש</th></tr></thead><tbody id="ei_tb"></tbody></table></div>
     <p class="hint" style="margin:6px 0 0">לחיצה על קוד = פתיחת הטופס (חישוב, משאבים) – הרשימה חוזרת בסגירה. צהוב = שינוי לבחירה ("?" בעמודת פעולה) – לא מסומן מראש. אדום = מחיקה. הפרש ≥20% מודגש. לפני הטעינה נשמרת גרסה, כך שאפשר לחזור אחורה דרך "גרסאות".</p>
@@ -3384,6 +3393,7 @@ function editImportPreview(rows,fname,P0){
     const S2=sel(); if(!S2.length) return;
     const ops=[]; P.ops.forEach((o,oi)=>{ if(o.k==='upd'){ const ks=S2.filter(it=>it.oi===oi).map(it=>it.k); if(!ks.length) return; const ch={}; ks.forEach(k=>ch[k]=o.ch[k]); if(ch.price&&o.ch.pdate){ ch.pdate=o.ch.pdate; } if(ch.price&&o.ch.psrc){ ch.psrc=o.ch.psrc; } ops.push(Object.assign({},o,{ch})); } else if(S2.some(it=>it.oi===oi&&it.typ!=='gone')) ops.push(o); });
     const gone=S2.filter(it=>it.typ==='gone').map(it=>P.gone[it.gi]);
+    const bt=$('ei_bt')?$('ei_bt').value:''; if(bt) ops.forEach(o=>{ if(o.k==='addS') o.sec.bld=bt; });
     if(gone.length&&!confirm(`למחוק ${gone.length} שורות שהוסרו מהקובץ? (נשמרות בסל המחזור)`)) return;
     await flushCloud(); if(cloudDirty||CONFLICT){ toast('יש שינויים שלא נשמרו בענן – נסה שוב בעוד רגע'); return; }
     await pushCloud(false,'לפני טעינת עריכה מאקסל ('+fname+')');
@@ -3402,7 +3412,7 @@ function applyEditPlan(P,delGone){
       const s=o.sec; let blds=state.tree.filter(n=>n.t==='b'); let b=(s.bld&&blds.find(x=>x.code===s.bld))||blds[0];
       if(!b){ b=mk('b',{code:'01',name:state.project||'מבנה 1'}); state.tree.push(b); }
       const chc=s.sub.slice(0,2); let c=b.ch.find(n=>n.t==='c'&&n.code===chc); if(!c){ c=mk('c',{code:chc}); b.ch.push(c); b.ch.sort((x,y)=>(x.code||'').localeCompare(y.code||'')); }
-      let sb=c.ch.find(n=>n.t==='s'&&n.code===s.sub); if(!sb){ sb=mk('s',{code:s.sub}); c.ch.push(sb); c.ch.sort((x,y)=>(x.code||'').localeCompare(y.code||'')); }
+      let sb=c.ch.find(n=>n.t==='s'&&n.code===s.sub); if(!sb){ sb=mk('s',Object.assign({code:s.sub},s.subName&&!(state.lists.subs||[]).some(x=>x.c===s.sub)?{name:s.subName}:{})); c.ch.push(sb); c.ch.sort((x,y)=>(x.code||'').localeCompare(y.code||'')); }
       const node=mk('i',{code:s.code||nextSecCode(sb),name:s.name,unit:s.unit,qty:s.qty,note:s.note,calc:[]}); if(s.sp) node.sp=s.sp; sb.ch.push(node); secNode.set(s,node); res.addS++;
     }
     else if(o.k==='addR'){ const sec=secNode.get(o.sec)||o.sec; if(!sec||!sec.ch) continue; const node=mk('r',Object.assign({calc:[]},o.r)); sec.ch.push(node); secNode.set(o.r,node); res.addR++; }
