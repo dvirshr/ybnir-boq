@@ -1633,29 +1633,33 @@ function effiExport(o){
     if(OHC&&OHC.OB.has(b.code)) return;
     const q=secQty(n), t=OHC?ohTot(n):total(n); if(!o.zero&&!t) return;
     const L=[]; if(wVal(n)) L.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) L.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); });
-    rows.push({ord:ord++,id:n.id,b:b.code||'',bn:b.name||'',c:c.code||'',s:s.code||'',code:n.code||'',name:n.name||'',unit:n.unit||'',q:Number.isNaN(q)?0:(q||0),t,w:L.join(' · '),note:n.note||'',pb:(()=>{ const b=pbOf(n); const F=liveFiles(n).length+filesUp(n).length; return (b?PB[b.k]:'')+(F?(b?' · ':'')+'📎'+F:''); })()}); });
+    rows.push({ord:ord++,sw:wVal(n),qn:(v=>Number.isNaN(v)?0:(v||0))(secQtyNet(n)),id:n.id,b:b.code||'',bn:b.name||'',c:c.code||'',s:s.code||'',code:n.code||'',name:n.name||'',unit:n.unit||'',q:Number.isNaN(q)?0:(q||0),t,w:L.join(' · '),note:n.note||'',pb:(()=>{ const b=pbOf(n); const F=liveFiles(n).length+filesUp(n).length; return (b?PB[b.k]:'')+(F?(b?' · ':'')+'📎'+F:''); })()}); });
   if(o.sort==='code') rows.sort((a,b)=>String(a.code).localeCompare(String(b.code),undefined,{numeric:true})||String(a.b).localeCompare(String(b.b),undefined,{numeric:true})||a.ord-b.ord);
-  const H=['מזהה','מבנה','שם מבנה','פרק','תת-פרק','קוד סעיף','תאור סעיף',"יח'",'כמות',"מחיר יח'",'סה"כ','פחת','הערות מערכת','הערות','בסיס מחיר'];
-  const aoa=[H]; rows.forEach(r=>aoa.push([r.id,r.b,r.bn,r.c,r.s,r.code,r.name,r.unit,R2(r.q),r.q?r.t/r.q:null,R2(r.t),r.w,r.note,'',r.pb]));
+  // I כמות (לפני פחת) · J פחת · K כמות כולל פחת · L מחיר יח' · M סה"כ = K×L
+  const H=['מזהה','מבנה','שם מבנה','פרק','תת-פרק','קוד סעיף','תאור סעיף',"יח'",'כמות','פחת','כמות כולל פחת',"מחיר יח'",'סה"כ','הערות מערכת','הערות','בסיס מחיר'];
+  const aoa=[H]; rows.forEach(r=>aoa.push([r.id,r.b,r.bn,r.c,r.s,r.code,r.name,r.unit,R2(r.qn),r.w,R2(r.q),r.q?r.t/r.q:null,R2(r.t),r.note,'',r.pb]));
   const N=aoa.length; const G=rows.reduce((a,r)=>a+r.t,0);
   // עלויות כלכליות – מתחת לסה"כ כתב הכמויות (בסיס מחושב בנוסחה)
   const FC=finCalc(); const FR=(OHC&&OHC.ff>1)?[]:FC.rows; // כל השורות הכלכליות (גם 0%) – כדי שאפשר יהיה להזין אחוז באקסל ולטעון חזרה
   const OB=new Set(typeof ohBlds==='function'?ohBlds():[]);
-  aoa.push(['','','','','','','סה"כ כתב כמויות'+(OHC?' (מועמס)':''),'',null,null,null,'','','']);
-  FR.forEach(r=>aoa.push(['','','','','','',r.name,'%',null,r.p,null,'','בסיס: '+FIN_BASE[r.base]+(r.isG&&r.g?` · כמות = סכום ערבות (${fmt(r.g,2)}% מהבסיס ${fmt(r.B)})`:''),'']));
-  if(FR.length) aoa.push(['','','','','','','סה"כ כולל עלויות כלכליות','',null,null,null,'','','']);
+  aoa.push(['','','','','','','סה"כ כתב כמויות'+(OHC?' (מועמס)':''),'',null,'',null,null,null,'','','']);
+  FR.forEach(r=>aoa.push(['','','','','','',r.name,'%',null,'',null,r.p,null,'בסיס: '+FIN_BASE[r.base]+(r.isG&&r.g?` · כמות = סכום ערבות (${fmt(r.g,2)}% מהבסיס ${fmt(r.B)})`:''),'']));
+  if(FR.length) aoa.push(['','','','','','','סה"כ כולל עלויות כלכליות','',null,'',null,null,null,'','','']);
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   const isInt=v=>Math.abs(v-Math.round(v))<1e-9;
-  for(let i=2;i<=N;i++){ const qc=ws['I'+i]; if(qc&&typeof qc.v==='number') qc.z=isInt(qc.v)?'#,##0':'#,##0.00'; const pc=ws['J'+i]; if(pc&&typeof pc.v==='number') pc.z='#,##0';
-    const tc=ws['K'+i]; if(tc&&typeof tc.v==='number'){ tc.z='#,##0'; if(pc&&typeof pc.v==='number'&&qc&&qc.v) tc.f=`I${i}*J${i}`; } }
-  const TR=N+1; ws['K'+TR]={t:'n',v:R2(G),f:`SUBTOTAL(9,K2:K${N})`,z:'#,##0'};
-  const dirF=`SUMPRODUCT(${[...OB].map(c=>`(B2:B${N}<>"${c}")*`).join('')}K2:K${N})`;
-  let prev=`K${TR}`, profCell=''; FR.forEach((r,j)=>{ const i=TR+1+j; const bf=r.base==='d'?(OHC?`SUM(K2:K${N})`:dirF):r.base==='cum'?prev:r.base==='boqp'?`SUM(K2:K${N})`+(profCell?`+${profCell}`:''):`SUM(K2:K${N})`; if(r.k==='prf') profCell=`K${i}`;
-    ws['I'+i]={t:'n',v:R2(r.A),f:(r.isG&&r.g)?`(${bf})*${r.g}/100`:bf,z:'#,##0'}; ws['J'+i]={t:'n',v:r.p,z:'0.00'}; ws['K'+i]={t:'n',v:R2(r.v),f:`I${i}*J${i}/100`,z:'#,##0'};
-    prev=`${prev}+K${i}`; });
-  const GR=TR+FR.length+1; if(FR.length) ws['K'+GR]={t:'n',v:R2(G+FR.reduce((a,r)=>a+r.v,0)),f:`K${TR}+SUM(K${TR+1}:K${TR+FR.length})`,z:'#,##0'};
-  ws['!cols']=[{wch:7,hidden:true},{wch:6},{wch:18},{wch:5},{wch:7},{wch:12},{wch:60},{wch:7},{wch:11},{wch:11},{wch:14},{wch:18},{wch:40,hidden:!o.notes},{wch:40},{wch:16}];
-  ws['!autofilter']={ref:'A1:O'+N};
+  const nz=c=>{ if(c&&typeof c.v==='number') c.z=isInt(c.v)?'#,##0':'#,##0.00'; };
+  for(let i=2;i<=N;i++){ const rr=rows[i-2]; const nc=ws['I'+i], gc=ws['K'+i], pc=ws['L'+i], tc=ws['M'+i]; nz(nc); nz(gc);
+    if(gc&&typeof gc.v==='number'&&nc&&typeof nc.v==='number') gc.f=rr&&rr.sw?`I${i}*(1+${rr.sw}/100)`:`I${i}`;   // כמות כולל פחת = כמות × (1+פחת הסעיף) – חי
+    if(pc&&typeof pc.v==='number') pc.z='#,##0';
+    if(tc&&typeof tc.v==='number'){ tc.z='#,##0'; if(pc&&typeof pc.v==='number'&&gc&&gc.v) tc.f=`K${i}*L${i}`; } }
+  const TR=N+1; ws['M'+TR]={t:'n',v:R2(G),f:`SUBTOTAL(9,M2:M${N})`,z:'#,##0'};
+  const dirF=`SUMPRODUCT(${[...OB].map(c=>`(B2:B${N}<>"${c}")*`).join('')}M2:M${N})`;
+  let prev=`M${TR}`, profCell=''; FR.forEach((r,j)=>{ const i=TR+1+j; const bf=r.base==='d'?(OHC?`SUM(M2:M${N})`:dirF):r.base==='cum'?prev:r.base==='boqp'?`SUM(M2:M${N})`+(profCell?`+${profCell}`:''):`SUM(M2:M${N})`; if(r.k==='prf') profCell=`M${i}`;
+    ws['K'+i]={t:'n',v:R2(r.A),f:(r.isG&&r.g)?`(${bf})*${r.g}/100`:bf,z:'#,##0'}; ws['L'+i]={t:'n',v:r.p,z:'0.00'}; ws['M'+i]={t:'n',v:R2(r.v),f:`K${i}*L${i}/100`,z:'#,##0'};
+    prev=`${prev}+M${i}`; });
+  const GR=TR+FR.length+1; if(FR.length) ws['M'+GR]={t:'n',v:R2(G+FR.reduce((a,r)=>a+r.v,0)),f:`M${TR}+SUM(M${TR+1}:M${TR+FR.length})`,z:'#,##0'};
+  ws['!cols']=[{wch:7,hidden:true},{wch:6},{wch:18},{wch:5},{wch:7},{wch:12},{wch:60},{wch:7},{wch:11},{wch:16},{wch:12},{wch:11},{wch:14},{wch:40,hidden:!o.notes},{wch:40},{wch:16}];
+  ws['!autofilter']={ref:'A1:P'+N};
   // סיכום
   const S=[['מבנה','שם מבנה','פרק','שם פרק','סה"כ']]; const cm=chMap(); const acc={};
   rows.forEach(r=>{ const k=r.b+'|'+r.c; acc[k]=acc[k]||{b:r.b,bn:r.bn,c:r.c,v:0}; acc[k].v+=r.t; });
@@ -3093,7 +3097,10 @@ $('fileEditImp').onchange=async e=>{
       for(let r=R.s.r;r<=Math.min(R.s.r+9,R.e.r);r++){ const vals=[]; for(let c=R.s.c;c<=R.e.c;c++){ const x=w[XLSX.utils.encode_cell({r,c})]; vals.push(x?String(x.v).trim():''); }
         if(vals.includes('מזהה')&&vals.includes('קוד סעיף')&&vals.includes('תאור סעיף')&&vals.includes('סה"כ')&&!vals.includes('רמה')){ we=w; hr=r; break; } } if(we) break; }
     if(we){
-      const rows=XLSX.utils.sheet_to_json(we,{defval:'',raw:true,range:hr}); rows.forEach(r=>{ const c=we['K'+(r.__rowNum__+1)]; r.__Kf=!c||!!c.f; });
+      const rows=XLSX.utils.sheet_to_json(we,{defval:'',raw:true,range:hr}); const Rg=XLSX.utils.decode_range(we['!ref']); let tCol='K'; for(let cc=Rg.s.c;cc<=Rg.e.c;cc++){ const x=we[XLSX.utils.encode_cell({r:hr,c:cc})]; if(x&&String(x.v).trim()==='סה"כ'){ tCol=XLSX.utils.encode_col(cc); break; } }
+      rows.forEach(r=>{ const c=we[tCol+(r.__rowNum__+1)]; r.__Kf=!c||!!c.f;
+        if('כמות כולל פחת' in r) r.__net=true;   // פורמט חדש: "כמות" = לפני פחת. בקבצים ישנים "כמות" = כולל פחת
+      });
       if(rows.some(r=>/\(מועמס\)/.test(String(r['תאור סעיף']||'')))){ toast('זה קובץ עם מחירים מועמסים – לא ניתן לטעון ממנו מחירים. ייצא לאפי בלי העמסה ועבוד עליו'); return; }
       editImportPreview(rows,f.name,effiPlan(rows)); return; }
     const ws=wb.Sheets['עריכה']||wb.Sheets[wb.SheetNames[0]];
@@ -3215,17 +3222,19 @@ function effiPlan(rows){
           if(Math.abs((wVal(x)||0)-v)>1e-9) ops.push({k:'upd',n:x,ch:{w:String(v)},line,txt:`${x.t==='r'?'משאב':'מק"ט'} ${x.code} בסעיף ${n.code}: פחת → ${v}%`}); }
         for(const x of kids){ const nm=x.code||nodeName(x)||'שורה'; if(wVal(x)&&!want.has(nm)) ops.push({k:'upd',n:x,ch:{w:''},line,txt:`${x.t==='r'?'משאב':'מק"ט'} ${x.code} בסעיף ${n.code}: פחת הוסר`}); }
       } }
-    const q0=secQty(n), q1=N(r['כמות']);
-    let qNew=q0;
+    const q0=r.__net?secQtyNet(n):secQty(n), q1=N(r['כמות']);
+    let qNew=secQty(n);
+    if(r.__net&&q1!==null&&Math.abs(R2(q1)-R2(q0))<=0.005){ const g1=N(r['כמות כולל פחת']); if(g1!==null&&Math.abs(R2(g1)-R2(secQty(n)))>0.005&&!isPct(n)) warn.push(`שורה ${line}: ${n.code} – שונתה "כמות כולל פחת" (${fmtQ(g1)}) בלי לשנות "כמות" – לא נקלט. לשנות את הכמות או את הפחת`); }
     if(q1!==null&&Math.abs(R2(q1)-R2(q0))>0.005){
       if(isPct(n)) warn.push(`שורה ${line}: ${n.code} – סעיף אחוז, הכמות היא בסיס מחושב – לא עודכנה`);
       else if(isByc(n)) warn.push(`שורה ${line}: ${n.code} – כמות לפי בטון (${n.byc.k} ק"ג/מ"ק × בטון כולל פחת) – לא עודכנה. לשנות את המקדם בטופס הסעיף`);
       else if(leadOf(n)) warn.push(`שורה ${line}: ${n.code} – הכמות נלקחת ממשאב מוביל ★ – לא עודכנה (לשנות במשאב)`);
       else if(n.calc&&n.calc.length) warn.push(`שורה ${line}: ${n.code} – כמות מחושבת מפירוט – לא עודכנה (${fmtQ(q0)} → ${fmtQ(q1)})`);
-      else { const w=wNew; ch.qty=String(R2(q1)); qNew=w?q1*(1+w/100):q1; if(w) warn.push(`שורה ${line}: ${n.code} – הכמות שהוקלדה ${fmtQ(q1)} נשמרה כנטו, והפחת ${fmt(w,1)}% מתווסף עליה = ${fmtQ(qNew)}`); } }
+      else { const w=wNew; ch.qty=String(R2(q1)); qNew=w?q1*(1+w/100):q1; if(w&&!r.__net) warn.push(`שורה ${line}: ${n.code} – הכמות שהוקלדה ${fmtQ(q1)} נשמרה כנטו, והפחת ${fmt(w,1)}% מתווסף עליה = ${fmtQ(qNew)}`); } }
     // מחיר: הקלדת מחיר שונה מהמחושב = תמחור ברמת סעיף. הקלדת סה"כ במקום הנוסחה = מחיר = סה"כ ÷ כמות
-    const t0=total(n), up0=q0?t0/q0:0; let p1=N(r["מחיר יח'"]); const k1=N(r['סה"כ']);
-    if(!r.__Kf&&k1!==null&&Math.abs(k1-(p1||0)*(q1||0))>0.5&&q1){ p1=k1/q1; warn.push(`שורה ${line}: ${n.code} – הוקלד סה"כ ${fmt(k1)} במקום הנוסחה – נגזר מחיר יח' ${fmt(p1,2)}`); }
+    const g0=secQty(n), t0=total(n), up0=g0?t0/g0:0; let p1=N(r["מחיר יח'"]); const k1=N(r['סה"כ']);   // מחיר יח' = לכמות כולל פחת
+    const qg=r.__net?(N(r['כמות כולל פחת'])??qNew):q1;
+    if(!r.__Kf&&k1!==null&&Math.abs(k1-(p1||0)*(qg||0))>0.5&&qg){ p1=k1/qg; warn.push(`שורה ${line}: ${n.code} – הוקלד סה"כ ${fmt(k1)} במקום הנוסחה – נגזר מחיר יח' ${fmt(p1,2)}`); }
     if(p1!==null&&!isPct(n)&&Math.abs(p1-up0)>Math.max(0.5,Math.abs(up0)*1e-4)){ ch.sp=String(R2(p1)); if(!secPriced(n)) warn.push(`שורה ${line}: ${n.code} – מחיר ${fmt(up0,2)} → ${fmt(p1,2)}: עובר לתמחור ברמת סעיף (המשאבים לא נספרים בסה"כ)`); }
     const sn=S(r['הערות מערכת']), rev=S(r['הערות']); let note=n.note||'';
     if(sn!==note.trim()&&sn) note=sn;
