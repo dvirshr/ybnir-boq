@@ -746,8 +746,12 @@ function codeCell(n){
 }
 
 /* ---------- בסיס מחיר + מסמכים מצורפים (הצעות מחיר סרוקות) ---------- */
-const PB={q:'הצעת מחיר',e:'הערכה',i:'חשבונית / ביצוע',p:'מחירון / חוזה'};
-const PBC={q:'#067647',e:'#b54708',i:'#175cd3',p:'#6941c6'};
+const PB={q:'הצעת מחיר',e:'הערכה',a:'מחירים מעדי (רכש)',x:'אקוויוולנטי מפרויקט אחר',i:'חשבונית / ביצוע',p:'מחירון / חוזה'};
+const PBC={q:'#067647',e:'#b54708',a:'#0e7090',x:'#c11574',i:'#175cd3',p:'#6941c6'};
+/* מקור מחיר כטקסט: בסיס מחיר (כולל ירושה) + שם הפרויקט באקוויוולנטי (שדה ידני, אחרת ממקור מחירי המשאבים) */
+function pbText(n){ const b=pbOf(n); if(!b) return ''; let t=PB[b.k];
+  if(b.k==='x'){ const src=b.own?n:b.from; let ref=(src&&src.pbRef)||''; if(!ref){ const S=new Set(); walk([n],x=>{ const m=/^פרויקט\s+(.+)/.exec(x.psrc||''); if(m) S.add(m[1].trim()); }); ref=[...S].join(', '); } if(ref) t+=' – '+ref; }
+  return t; }
 function pbOf(n){ if(n.pb&&PB[n.pb]) return {k:n.pb,own:true}; const f=find(n.id); if(!f) return null; for(let i=f.path.length-1;i>=0;i--){ const p=f.path[i]; if(p.pb&&PB[p.pb]) return {k:p.pb,own:false,from:p}; } return null; }
 const liveFiles=n=>(n&&n.files||[]).filter(f=>!f.rm);
 const fTitle=x=>(x.title||'').trim()||x.name||'';
@@ -767,6 +771,7 @@ function attDlg(id){
   h.innerHTML=`<div class="pdlg"><div class="box" role="dialog" aria-label="מסמכים ובסיס מחיר" style="width:min(680px,100%)">
     <h2 style="margin:0 0 2px">מסמכים ובסיס מחיר – ${NAMES[n.t]} ${esc(n.code||'')}</h2><div class="hint" style="margin:0 0 10px">${esc((n.name||nodeName(n)||'').slice(0,90))}</div>
     <div class="field"><label for="at_pb">בסיס המחיר</label><select id="at_pb"><option value="">${b&&!b.own?'לפי '+(b.from.t==='s'?'תת-הפרק':b.from.t==='c'?'הפרק':'המבנה')+': '+PB[b.k]:'— לא סומן —'}</option>${Object.entries(PB).map(([k,l])=>`<option value="${k}" ${n.pb===k?'selected':''}>${l}</option>`).join('')}</select>
+      <input id="at_ref" ${n.pb==='x'?'':'hidden'} value="${esc(n.pbRef||'')}" placeholder="שם הפרויקט שממנו המחיר" style="margin-top:4px">
       ${n.t!=='i'?`<div class="hint" style="margin:2px 0 0">חל על כל הסעיפים ב${n.t==='s'?'תת-פרק':'פרק'} שלא סומנו בנפרד</div>`:''}</div>
     <h3 style="margin:10px 0 4px;font-size:14px">מסמכים מצורפים</h3>
     <table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><tbody>
@@ -781,7 +786,8 @@ function attDlg(id){
     <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" id="at_c">סגור</button></div></div></div>`;
   const close=()=>{ h.innerHTML=''; render(); };
   document.getElementById('at_c').onclick=close;
-  document.getElementById('at_pb').onchange=e=>{ const v=e.target.value; if(v) n.pb=v; else delete n.pb; save(); };
+  document.getElementById('at_pb').onchange=e=>{ const v=e.target.value; if(v) n.pb=v; else delete n.pb; document.getElementById('at_ref').hidden=v!=='x'; save(); };
+  document.getElementById('at_ref').oninput=e=>{ const v=e.target.value.trim(); if(v) n.pbRef=v; else delete n.pbRef; save(); };
   h.querySelectorAll('[data-fo]').forEach(a=>a.onclick=async ev=>{ ev.preventDefault(); const w=window.open('about:blank','_blank'); try{ const u=await FILES.url(a.dataset.fo); if(w) w.location=u; else location.href=u; }catch(e){ if(w) w.close(); toast('פתיחה נכשלה: '+e.message); } });
   h.querySelectorAll('[data-fe]').forEach(x=>x.onclick=()=>{ const ed=h.querySelector(`[data-fed="${x.dataset.fe}"]`); ed.hidden=!ed.hidden; if(!ed.hidden) ed.querySelector('input').focus(); });
   h.querySelectorAll('[data-fsv]').forEach(x=>x.onclick=async()=>{ const i=x.dataset.fsv, it=(n.files||[])[+i]; if(!it) return; const t=h.querySelector(`[data-ft="${i}"]`).value.trim(), d=h.querySelector(`[data-fd="${i}"]`).value.trim();
@@ -1633,33 +1639,36 @@ function effiExport(o){
     if(OHC&&OHC.OB.has(b.code)) return;
     const q=secQty(n), t=OHC?ohTot(n):total(n); if(!o.zero&&!t) return;
     const L=[]; if(wVal(n)) L.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) L.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); });
-    rows.push({ord:ord++,sw:wVal(n),qn:(v=>Number.isNaN(v)?0:(v||0))(secQtyNet(n)),id:n.id,b:b.code||'',bn:b.name||'',c:c.code||'',s:s.code||'',code:n.code||'',name:n.name||'',unit:n.unit||'',q:Number.isNaN(q)?0:(q||0),t,w:L.join(' · '),note:n.note||'',pb:(()=>{ const b=pbOf(n); const F=liveFiles(n).length+filesUp(n).length; return (b?PB[b.k]:'')+(F?(b?' · ':'')+'📎'+F:''); })()}); });
+    rows.push({ord:ord++,cn:'',sn:nodeName(s)||s.name||'',src:(()=>{ const F=liveFiles(n).length+filesUp(n).length; const t=pbText(n); return t+(F?(t?' · ':'')+'📎'+F:''); })(),sw:wVal(n),qn:(v=>Number.isNaN(v)?0:(v||0))(secQtyNet(n)),id:n.id,b:b.code||'',bn:b.name||'',c:c.code||'',s:s.code||'',code:n.code||'',name:n.name||'',unit:n.unit||'',q:Number.isNaN(q)?0:(q||0),t,w:L.join(' · '),note:n.note||'',pb:(()=>{ const b=pbOf(n); const F=liveFiles(n).length+filesUp(n).length; return (b?PB[b.k]:'')+(F?(b?' · ':'')+'📎'+F:''); })()}); });
   if(o.sort==='code') rows.sort((a,b)=>String(a.code).localeCompare(String(b.code),undefined,{numeric:true})||String(a.b).localeCompare(String(b.b),undefined,{numeric:true})||a.ord-b.ord);
-  // I כמות (לפני פחת) · J פחת · K כמות כולל פחת · L מחיר יח' · M סה"כ = K×L
-  const H=['מזהה','מבנה','שם מבנה','פרק','תת-פרק','קוד סעיף','תאור סעיף',"יח'",'כמות','פחת','כמות כולל פחת',"מחיר יח'",'סה"כ','הערות מערכת','הערות','בסיס מחיר'];
-  const aoa=[H]; rows.forEach(r=>aoa.push([r.id,r.b,r.bn,r.c,r.s,r.code,r.name,r.unit,R2(r.qn),r.w,R2(r.q),r.q?r.t/r.q:null,R2(r.t),r.note,'',r.pb]));
+  // פורמט אפי (כמו ייצוא הפריוריטי שהוא רגיל אליו): A מב · B תאור מבנה · C פרק · D תאור פרק · E תת-פרק · F תאור תת-פרק · G סעיף · H תאור סעיף · I יחידה
+  // J כמות (ללא פחת) · K פחת % (סעיף) · L כמות כולל פחת = J×(1+K) · M מחיר יחידה · N סה"כ = L×M · O מקור מחיר · P הערות · Q הערות מערכת · R מזהה (מוסתר, לטעינה חזרה)
+  const cmE=chMap(); rows.forEach(r=>{ r.cn=cmE[r.c]||''; });
+  const H=['מב','תאור מבנה','פרק','תאור פרק','תת-פרק','תאור תת-פרק','סעיף','תאור סעיף','יחידה','כמות','פחת %','כמות כולל פחת','מחיר יחידה','סה"כ','מקור מחיר','הערות','הערות מערכת','מזהה'];
+  const aoa=[H]; rows.forEach(r=>aoa.push([r.b,r.bn,r.c,r.cn,String(r.s||'').split('.').pop(),r.sn,(r.b?r.b+'.':'')+r.code,r.name,r.unit,R2(r.qn),r.sw||null,R2(r.q),r.q?r.t/r.q:null,R2(r.t),r.src,'',r.note,r.id]));
   const N=aoa.length; const G=rows.reduce((a,r)=>a+r.t,0);
-  // עלויות כלכליות – מתחת לסה"כ כתב הכמויות (בסיס מחושב בנוסחה)
-  const FC=finCalc(); const FR=(OHC&&OHC.ff>1)?[]:FC.rows; // כל השורות הכלכליות (גם 0%) – כדי שאפשר יהיה להזין אחוז באקסל ולטעון חזרה
+  const FC=finCalc(); const FR=(OHC&&OHC.ff>1)?[]:FC.rows;
   const OB=new Set(typeof ohBlds==='function'?ohBlds():[]);
-  aoa.push(['','','','','','','סה"כ כתב כמויות'+(OHC?' (מועמס)':''),'',null,'',null,null,null,'','','']);
-  FR.forEach(r=>aoa.push(['','','','','','',r.name,'%',null,'',null,r.p,null,'בסיס: '+FIN_BASE[r.base]+(r.isG&&r.g?` · כמות = סכום ערבות (${fmt(r.g,2)}% מהבסיס ${fmt(r.B)})`:''),'']));
-  if(FR.length) aoa.push(['','','','','','','סה"כ כולל עלויות כלכליות','',null,'',null,null,null,'','','']);
+  const blank=()=>new Array(18).fill('');
+  { const x=blank(); x[7]='סה"כ כתב כמויות'+(OHC?' (מועמס)':''); aoa.push(x); }
+  FR.forEach(r=>{ const x=blank(); x[7]=r.name; x[8]='%'; x[16]='בסיס: '+FIN_BASE[r.base]+(r.isG&&r.g?` · כמות = סכום ערבות (${fmt(r.g,2)}% מהבסיס ${fmt(r.B)})`:''); aoa.push(x); });
+  if(FR.length){ const x=blank(); x[7]='סה"כ כולל עלויות כלכליות'; aoa.push(x); }
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   const isInt=v=>Math.abs(v-Math.round(v))<1e-9;
   const nz=c=>{ if(c&&typeof c.v==='number') c.z=isInt(c.v)?'#,##0':'#,##0.00'; };
-  for(let i=2;i<=N;i++){ const rr=rows[i-2]; const nc=ws['I'+i], gc=ws['K'+i], pc=ws['L'+i], tc=ws['M'+i]; nz(nc); nz(gc);
-    if(gc&&typeof gc.v==='number'&&nc&&typeof nc.v==='number') gc.f=rr&&rr.sw?`I${i}*(1+${rr.sw}/100)`:`I${i}`;   // כמות כולל פחת = כמות × (1+פחת הסעיף) – חי
-    if(pc&&typeof pc.v==='number') pc.z='#,##0';
-    if(tc&&typeof tc.v==='number'){ tc.z='#,##0'; if(pc&&typeof pc.v==='number'&&gc&&gc.v) tc.f=`K${i}*L${i}`; } }
-  const TR=N+1; ws['M'+TR]={t:'n',v:R2(G),f:`SUBTOTAL(9,M2:M${N})`,z:'#,##0'};
-  const dirF=`SUMPRODUCT(${[...OB].map(c=>`(B2:B${N}<>"${c}")*`).join('')}M2:M${N})`;
-  let prev=`M${TR}`, profCell=''; FR.forEach((r,j)=>{ const i=TR+1+j; const bf=r.base==='d'?(OHC?`SUM(M2:M${N})`:dirF):r.base==='cum'?prev:r.base==='boqp'?`SUM(M2:M${N})`+(profCell?`+${profCell}`:''):`SUM(M2:M${N})`; if(r.k==='prf') profCell=`M${i}`;
-    ws['K'+i]={t:'n',v:R2(r.A),f:(r.isG&&r.g)?`(${bf})*${r.g}/100`:bf,z:'#,##0'}; ws['L'+i]={t:'n',v:r.p,z:'0.00'}; ws['M'+i]={t:'n',v:R2(r.v),f:`K${i}*L${i}/100`,z:'#,##0'};
-    prev=`${prev}+M${i}`; });
-  const GR=TR+FR.length+1; if(FR.length) ws['M'+GR]={t:'n',v:R2(G+FR.reduce((a,r)=>a+r.v,0)),f:`M${TR}+SUM(M${TR+1}:M${TR+FR.length})`,z:'#,##0'};
-  ws['!cols']=[{wch:7,hidden:true},{wch:6},{wch:18},{wch:5},{wch:7},{wch:12},{wch:60},{wch:7},{wch:11},{wch:16},{wch:12},{wch:11},{wch:14},{wch:40,hidden:!o.notes},{wch:40},{wch:16}];
-  ws['!autofilter']={ref:'A1:P'+N};
+  for(let i=2;i<=N;i++){ const nc=ws['J'+i], wc=ws['K'+i], gc=ws['L'+i], pc=ws['M'+i], tc=ws['N'+i]; nz(nc); nz(gc); if(wc&&typeof wc.v==='number') wc.z='0.0';
+    for(const c of ['A','C','E','G']){ const x=ws[c+i]; if(x){ x.t='s'; x.v=String(x.v); } }
+    if(gc&&typeof gc.v==='number'&&nc&&typeof nc.v==='number') gc.f=`J${i}*(1+N(K${i})/100)`;   // כמות כולל פחת – חי
+    if(pc&&typeof pc.v==='number') pc.z='#,##0.00';
+    if(tc&&typeof tc.v==='number'){ tc.z='#,##0'; if(pc&&typeof pc.v==='number'&&gc&&gc.v) tc.f=`L${i}*M${i}`; } }
+  const TR=N+1; ws['N'+TR]={t:'n',v:R2(G),f:`SUBTOTAL(9,N2:N${N})`,z:'#,##0'};
+  const dirF=`SUMPRODUCT(${[...OB].map(c=>`(A2:A${N}<>"${c}")*`).join('')}N2:N${N})`;
+  let prev=`N${TR}`, profCell=''; FR.forEach((r,j)=>{ const i=TR+1+j; const bf=r.base==='d'?(OHC?`SUM(N2:N${N})`:dirF):r.base==='cum'?prev:r.base==='boqp'?`SUM(N2:N${N})`+(profCell?`+${profCell}`:''):`SUM(N2:N${N})`; if(r.k==='prf') profCell=`N${i}`;
+    ws['L'+i]={t:'n',v:R2(r.A),f:(r.isG&&r.g)?`(${bf})*${r.g}/100`:bf,z:'#,##0'}; ws['M'+i]={t:'n',v:r.p,z:'0.00'}; ws['N'+i]={t:'n',v:R2(r.v),f:`L${i}*M${i}/100`,z:'#,##0'};
+    prev=`${prev}+N${i}`; });
+  const GR=TR+FR.length+1; if(FR.length) ws['N'+GR]={t:'n',v:R2(G+FR.reduce((a,r)=>a+r.v,0)),f:`N${TR}+SUM(N${TR+1}:N${TR+FR.length})`,z:'#,##0'};
+  ws['!cols']=[{wch:4},{wch:16},{wch:4},{wch:22},{wch:5},{wch:18},{wch:14},{wch:55},{wch:7},{wch:11},{wch:7},{wch:12},{wch:11},{wch:13},{wch:24},{wch:30},{wch:40,hidden:!o.notes},{wch:8,hidden:true}];
+  ws['!autofilter']={ref:'A1:R'+N};
   // סיכום
   const S=[['מבנה','שם מבנה','פרק','שם פרק','סה"כ']]; const cm=chMap(); const acc={};
   rows.forEach(r=>{ const k=r.b+'|'+r.c; acc[k]=acc[k]||{b:r.b,bn:r.bn,c:r.c,v:0}; acc[k].v+=r.t; });
@@ -3095,11 +3104,16 @@ $('fileEditImp').onchange=async e=>{
     let we=null, hr=0;
     for(const sn of ['כתב כמויות',...wb.SheetNames]){ const w=wb.Sheets[sn]; if(!w||!w['!ref']) continue; const R=XLSX.utils.decode_range(w['!ref']);
       for(let r=R.s.r;r<=Math.min(R.s.r+9,R.e.r);r++){ const vals=[]; for(let c=R.s.c;c<=R.e.c;c++){ const x=w[XLSX.utils.encode_cell({r,c})]; vals.push(x?String(x.v).trim():''); }
-        if(vals.includes('מזהה')&&vals.includes('קוד סעיף')&&vals.includes('תאור סעיף')&&vals.includes('סה"כ')&&!vals.includes('רמה')){ we=w; hr=r; break; } } if(we) break; }
+        if(vals.includes('מזהה')&&(vals.includes('קוד סעיף')||vals.includes('סעיף'))&&vals.includes('תאור סעיף')&&vals.includes('סה"כ')&&!vals.includes('רמה')){ we=w; hr=r; break; } } if(we) break; }
     if(we){
       const rows=XLSX.utils.sheet_to_json(we,{defval:'',raw:true,range:hr}); const Rg=XLSX.utils.decode_range(we['!ref']); let tCol='K'; for(let cc=Rg.s.c;cc<=Rg.e.c;cc++){ const x=we[XLSX.utils.encode_cell({r:hr,c:cc})]; if(x&&String(x.v).trim()==='סה"כ'){ tCol=XLSX.utils.encode_col(cc); break; } }
       rows.forEach(r=>{ const c=we[tCol+(r.__rowNum__+1)]; r.__Kf=!c||!!c.f;
         if('כמות כולל פחת' in r) r.__net=true;   // פורמט חדש: "כמות" = לפני פחת. בקבצים ישנים "כמות" = כולל פחת
+        if('מב' in r&&'סעיף' in r){   // פורמט אפי (כמו פריוריטי): מב / פרק / תת-פרק (2 ספרות) / סעיף = מבנה.קוד / יחידה / מחיר יחידה / פחת % (סעיף בלבד)
+          const b=String(r['מב']??'').trim(), c=String(r['פרק']??'').trim(), e=String(r['תת-פרק']??'').trim(); let g=String(r['סעיף']??'').trim();
+          if(b&&g.startsWith(b+'.')) g=g.slice(b.length+1);
+          r['מבנה']=b; r['קוד סעיף']=g; r['תת-פרק']=c&&e?(e.includes('.')?e:c+'.'+e.padStart(2,'0')):'';
+          r["יח'"]=r['יחידה']; r["מחיר יח'"]=r['מחיר יחידה']; r['פחת']=r['פחת %']; r.__wsec=true; }
       });
       if(rows.some(r=>/\(מועמס\)/.test(String(r['תאור סעיף']||'')))){ toast('זה קובץ עם מחירים מועמסים – לא ניתן לטעון ממנו מחירים. ייצא לאפי בלי העמסה ועבוד עליו'); return; }
       editImportPreview(rows,f.name,effiPlan(rows)); return; }
@@ -3211,7 +3225,8 @@ function effiPlan(rows){
     const u=normUnit(S(r["יח'"])); if(u!==(n.unit||'')) ch.unit=u;
     // פחת: מספר = פחת סעיף %. טקסט "סעיף 3% · 4-0012 5%" = פחת סעיף + פחת משאב/מק"ט לפי קוד. ריק = בלי פחת
     const wRaw=S(r['פחת']); let wNew=wVal(n);
-    { const cur=[]; if(wVal(n)) cur.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) cur.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); });
+    if(r.__wsec){ const v=wRaw===''?0:N(wRaw); if(v===null) warn.push(`שורה ${line}: ${n.code} – פחת "${wRaw}" לא מספר – לא עודכן`); else if(Math.abs(v-(wVal(n)||0))>1e-9){ ch.w=v?String(v):''; wNew=v; } }
+    else { const cur=[]; if(wVal(n)) cur.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) cur.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); });
       if(wRaw!==cur.join(' · ')){
         const tok=wRaw===''?[]:(N(wRaw)!==null?[['סעיף',N(wRaw)]]:wRaw.split(/\s*[·|;,]\s*/).map(t=>{ const m=t.match(/^(.*?)\s*([\d.]+)\s*%?$/); return m?[m[1].trim()||'סעיף',+m[2]]:null; }).filter(Boolean));
         const want=new Map(tok); const sw=want.has('סעיף')?want.get('סעיף'):0;
