@@ -3143,13 +3143,22 @@ $('fileEditImp').onchange=async e=>{
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
   try{ const wb=XLSX.read(await f.arrayBuffer());
     // קובץ "ייצוא לאפי": מחפשים גיליון עם כותרת "מזהה" + "הערות מערכת" באחת מ-10 השורות הראשונות (גם אם נוספה שורת כותרת מעל)
-    // קובץ פריוריטי (DataSheet של כתב כמויות): ספריית סעיפים – תאור + יחידה + מחיר יח' (עלות), בלי כמות. הכל לבחירה, לא מסומן מראש
-    for(const sn of wb.SheetNames){ const w=wb.Sheets[sn]; if(!w||!w['!ref']) continue; const R=XLSX.utils.decode_range(w['!ref']);
-      for(let r=R.s.r;r<=Math.min(R.s.r+9,R.e.r);r++){ const vals=[]; for(let c=R.s.c;c<=R.e.c;c++){ const x=w[XLSX.utils.encode_cell({r,c})]; vals.push(x?String(x.v).trim():''); }
-        if(vals.includes('מב')&&vals.includes('סעיף')&&vals.includes('תאור סעיף')&&vals.includes("מחיר יח'")&&!vals.includes('מזהה')){
-          const src=XLSX.utils.sheet_to_json(w,{defval:'',raw:true,range:r}); const S=v=>String(v??'').trim();
-          const rows=src.filter(x=>S(x['תאור סעיף'])&&S(x['סעיף'])).map(x=>{ const c=S(x['פרק']).padStart(2,'0'), e=S(x['תת-פרק']).padStart(2,'0'); const pr=+S(x["מחיר יח'"]).replace(/,/g,'')||0, cl=+S(x['מחיר יחידה']).replace(/,/g,'')||0;
-            return {'מזהה':'','רמה':'סעיף','מבנה':S(x['מב']),'פרק':c,'תת-פרק':c+'.'+e,'שם תת-פרק':(()=>{ const F=S(x['תאור תת-פרק']); return e==='00'||!F||/^\d+$/.test(F)?S(x['תאור פרק']):F; })(),'קוד סעיף':'','תאור סעיף':S(x['תאור סעיף']),"יח'":S(x['יחידה']),'כמות':'',"מחיר יח'":pr?String(pr):'','הערות':`פריוריטי ${S(x['סעיף'])}`+(cl?` · מחיר ללקוח ${cl}`:'')+(pr?'':' · ללא מחיר עלות'),'מק"ט משאב':'','שם משאב (מהרשימה)':'','פעולה':'?'}; });
+    // קובץ פריוריטי (DataSheet של כתב כמויות): ספריית סעיפים – תאור + יחידה + עלות יח', בלי כמות. הכל לבחירה, לא מסומן מראש
+    // שמות כותרות משתנים בין ייצואים (מב / מספר מבנה, סעיף / מספר סעיף כתב כמויות, מחיר יח' / עלות ליח' מזמין)
+    { const HN=t=>String(t??'').replace(/[׳’`]/g,"'").replace(/[״”]/g,'"').replace(/\s+/g,' ').trim();
+      const AL={b:['מב','מספר מבנה'],c:['פרק','מספר פרק'],e:['תת-פרק','מספר תת-פרק'],g:['סעיף','מספר סעיף כתב כמויות','מספר סעיף'],h:['תאור סעיף'],u:['יחידה'],q:['כמות'],m:["מחיר יח'","עלות ליח' מזמין","עלות ליח'",'עלות ליחידה'],k:['מחיר יחידה'],o:['סה"כ עלות'],bn:['תאור מבנה'],cn:['תאור פרק'],en:['תאור תת-פרק']};
+      for(const sn of wb.SheetNames){ const w=wb.Sheets[sn]; if(!w||!w['!ref']) continue; const R=XLSX.utils.decode_range(w['!ref']);
+        for(let r=R.s.r;r<=Math.min(R.s.r+14,R.e.r);r++){ const vals=[]; for(let c=R.s.c;c<=R.e.c;c++){ const x=w[XLSX.utils.encode_cell({r,c})]; vals.push(x?HN(x.v):''); }
+          const col={}; for(const [k,names] of Object.entries(AL)){ const ix=vals.findIndex(v=>names.includes(v)); if(ix>=0) col[k]=R.s.c+ix; }
+          if(vals.includes('מזהה')||!(col.b!==undefined&&col.c!==undefined&&col.g!==undefined&&col.h!==undefined&&col.u!==undefined&&(col.m!==undefined||col.o!==undefined))) continue;
+          const S=v=>String(v??'').trim(); const Nn=v=>{ const t=S(v).replace(/,/g,''); return t===''?0:(+t||0); };
+          const cell=(rr,k)=>{ if(col[k]===undefined) return ''; const x=w[XLSX.utils.encode_cell({r:rr,c:col[k]})]; return x?x.v:''; };
+          const rows=[];
+          for(let rr=r+1;rr<=R.e.r;rr++){ const h=S(cell(rr,'h')), g=S(cell(rr,'g')); if(!h||!g) continue;
+            const c=S(cell(rr,'c')).padStart(2,'0'), e=S(cell(rr,'e')).padStart(2,'0')||'00'; const q=Nn(cell(rr,'q'));
+            const pr=col.m!==undefined?Nn(cell(rr,'m')):(q?Nn(cell(rr,'o'))/q:0), cl=Nn(cell(rr,'k')); const F=S(cell(rr,'en'));
+            rows.push({'מזהה':'','רמה':'סעיף','מבנה':S(cell(rr,'b')),'פרק':c,'תת-פרק':c+'.'+e,'שם תת-פרק':e==='00'||!F||/^\d+$/.test(F)?S(cell(rr,'cn')):F,'קוד סעיף':'','תאור סעיף':h,"יח'":S(cell(rr,'u')),'כמות':'',"מחיר יח'":pr?String(Math.round(pr*100)/100):'','הערות':`פריוריטי ${g}`+(cl?` · מחיר ללקוח ${cl}`:'')+(pr?'':' · ללא מחיר עלות'),'מק"ט משאב':'','שם משאב (מהרשימה)':'','פעולה':'?'}); }
+          if(!rows.length) continue;
           const P=editPlan(rows); P.gone=[]; P.ops.forEach(o=>o.opt=true); P.lib=true; editImportPreview(rows,f.name,P); return; } } }
     let we=null, hr=0;
     for(const sn of ['כתב כמויות',...wb.SheetNames]){ const w=wb.Sheets[sn]; if(!w||!w['!ref']) continue; const R=XLSX.utils.decode_range(w['!ref']);
