@@ -739,11 +739,11 @@ function codeCell(n){
   const car=`<button class="caret ${leaf?'leaf':''} ${closed?'closed':''}" data-act="toggle" data-id="${n.id}" aria-label="${closed?'פתח':'סגור'}">${caretSvg}</button>`;
   let code;
   if(n.t==='b') code=`<input class="cell-in mono" style="width:56px" data-f="code" data-id="${n.id}" value="${esc(n.code)}" aria-label="קוד מבנה">`;
-  else if(n.t==='c') code=`<select class="cell-in mono" data-f="code" data-id="${n.id}" aria-label="פרק"><option value="">בחר</option>${state.lists.chapters.map(c=>`<option value="${c.c}" ${c.c===n.code?'selected':''}>${c.c}</option>`).join('')}</select>`;
+  else if(n.t==='c') code=`<select class="cell-in mono" data-f="code" data-id="${n.id}" aria-label="פרק"><option value="">בחר</option>${state.lists.chapters.map(c=>`<option value="${c.c}" ${c.c===n.code?'selected':''}>${c.c}</option>`).join('')}<option value="__new">➕ חדש…</option></select>`;
   else if(n.t==='s'){
     const par=find(n.id).path.slice(-1)[0];
     const opts=state.lists.subs.filter(s=>s.ch===par.code);
-    code=`<select class="cell-in mono" data-f="code" data-id="${n.id}" aria-label="תת-פרק"><option value="">בחר</option>${opts.map(s=>`<option value="${s.c}" ${s.c===n.code?'selected':''}>${s.c}</option>`).join('')}${n.code&&!opts.some(s=>s.c===n.code)?`<option selected>${esc(n.code)}</option>`:''}</select>`;
+    code=`<select class="cell-in mono" data-f="code" data-id="${n.id}" aria-label="תת-פרק"><option value="">בחר</option>${opts.map(s=>`<option value="${s.c}" ${s.c===n.code?'selected':''}>${s.c}</option>`).join('')}${n.code&&!opts.some(s=>s.c===n.code)?`<option selected>${esc(n.code)}</option>`:''}<option value="__new">➕ חדש…</option></select>`;
   }
   else code=`<span class="mono" title="${n.oldCodes&&n.oldCodes.length?'קוד קודם: '+esc(n.oldCodes.join(' → ')):''}">${esc(n.code||'')}</span>`;
   const sb=SELMODE&&['c','s','i'].includes(n.t)?`<input type="checkbox" data-sel="${n.id}" ${SEL.has(n.id)?'checked':''} ${selAnc(n.id)?'disabled title="נבחר דרך הרמה שמעל"':''} style="margin:0 0 0 2px;width:14px;height:14px;flex:none;accent-color:var(--accent)" aria-label="בחירה">`:'';
@@ -841,7 +841,7 @@ function nameCell(n){
     const cur=opts.find(s=>s.c===n.code);
     return `<td><input class="cell-in" list="subList" data-f="subpick" data-ch="${esc(par.code||'')}" data-id="${n.id}" value="${esc(cur?cur.n:'')}" placeholder="${opts.length?'הקלד לחיפוש תת-פרק ('+opts.length+')':'אין תתי-פרקים לפרק זה'}" aria-label="תאור תת-פרק">${miss}</td>`;
   }
-  if(n.t==='c') return `<td><input class="cell-in" list="chList" data-f="chpick" data-id="${n.id}" value="${esc(chMap()[n.code]||'')}" placeholder="הקלד לחיפוש פרק" aria-label="תאור פרק">${miss}</td>`;
+  if(n.t==='c') return `<td><input class="cell-in" list="chList" data-f="chpick" data-id="${n.id}" value="${esc(chMap()[n.code]||'')}" placeholder="הקלד לחיפוש פרק / שם חדש" title="בחירה מהרשימה, או הקלדת שם חדש = שינוי שם הפרק בפרויקט" aria-label="תאור פרק">${miss}</td>`;
   if(n.t==='k') return `<td><input class="cell-in" list="itemList" data-f="item" data-id="${n.id}" data-res="${esc((parentOf(n.id)||{}).code||'')}" value="${esc(n.code?nodeName(n):'')}" placeholder="בחר מק&quot;ט (${itemsOf((parentOf(n.id)||{}).code).length} במשאב)" title="${esc(nodeName(n))}">${n.code&&!(ITEMS.it&&ITEMS.it[n.code])?'<span class="pill" title="מק&quot;ט שלא בטבלת המק&quot;טים">ידני</span>':''}</td>`;
   // resource
   return `<td><input class="cell-in" list="resList" data-f="res" data-id="${n.id}" value="${esc(nodeName(n)||n.code||'')}" placeholder="הקלד לחיפוש משאב">${demo}${miss}</td>`;
@@ -941,14 +941,31 @@ tb.addEventListener('focusin',e=>{
   dl.innerHTML=items.map(x=>`<option value="${esc(x.c+' | '+x.n)}"></option>`).join('');
   el.select&&el.select();
 });
+/* פרק / תת-פרק חדש שלא ברשימות – נוסף לרשימות של הפרויקט הזה */
+function listNew(n,t,name,ch){ const isC=t==='c'; const L=isC?state.lists.chapters:state.lists.subs;
+  let sug; if(isC){ const used=new Set(L.map(x=>x.c)); let i=1; while(used.has(String(i).padStart(2,'0'))) i++; sug=String(i).padStart(2,'0'); }
+  else { const used=new Set(L.filter(x=>x.ch===ch).map(x=>x.c)); let i=1; while(used.has(ch+'.'+String(i).padStart(2,'0'))) i++; sug=ch+'.'+String(i).padStart(2,'0'); }
+  let code=prompt(`קוד ${isC?'פרק חדש (2 ספרות)':'תת-פרק חדש (פרק.XX)'}:`,sug); if(code===null){ render(); return; } code=code.trim();
+  if(isC?!/^\d{2}$/.test(code):!(new RegExp('^'+ch.replace('.','\\.')+'\\.\\d{2}$').test(code))){ toast(isC?'קוד פרק = 2 ספרות, למשל 61':'קוד תת-פרק = '+ch+'.XX'); render(); return; }
+  const ex=L.find(x=>x.c===code); if(!name){ name=prompt('שם:',ex?ex.n:''); if(name===null){ render(); return; } name=name.trim(); }
+  if(ex){ if(name&&name!==ex.n&&confirm(`הקוד ${code} כבר קיים ("${ex.n}"). לשנות את שמו ל"${name}"?`)) ex.n=name; }
+  else L.push(isC?{c:code,n:name||'פרק '+code}:{c:code,n:name||'תת-פרק '+code,ch});
+  if(isC&&n.code&&n.code!==code&&n.ch.length) toast('שים לב: תתי-הפרקים שמתחת שייכים לפרק הקודם');
+  n.code=code; if(!isC) delete n.name; const pl=parentList(n.id); if(pl) sortByCode(pl); save(); render(); toast(`${isC?'פרק':'תת-פרק'} ${code} נוסף לרשימות הפרויקט`); }
 tb.addEventListener('change',e=>{
   const el=e.target; let f=el.dataset.f; if(!f) return;
   const {n}=find(+el.dataset.id);
   if(f==='chpick'||f==='subpick'){
-    const code=pickCode(f==='chpick'?state.lists.chapters:state.lists.subs.filter(x=>x.ch===el.dataset.ch),el.value);
-    if(!code){ toast(f==='chpick'?'פרק לא נמצא ברשימה':'תת-פרק לא נמצא ברשימה של הפרק'); render(); return; }
+    const isC=f==='chpick'; const code=pickCode(isC?state.lists.chapters:state.lists.subs.filter(x=>x.ch===el.dataset.ch),el.value);
+    if(!code){ const v=String(el.value).trim(); if(!v){ render(); return; }
+      if(n.code){ // שינוי שם – ברשימות של הפרויקט הזה (חל על כל המבנים בפרויקט)
+        const L=isC?state.lists.chapters:state.lists.subs; const ex=L.find(x=>x.c===n.code); const old=ex?ex.n:'';
+        if(!confirm(`לשנות את שם ה${isC?'פרק':'תת-פרק'} ${n.code}${old?` מ"${old}"`:''} ל"${v}"?\nהשינוי בפרויקט הזה בלבד, בכל המבנים.`)){ render(); return; }
+        if(ex) ex.n=v; else L.push(isC?{c:n.code,n:v}:{c:n.code,n:v,ch:n.code.slice(0,2)}); if(!isC) delete n.name; save(); render(); toast('השם עודכן'); return; }
+      listNew(n,isC?'c':'s',v,el.dataset.ch); return; }
     f='code'; el.value=code;
   }
+  if(f==='code'&&el.value==='__new'&&(n.t==='c'||n.t==='s')){ listNew(n,n.t,'',n.t==='s'?(find(n.id).path.slice(-1)[0]||{}).code:''); return; }
   if(f==='res'){
     const v=el.value.trim(); const r=state.lists.res.find(x=>x.n===v||x.c===v||(x.c+' | '+x.n)===v);
     if(r){ if(n.code!==r.c) delete n.sugg; n.code=r.c; if(!n.unit&&r.u) n.unit=r.u; } else { toast('משאב לא נמצא ברשימה. בחר מהרשימה הנפתחת'); render(); return; }
