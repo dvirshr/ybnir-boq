@@ -3156,6 +3156,17 @@ $('fileEditImp').onchange=async e=>{
     const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:true}); rows.forEach(r=>{ const c=ws['L'+(r.__rowNum__+1)]; r.__Lf=!!(c&&c.f); }); editImportPreview(rows,f.name); }
   catch(err){ toast('הטעינה נכשלה: '+err.message); }
 };
+/* כפילויות בשורות חדשות מאקסל: אותו קוד באותו מבנה, או תאור דומה (≥60%) באותו פרק ובאותה יחידה → לא מסומן מראש + הפניה לסעיף הקיים */
+const dupNorm=t=>String(t||'').replace(/["'׳״`.,;:()\[\]\-–\/\\]/g,' ').replace(/\s+/g,' ').trim();
+function dupSim(a,b){ a=dupNorm(a); b=dupNorm(b); if(!a||!b) return 0; if(a===b) return 1; const bg=t=>{ const m=new Map(); for(let i=0;i<t.length-1;i++){ const k=t.slice(i,i+2); m.set(k,(m.get(k)||0)+1); } return m; };
+  const A=bg(a), B=bg(b); let x=0; for(const [k,v] of A) x+=Math.min(v,B.get(k)||0); return 2*x/Math.max(1,(a.length-1)+(b.length-1)); }
+function dupMark(ops){ const secs=[]; walk(state.tree,(n,p)=>{ if(n.t==='i') secs.push({n,b:(p[0]||{}).code||''}); });
+  for(const o of ops){ if(o.k!=='addS') continue; const s=o.sec, ch=String(s.sub||s.code||'').slice(0,2), u=UNORM(s.unit);
+    let best=null, sc=0;
+    for(const x of secs){ if(s.code&&x.n.code===s.code&&(!s.bld||x.b===s.bld)){ best=x; sc=1.01; break; }
+      if(String(x.n.code||'').slice(0,2)!==ch||UNORM(x.n.unit)!==u) continue; const v=dupSim(s.name,x.n.name); if(v>sc){ sc=v; best=x; } }
+    if(best&&sc>=0.6){ o.opt=true; o.dupN=best.n; o.txt+=` ⚠ כפילות אפשרית: ${best.b?best.b+'.':''}${best.n.code} «${String(best.n.name||'').slice(0,45)}» (${sc>1?'אותו קוד':'דמיון '+Math.round(sc*100)+'%'})`; } }
+  return ops; }
 function editPlan(rows){
   const idMap={}; walk(state.tree,(n,p)=>{ if(n.t==='i'||n.t==='r'||n.t==='k') idMap[n.id]={n,p}; });
   const S=v=>String(v??'').trim(); const same=(a,b)=>{ a=S(a); b=S(b); if(a===b) return true; const x=+a.replace(/,/g,''), y=+b.replace(/,/g,''); return a!==''&&b!==''&&Number.isFinite(x)&&Number.isFinite(y)&&Math.abs(x-y)<1e-9; };
@@ -3228,7 +3239,7 @@ function editPlan(rows){
   const gone=Object.values(idMap).filter(x=>!seen.has(x.n.id)&&!(x.n.t==='r'&&!seen.has(x.p[x.p.length-1]?.id)&&false));
   // only report rows whose section is still in the file (or sections themselves)
   const goneRep=gone.filter(x=>x.n.t==='i'||seen.has(x.p[x.p.length-1]?.id)||!gone.some(g=>g.n===x.p[x.p.length-1]));
-  ops.forEach(o=>{ if(optL.has(o.line)) o.opt=true; });
+  ops.forEach(o=>{ if(optL.has(o.line)) o.opt=true; }); dupMark(ops);
   return {ops,warn,gone:goneRep};
 }
 function effiPlan(rows){
@@ -3295,7 +3306,7 @@ function effiPlan(rows){
       return `${L}: ${String(old).slice(0,40)||'—'} → ${String(v).slice(0,80)||'—'}`; }).join(' · ')});
   });
   const total0=Object.keys(idMap).length; if(seen<total0) warn.unshift(`${total0-seen} סעיפים לא מופיעים בקובץ (סוננו או נמחקו) – לא נמחקים מהמערכת`);
-  return {ops,warn,gone:[]};
+  dupMark(ops); return {ops,warn,gone:[]};
 }
 function editImportPreview(rows,fname,P0){
   if(!rows.length||!('מזהה' in rows[0])){ toast('הקובץ לא במבנה של "אקסל לעריכה"'); return; }
@@ -3314,7 +3325,7 @@ function editImportPreview(rows,fname,P0){
     if(o.k==='upd'){ for(const k of Object.keys(o.ch)){ if(k==='pdate'||k==='psrc') continue; const isQ=k==='qty'||k==='qexpr'||k==='calcAdd';
         const ov=oldOf(o.n,k), nv=k==='calcAdd'?calcQty(o.n)+(+o.ch.calcAdd.n):o.ch[k];
         const a=num(ov), b=num(nv); IT.push({oi,k,o,nid:o.n.id,desc:descOf(o.n),line:o.line,typ:'upd',code:o.n.code||'',lvl:T[o.n.t]||'',fld:FL[k]||k,ov,nv,isQ,dp:isQ&&a!==null&&b!==null&&a!==0?(b-a)/Math.abs(a)*100:null,on:!o.opt}); } }
-    else IT.push({oi,o,nid:o.n?o.n.id:null,desc:o.n?descOf(o.n):(o.sec&&o.sec.name)||'',line:o.line,typ:o.k,code:(o.n&&o.n.code)||(o.sec&&o.sec.code)||(o.r&&o.r.code)||'',lvl:o.k==='addS'?'סעיף':o.k==='addR'?'משאב':o.k==='addK'?'מק"ט':(o.n?T[o.n.t]||'':''),fld:'',ov:'',nv:o.txt,isQ:false,dp:null,on:!o.opt});
+    else IT.push({oi,o,nid:o.n?o.n.id:(o.dupN?o.dupN.id:null),desc:o.n?descOf(o.n):(o.sec&&o.sec.name)||'',line:o.line,typ:o.k,code:(o.n&&o.n.code)||(o.sec&&o.sec.code)||(o.r&&o.r.code)||'',lvl:o.k==='addS'?'סעיף':o.k==='addR'?'משאב':o.k==='addK'?'מק"ט':(o.n?T[o.n.t]||'':''),fld:'',ov:'',nv:o.txt,isQ:false,dp:null,on:!o.opt});
   });
   P.gone.forEach((x,gi)=>IT.push({gi,nid:x.n.id,desc:descOf(x.n),line:'',typ:'gone',code:x.n.code||'',lvl:T[x.n.t]||'',fld:'',ov:cut(x.n.name||nodeName(x.n)),nv:'מחיקה מהכתב',isQ:false,dp:null,on:false}));
   // תלות: משאב/מק"ט חדש תחת סעיף/משאב חדש שלא נבחר – לא ייכנס
