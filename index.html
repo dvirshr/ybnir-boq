@@ -1065,12 +1065,13 @@ function getSub(b,code){ const c=getCh(b,code.slice(0,2)); let s=c.ch.find(x=>x.
 /* ---------- העתקה בין פרויקטים: לוח (בדפדפן הזה) ---------- */
 const CLIP_K='ybnir-boq-clip';
 function clipGet(){ try{ return JSON.parse(localStorage.getItem(CLIP_K)||'null'); }catch(e){ return null; } }
-function clipSet(T){ const items=T.map(f=>({n:JSON.parse(JSON.stringify(f.n)),b:{code:(f.path[0]||{}).code||'',name:(f.path[0]||{}).name||''},s:f.n.t==='i'?(f.path.slice(-1)[0]||{}).code||'':''}));
+function clipSet(T){ const items=T.map(f=>{ const inh=[]; f.path.forEach(p=>liveFiles(p).forEach(x=>inh.push(Object.assign({},x,{via:(p.code||'')})))); const pb=pbOf(f.n);
+    return {n:JSON.parse(JSON.stringify(f.n)),b:{code:(f.path[0]||{}).code||'',name:(f.path[0]||{}).name||''},s:f.n.t==='i'?(f.path.slice(-1)[0]||{}).code||'':'',inhF:inh,inhPb:pb&&!pb.own?pb.k:''}; });
   try{ localStorage.setItem(CLIP_K,JSON.stringify({proj:state.project||'',pid:(typeof CLOUD!=='undefined'&&CLOUD&&CLOUD.id)||'',ts:new Date().toISOString(),items})); }catch(e){ toast('ההעתקה ללוח נכשלה: '+e.message); } clipBtn(); }
 function clipBtn(){ const b=document.getElementById('btnPaste'); if(!b) return; const c=clipGet(); b.hidden=!c||!c.items||!c.items.length; if(c&&c.items) b.textContent=`📋 הדבק (${c.items.length})`; if(c) b.title=`הדבקה מ"${c.proj||''}" (${new Date(c.ts).toLocaleString('he-IL')})`; }
 /* סינון תוכן בהעתקה: o={res,price,qty,note} – false = לא להעביר */
 function stripCopy(n,o){ walk([n],x=>{
-  delete x.files;
+  if(o.files===false||!x.files) delete x.files; else { x.files=liveFiles(x); if(!x.files.length) delete x.files; }
   if(!o.note) x.note='';
   if(x.t==='i'){ if(!o.res){ x.ch=(x.ch||[]).filter(c=>c.t!=='r'); } if(!o.price) delete x.sp; if(!o.qty){ x.qty=''; x.calc=[]; } }
   if(x.t==='r'||x.t==='k'){ if(!o.price){ x.price=''; delete x.pdate; delete x.psrc; } if(!o.qty){ x.calc=[]; const e=String(x.qexpr??'').trim(); if(e&&!/[QR]/i.test(e)) x.qexpr=''; } }
@@ -1087,7 +1088,7 @@ function bulkMoveDlg(CLIP){
   h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="העברה מרוכזת" style="width:min(640px,100%)">
     <h2>${PASTE?'הדבקה מפרויקט "'+esc(CLIP.proj||'')+'"':'העברה / העתקה מרוכזת'}</h2>
     <div class="hint" style="margin:0 0 6px;max-height:120px;overflow:auto">${T.map(f=>`<div>${f.n.t==='c'?'📁 פרק':f.n.t==='s'?'📂 תת-פרק':'• סעיף'} ${esc((f.path[0]||f.n).code||'')} · ${esc(f.n.code||'')} ${esc((nodeName(f.n)||f.n.name||'').slice(0,50))}</div>`).join('')}</div>
-    ${PASTE?`<div class="field"><label>מה להעביר עם כל סעיף</label><div class="row" style="gap:14px;flex-wrap:wrap">${[['res','משאבים ומק"טים'],['price','מחירים'],['qty','כמויות ופירוט'],['note','הערות']].map(([k,t])=>`<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-co="${k}" checked> ${t}</label>`).join('')}</div><div class="hint" style="margin:2px 0 0">בלי כמויות – כמויות שהוקלדו נמחקות; נוסחאות (=Q, =R) נשארות. קבצים מצורפים לא מועתקים.</div></div>`
+    ${PASTE?`<div class="field"><label>מה להעביר עם כל סעיף</label><div class="row" style="gap:14px;flex-wrap:wrap">${[['res','משאבים ומק"טים'],['price','מחירים'],['qty','כמויות ופירוט'],['note','הערות'],['files','מסמכים מצורפים ובסיס מחיר (הצעות מחיר)']].map(([k,t])=>`<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-co="${k}" checked> ${t}</label>`).join('')}</div><div class="hint" style="margin:2px 0 0">בלי כמויות – כמויות שהוקלדו נמחקות; נוסחאות (=Q, =R) נשארות. מסמכים שצורפו ברמה שמעל (תת-פרק / פרק / מבנה) מצורפים לפריט המודבק, עם ציון המקור.</div></div>`
     :`<div class="field"><label>פעולה</label><div class="row" style="gap:14px"><label style="display:flex;gap:6px;align-items:center"><input type="radio" name="bm_op" value="move" checked> העבר</label><label style="display:flex;gap:6px;align-items:center"><input type="radio" name="bm_op" value="copy"> העתק (המקור נשאר)</label></div></div>`}
     <div class="field"><label for="bm_b">למבנה</label><select id="bm_b"><option value="">${PASTE?'— לפי קוד המבנה במקור (נוצר אם חסר) —':'— כל אחד נשאר במבנה שלו —'}</option>${state.tree.map(b=>`<option value="${b.id}">${esc(b.code+' '+(b.name||''))}</option>`).join('')}<option value="NEW">➕ מבנה חדש</option></select><input id="bm_bn" hidden placeholder="שם המבנה החדש" style="margin-top:4px"></div>
     ${has.c?`<p class="hint" style="margin:4px 0">📁 <b>פרקים</b> עוברים למבנה שנבחר עם אותו קוד. אם הפרק כבר קיים שם – התוכן מצטרף אליו.</p>`:''}
@@ -1108,7 +1109,10 @@ function bulkMoveDlg(CLIP){
     else if(q('bm_b').value) B2=state.tree.find(b=>String(b.id)===q('bm_b').value);
     const tS=q('bm_s')?q('bm_s').value:'', tI=q('bm_i')?q('bm_i').value:'';
     const empt=new Set(); const out={c:0,s:0,i:0,secs:0};
-    const take=(n)=>{ if(PASTE) return stripCopy(cloneNode(n),CO); if(copy) return cloneNode(n); const pl=parentList(n.id); const par=find(n.id).path.slice(-1)[0]; pl.splice(pl.indexOf(n),1); if(par) empt.add(par.id); return n; };
+    const take=(n)=>{ if(PASTE){ const c=stripCopy(cloneNode(n),CO); const it=CLIP.items.find(x=>x.n===n);
+        if(it&&CO.files!==false){ const have=new Set((c.files||[]).map(x=>x.k)); const add=(it.inhF||[]).filter(x=>!have.has(x.k)).map(x=>Object.assign({},x,{d:((x.d?x.d+' · ':'')+'הועבר מרמה '+x.via+' בפרויקט '+(CLIP.proj||'')).trim()})); add.forEach(x=>delete x.via); if(add.length) c.files=(c.files||[]).concat(add);
+          if(it.inhPb&&!c.pb) c.pb=it.inhPb; }
+        return c; } if(copy) return cloneNode(n); const pl=parentList(n.id); const par=find(n.id).path.slice(-1)[0]; pl.splice(pl.indexOf(n),1); if(par) empt.add(par.id); return n; };
     // פרקים
     for(const f of T.filter(f=>f.n.t==='c')){ const b2=B2||(PASTE?bOf(f.bc):f.path[0]); if(!copy&&b2===f.path[0]) continue; const n=take(f.n); const ex=b2.ch.find(x=>x.t==='c'&&x.code===n.code&&x!==n);
       if(!ex){ b2.ch.push(n); sortByCode(b2.ch); } else { for(const sub of n.ch.slice()){ const s2=ex.ch.find(x=>x.t==='s'&&x.code===sub.code); if(!s2){ ex.ch.push(sub); continue; } out.secs+=mergeSub(sub,s2,true); } sortByCode(ex.ch); }
@@ -2732,13 +2736,13 @@ $('p_list').onclick=async e=>{ const dp=e.target.closest('[data-dup]'); if(dp){ 
 function dupProjectDlg(id){ const r=(P_ROWS||[]).find(x=>x.id===id); if(!r) return; const h=$('printDlgHost');
   h.innerHTML=`<div class="pdlg" style="z-index:9999"><div class="box" style="width:min(520px,100%)"><h2>שכפול פרויקט</h2>
     <div class="field"><label for="dp_n">שם הפרויקט החדש</label><input id="dp_n" value="${esc(r.name+' – עותק')}"></div>
-    <div class="field"><label>מה להעתיק</label><div class="row" style="gap:14px;flex-wrap:wrap">${[['res','משאבים ומק"טים'],['price','מחירים'],['qty','כמויות ופירוט'],['note','הערות'],['pf','טופס פרויקט (שטחים, יח"ד, משך)']].map(([k,t])=>`<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-co="${k}" checked> ${t}</label>`).join('')}</div>
-      <div class="hint" style="margin:2px 0 0">המבנה (מבנים, פרקים, סעיפים) תמיד מועתק. קבצים מצורפים לא מועתקים. נלקחת הגרסה השמורה בענן.</div></div>
+    <div class="field"><label>מה להעתיק</label><div class="row" style="gap:14px;flex-wrap:wrap">${[['res','משאבים ומק"טים'],['price','מחירים'],['qty','כמויות ופירוט'],['note','הערות'],['files','מסמכים מצורפים (הצעות מחיר)'],['pf','טופס פרויקט (שטחים, יח"ד, משך)']].map(([k,t])=>`<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-co="${k}" checked> ${t}</label>`).join('')}</div>
+      <div class="hint" style="margin:2px 0 0">המבנה (מבנים, פרקים, סעיפים) תמיד מועתק. מסמכים – קישור לאותו קובץ בספרייה (לא עותק). נלקחת הגרסה השמורה בענן.</div></div>
     <div class="row" style="justify-content:flex-end"><button class="btn" id="dp_c">ביטול</button><button class="btn primary" id="dp_go">שכפל</button></div></div></div>`;
   $('dp_c').onclick=()=>h.innerHTML='';
   $('dp_go').onclick=async()=>{ const nm=$('dp_n').value.trim(); if(!nm){ toast('חסר שם'); return; } const CO={}; h.querySelectorAll('[data-co]').forEach(x=>CO[x.dataset.co]=x.checked);
     $('dp_go').disabled=true; try{ const p=await DB.getProject(id); const st=JSON.parse(JSON.stringify(p.state)); st.project=nm;
-      if(!(CO.res&&CO.price&&CO.qty&&CO.note)) (st.tree||[]).forEach(b=>stripCopy(b,CO));
+      (st.tree||[]).forEach(b=>stripCopy(b,CO));
       if(!CO.pf){ delete st.pf; delete st.units; delete st.area; }
       const r2=await DB.createProject(nm,st,'שכפול מ-"'+p.name+'" (rev '+p.rev+')'); h.innerHTML=''; toast('נוצר "'+nm+'"'); openProject(r2.id); }
     catch(err){ $('dp_go').disabled=false; toast('שכפול נכשל: '+err.message); } }; }
