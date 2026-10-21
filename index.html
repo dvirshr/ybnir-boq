@@ -749,7 +749,14 @@ function codeCell(n){
 const PB={q:'הצעת מחיר',e:'הערכה',a:'מחירים מעדי (רכש)',x:'אקוויוולנטי מפרויקט אחר',i:'חשבונית / ביצוע',p:'מחירון / חוזה'};
 const PBC={q:'#067647',e:'#b54708',a:'#0e7090',x:'#c11574',i:'#175cd3',p:'#6941c6'};
 /* מקור מחיר כטקסט: בסיס מחיר (כולל ירושה) + שם הפרויקט באקוויוולנטי (שדה ידני, אחרת ממקור מחירי המשאבים) */
-function pbText(n){ const b=pbOf(n); if(!b) return ''; let t=PB[b.k];
+function pbText(n){ const b=pbOf(n);
+  if(!b){ // לא סומן: מקור לפי מחירי המשאבים – מפרויקט אחר = אקוויוולנטי, כולם ממחירון = מחירון, אחרת הערכה
+    const S=[]; walk([n],x=>{ if((x.t==='r'&&!hasItems(x))||x.t==='k'){ if(evalExpr(x.price)) S.push(String(x.psrc||'')); } });
+    const P=[...new Set(S.map(v=>(/^פרויקט\s+(.+)/.exec(v)||[])[1]).filter(Boolean))];
+    if(P.length) return PB.x+' – '+P.join(', ');
+    if(S.length&&S.every(v=>/^מחירון/.test(v))) return PB.p;
+    return PB.e; }
+  let t=PB[b.k];
   if(b.k==='x'){ const src=b.own?n:b.from; let ref=(src&&src.pbRef)||''; if(!ref){ const S=new Set(); walk([n],x=>{ const m=/^פרויקט\s+(.+)/.exec(x.psrc||''); if(m) S.add(m[1].trim()); }); ref=[...S].join(', '); } if(ref) t+=' – '+ref; }
   return t; }
 function pbOf(n){ if(n.pb&&PB[n.pb]) return {k:n.pb,own:true}; const f=find(n.id); if(!f) return null; for(let i=f.path.length-1;i>=0;i--){ const p=f.path[i]; if(p.pb&&PB[p.pb]) return {k:p.pb,own:false,from:p}; } return null; }
@@ -1436,7 +1443,7 @@ function pbPanel(){ const el=document.getElementById('pbPanel'); if(!el) return;
   const acc={}, L=[]; let T=0; walk(state.tree,(x,p)=>{ if(x.t!=='i'||isPct(x)) return; const t=total(x); if(!t) return; const b=pbOf(x), k=b?b.k:'-'; acc[k]=(acc[k]||0)+t; T+=t; if(k==='e'||k==='-') L.push({x,p,t,k,F:liveFiles(x).length+filesUp(x).length}); });
   L.sort((a,b)=>b.t-a.t);
   el.innerHTML=`<h3>בסיס תמחור <small class="hint" style="font-weight:400">– כמה מהעלות מגובה בהצעות מחיר. סימון בכפתור 📎 בסעיף / תת-פרק / פרק</small></h3>
-   <table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><tbody>${Object.keys(PB).concat('-').filter(k=>acc[k]).map(k=>`<tr><td><span style="color:${PBC[k]||'var(--muted)'};font-weight:600">${PB[k]||'לא סומן'}</span></td><td class="n num">${fmt(acc[k])}</td><td class="n num" style="width:70px">${fmt(acc[k]/T*100,1)}%</td><td style="width:40%"><div style="height:8px;border-radius:4px;background:${PBC[k]||'#98a2b3'};width:${Math.max(1,acc[k]/T*100)}%"></div></td></tr>`).join('')}</tbody></table>
+   <table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><tbody>${Object.keys(PB).concat('-').filter(k=>acc[k]).map(k=>`<tr><td><span style="color:${PBC[k]||'var(--muted)'};font-weight:600">${PB[k]||'הערכה – לא סומן'}</span></td><td class="n num">${fmt(acc[k])}</td><td class="n num" style="width:70px">${fmt(acc[k]/T*100,1)}%</td><td style="width:40%"><div style="height:8px;border-radius:4px;background:${PBC[k]||'#98a2b3'};width:${Math.max(1,acc[k]/T*100)}%"></div></td></tr>`).join('')}</tbody></table>
    ${L.length?`<div style="margin-top:8px;font-size:13px;font-weight:600">הסעיפים היקרים שמבוססים על הערכה / לא סומנו</div><table class="boq" style="min-width:0;table-layout:auto;font-size:12px"><tbody>${L.slice(0,10).map(r=>`<tr><td class="mono">${esc((r.p[0]||{}).code||'')}</td><td class="mono"><button class="ib" data-act="att" data-id="${r.x.id}">${esc(r.x.code||'')}</button></td><td>${esc((r.x.name||'').slice(0,55))}</td><td class="n num">${fmt(r.t)}</td><td style="color:${PBC[r.k]||'var(--muted)'}">${PB[r.k]||'לא סומן'}${r.F?' · 📎'+r.F:''}</td></tr>`).join('')}</tbody></table>`:''}`;
   el.querySelectorAll('[data-act="att"]').forEach(b=>b.onclick=()=>attDlg(+b.dataset.id)); }
 function renderDash(){
