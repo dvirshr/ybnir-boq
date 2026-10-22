@@ -3229,7 +3229,7 @@ function dupMark(ops){ const secs=[]; walk(state.tree,(n,p)=>{ if(n.t==='i') sec
   for(const o of ops){ if(o.k!=='addS') continue; const s=o.sec, ch=String(s.sub||s.code||'').slice(0,2), u=UNORM(s.unit);
     let best=null, sc=0;
     for(const x of secs){ if(s.code&&x.n.code===s.code&&(!s.bld||x.b===s.bld)){ best=x; sc=1.01; break; }
-      if(String(x.n.code||'').slice(0,2)!==ch||UNORM(x.n.unit)!==u) continue; const v=dupSim(s.name,x.n.name); if(v>sc){ sc=v; best=x; } }
+      if(String(x.n.code||'').slice(0,2)!==ch||UNORM(x.n.unit)!==u||(s.bld&&x.b!==s.bld)) continue; const v=dupSim(s.name,x.n.name); if(v>sc){ sc=v; best=x; } }
     if(best&&sc>=0.6){ o.opt=true; o.dupN=best.n; o.txt+=` ⚠ כפילות אפשרית: ${best.b?best.b+'.':''}${best.n.code} «${String(best.n.name||'').slice(0,45)}» (${sc>1?'אותו קוד':'דמיון '+Math.round(sc*100)+'%'})`; } }
   return ops; }
 function editPlan(rows){
@@ -3248,7 +3248,8 @@ function editPlan(rows){
       const ch={};
       if(n.t==='i'){
         const curSub=(idMap[id].p[idMap[id].p.length-1]||{}).code||''; const nsub=S(r['תת-פרק']);
-        if(nsub&&nsub!==curSub){ if(/^\d{2}\.\d{2}$/.test(nsub)) ops.push({k:'move',n,sub:nsub,keep:!!S(r['קוד סעיף'])&&!same(r['קוד סעיף'],n.code),line,txt:`העברת סעיף ${n.code} מ-${curSub} ל-${nsub}`}); else warn.push(`שורה ${line}: תת-פרק "${nsub}" לא תקין`); }
+        const curB=(idMap[id].p[0]||{}).code||''; let nb=S(r['מבנה']); if(nb&&nb!==curB&&!state.tree.some(x=>x.t==='b'&&x.code===nb)){ warn.push(`שורה ${line}: מבנה "${nb}" לא קיים – הסעיף לא הועבר`); nb=curB; }
+        if((nsub&&nsub!==curSub)||(nb&&nb!==curB)){ const sub2=nsub||curSub; if(/^\d{2}\.\d{2}$/.test(sub2)) ops.push({k:'move',n,sub:sub2,bld:nb&&nb!==curB?nb:'',keep:nb&&nb!==curB?true:(!!S(r['קוד סעיף'])&&!same(r['קוד סעיף'],n.code)),line,txt:`העברת סעיף ${n.code}`+(nb&&nb!==curB?` ממבנה ${curB} למבנה ${nb}`:'')+(sub2!==curSub?` מ-${curSub} ל-${sub2}`:'')}); else warn.push(`שורה ${line}: תת-פרק "${sub2}" לא תקין`); }
         if(S(r['קוד סעיף'])&&!same(r['קוד סעיף'],n.code)) ch.code=S(r['קוד סעיף']);
         if(S(r['תאור סעיף'])&&!same(r['תאור סעיף'],n.name)) ch.name=S(r['תאור סעיף']);
         if(!same(normUnit(S(r["יח'"])),n.unit||'')) ch.unit=normUnit(S(r["יח'"]));
