@@ -1422,7 +1422,7 @@ function calcBlock(n){
         <div class="calc"><table>
           <thead><tr><th style="width:30%">צורה · תאור / מיקום</th><th>ממדים</th><th style="width:90px">כמות</th><th style="width:28px"></th></tr></thead>
           <tbody id="calcBody"></tbody>
-          <tfoot><tr><td colspan="2">סה"כ כמות${n.unit?' ('+esc(n.unit)+')':''}</td><td class="num" id="calcSum"></td><td></td></tr></tfoot>
+          <tfoot><tr><td colspan="2">${n.calc.length?'סה"כ כמות'+(n.unit?' ('+esc(n.unit)+')':''):'<span style="font-weight:400;color:var(--muted)">אין פירוט – הכמות לפי השדה "כמות" למעלה</span>'}</td><td class="num" id="calcSum"></td><td></td></tr></tfoot>
         </table></div>
         <div style="display:flex;gap:8px;margin-top:6px"><button class="btn small" id="d_addl">+ שורת חישוב</button>${n.calc.length?'<button class="btn small ghost" id="d_clr">בטל פירוט וחזור לכמות ידנית</button>':''}</div>
         <p class="hint" style="margin:0">בוחרים צורה בכל שורה – מוצגים רק השדות שלה. כל שדה מקבל גם נוסחה (‎2*3.5‎). מס' / אורך ריקים = 1. גליל וטבעת: יחידת מ"ר = מעטפת, מ"א = אורך, אחרת נפח. "ניכוי" = מחסיר (פתחים וכד').</p>
@@ -1452,7 +1452,7 @@ function lineSums(n){
     const v=calcLine(l,n.unit);
     const c=document.querySelector(`[data-line="${i}"]`); if(c){ c.textContent= v===null?'':(Number.isNaN(v)?'שגיאה':fmtQ(v)); c.title=calcFx(l,n.unit); c.style.color=v<0?'#b42318':''; }
   });
-  const s=document.getElementById('calcSum'); if(s) s.textContent=fmtQ(calcQty(n));
+  const s=document.getElementById('calcSum'); if(s){ s.textContent=n.calc.length?fmtQ(calcQty(n)):'—'; s.title=n.calc.length?'':'אין פירוט – הכמות לפי השדה "כמות" למעלה'; }
   const dq=document.getElementById('d_q'); if(dq&&n.calc.length) dq.value=fmtQ(calcQty(n));
 }
 function updTot(n){ const t=document.getElementById('dTot'); if(t) t.textContent='₪ '+fmt(total(n));
