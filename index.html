@@ -286,7 +286,7 @@ table.boq.plist{min-width:0!important;width:100%}
     <button class="btn primary" id="btnPrio">ייצוא לפריוריטי</button>
     <button class="btn" id="btnExport">ייצוא לאקסל</button>
     <button class="btn" id="btnEditX" title="קובץ אקסל שאפשר לערוך ולטעון חזרה">אקסל לעריכה</button>
-    <button class="btn" id="btnEditImp">טעינת עריכה</button><input type="file" id="fileEditImp" accept=".xlsx,.xls" hidden>
+    <button class="btn" id="btnEditImp">טעינת עריכה</button><button class="btn" id="btnPasteSec" title="הוספת סעיפים מטקסט מודבק (למשל רשימה שהוכנה בצ'אט) – עם מסך בחירה, בלי קובץ">📝 הדבקת סעיפים</button><input type="file" id="fileEditImp" accept=".xlsx,.xls" hidden>
     <button class="btn" id="btnEffi" title="כתב כמויות נקי ברמת סעיף לסקירה">ייצוא לאפי</button>
     <button class="btn" id="btnOffer" title="הצעת מחיר ללקוח – ברמת סה&quot;כ / מבנה / פרק / תת-פרק / סעיף, עם קיבוץ, שינוי שמות, התאמות ועיגול">הצעת מחיר ללקוח</button>
     <button class="btn" id="btnPull" hidden title="ייבוא מחירים מהמחירון או מפרויקט אחר – עם השוואה, מיון ובחירה">ייבוא מחירים</button>
@@ -3242,6 +3242,22 @@ $('btnEditX').onclick=()=>{
   XLSX.writeFile(wb,`${(state.project||'כתב כמויות').replace(/[\\/:*?"<>|]/g,'')} - לעריכה ${new Date().toLocaleDateString('he-IL').replace(/\./g,'-')}.xlsx`);
 };
 $('btnEditImp').onclick=()=>$('fileEditImp').click();
+/* הדבקת סעיפים מטקסט: שורה לכל סעיף, שדות מופרדים ב-| או בטאב: מבנה | תת-פרק או קוד סעיף | תאור | יחידה | כמות | מחיר יח' | הערה */
+function parsePasteSec(text){ const out=[]; const bl=new Set(state.tree.filter(b=>b.t==='b').map(b=>b.code));
+  for(const raw of String(text||'').split(/\r?\n/)){ let f=raw.split(raw.includes('|')?'|':'\t').map(x=>x.trim()); if(f.length<3||!f.some(x=>x)) continue;
+    if(/^(מבנה|מב)$/.test(f[0])) continue;   // שורת כותרת
+    let b=f[0].replace(/^מבנה\s*/,''), sc=f[1]; if(!bl.has(b)&&/^\d{2}\.\d{2}/.test(f[0])){ sc=f[0]; b=''; f=['',...f]; }
+    let code='', sub=''; const m=/^(\d{2}\.\d{2})(\.\d{3,4})?$/.exec(sc||''); if(m){ sub=m[1]; if(m[2]) code=sc; }
+    out.push({'מזהה':'','רמה':'סעיף','מבנה':b,'פרק':sub.slice(0,2),'תת-פרק':sub,'קוד סעיף':code,'תאור סעיף':f[2]||'',"יח'":f[3]||'','כמות':(f[4]||'').replace(/,/g,''),"מחיר יח'":(f[5]||'').replace(/[,₪\s]/g,''),'הערות':f[6]||'','מק"ט משאב':'','שם משאב (מהרשימה)':'','פעולה':''}); }
+  return out; }
+$('btnPasteSec').onclick=()=>{ const h=$('printDlgHost');
+  h.innerHTML=`<div class="pdlg" style="z-index:9999"><div class="box" style="width:min(820px,100%)"><h2>📝 הדבקת סעיפים</h2>
+    <p class="hint" style="margin:0 0 6px">שורה לכל סעיף. שדות מופרדים ב-<b>|</b> (או טאב מאקסל):<br><span class="mono" dir="rtl">מבנה | תת-פרק או קוד סעיף | תאור | יחידה | כמות | מחיר יח' (רשות) | הערה (רשות)</span><br>דוגמה: <span class="mono">10 | 06.03 | מעקה זכוכית במרפסות | מ"א | 60 | | לפי הנחיית יזם</span><br>בלי קוד סעיף – מספור המשך בתת-פרק. אחרי ההדבקה נפתח מסך בחירה (כפילויות מסומנות).</p>
+    <textarea id="ps_txt" rows="10" style="width:100%" dir="rtl" placeholder="הדבק כאן…"></textarea>
+    <div class="row" style="justify-content:space-between;align-items:center"><span class="hint" id="ps_cnt" style="margin:0"></span><span><button class="btn" id="ps_x">ביטול</button> <button class="btn primary" id="ps_ok" disabled>המשך לבחירה</button></span></div></div></div>`;
+  const ta=$('ps_txt'); const upd=()=>{ const R=parsePasteSec(ta.value); const bad=R.filter(r=>!r['תת-פרק']).length; $('ps_cnt').textContent=R.length?`זוהו ${R.length} סעיפים`+(bad?` · ${bad} בלי תת-פרק תקין (XX.YY)`:''):''; $('ps_ok').disabled=!R.length; };
+  ta.oninput=upd; $('ps_x').onclick=()=>h.innerHTML=''; setTimeout(()=>ta.focus(),0);
+  $('ps_ok').onclick=()=>{ const R=parsePasteSec(ta.value); const P=editPlan(R); P.gone=[]; h.innerHTML=''; editImportPreview(R,'הדבקת סעיפים',P); }; };
 $('fileEditImp').onchange=async e=>{
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
   try{ const wb=XLSX.read(await f.arrayBuffer());
