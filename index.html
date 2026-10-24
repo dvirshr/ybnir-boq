@@ -490,8 +490,8 @@ function releaseSp(x){ if(!x||(x.t!=='r'&&x.t!=='k')) return; let c=x; while(c&&
    "do" = ישיר + תקורות, כולל סעיפי אחוז שבסיסם ישיר (ביטוח, בצ"מ) – רווח. אין מעגליות: סעיפי "d" לא תלויים באחרים */
 let PCTB=null;
 function pctBase(n){
-  if(!PCTB){ PCTB={do:0,d:0}; const OB=new Set(typeof ohBlds==='function'?ohBlds():[]); const dp=[];
-    for(const b of state.tree){ walk(b.ch||[],x=>{ if(x.t!=='i') return; if(isPct(x)){ if(x.pctB==='d') dp.push(x); return; } const T=total(x); PCTB.do+=T; if(!OB.has(b.code)) PCTB.d+=T; }); }
+  if(!PCTB){ PCTB={do:0,d:0}; const OB=new Set(typeof ohBlds==='function'?ohBlds():[]), OC=new Set(typeof ohChs==='function'?ohChs():[]); const dp=[];
+    for(const b of state.tree){ walk(b.ch||[],(x,p)=>{ if(x.t!=='i') return; if(isPct(x)){ if(x.pctB==='d') dp.push(x); return; } const T=total(x); PCTB.do+=T; if(!OB.has(b.code)&&!OC.has((p[0]||{}).code)) PCTB.d+=T; }); }
     for(const x of dp) PCTB.do+=PCTB.d*(+x.pct)/100; }
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
@@ -1731,7 +1731,7 @@ function effiExport(o){
   try{
   const rows=[]; let ord=0;
   walk(state.tree,(n,p)=>{ if(n.t!=='i') return; const b=p[0]||{}, c=p[1]||{}, s=p[2]||{};
-    if(OHC&&OHC.OB.has(b.code)) return;
+    if(OHC&&(OHC.OB.has(b.code)||OHC.OC.has(c.code))) return;
     const q=secQty(n), t=OHC?ohTot(n):total(n); if(!o.zero&&!t) return;
     const L=[]; if(wVal(n)) L.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) L.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); });
     rows.push({ord:ord++,cn:'',sn:nodeName(s)||s.name||'',src:(()=>{ const F=liveFiles(n).length+filesUp(n).length; const t=pbText(n); return t+(F?(t?' · ':'')+'📎'+F:''); })(),sw:wVal(n),qn:(v=>Number.isNaN(v)?0:(v||0))(secQtyNet(n)),id:n.id,b:b.code||'',bn:b.name||'',c:c.code||'',s:s.code||'',code:n.code||'',name:n.name||'',unit:n.unit||'',q:Number.isNaN(q)?0:(q||0),t,w:L.join(' · '),note:n.note||'',pb:(()=>{ const b=pbOf(n); const F=liveFiles(n).length+filesUp(n).length; return (b?PB[b.k]:'')+(F?(b?' · ':'')+'📎'+F:''); })()}); });
@@ -1810,7 +1810,7 @@ function effiExport(o){
   XLSX.utils.book_append_sheet(wb,ws4,'דשבורד');
   // ---- ריכוז בטון / ברזל לבחינה (ברמת סעיף, לפי מבנה, עם סיכומי ביניים ויחס ק"ג ברזל למ"ק בטון) ----
   const boldX=[]; try{ const D=sumCollect(); const kg=r=>r.u==='טון'?r.q*1000:r.q;
-    for(const t of ['בטון','ברזל']){ const L=(D.S[t]||[]).filter(r=>!(OHC&&OHC.OB.has(r.b.code))); const A=[['מב','תאור מבנה','פרק','סעיף','תאור סעיף','יחידה','כמות','פחת %','כמות כולל פחת','סה"כ ₪','₪ ליח\'']]; const B=[1];
+    for(const t of ['בטון','ברזל']){ const L=(D.S[t]||[]).filter(r=>!(OHC&&(OHC.OB.has(r.b.code)||OHC.OC.has(r.c.code)))); const A=[['מב','תאור מבנה','פרק','סעיף','תאור סעיף','יחידה','כמות','פחת %','כמות כולל פחת','סה"כ ₪','₪ ליח\'']]; const B=[1];
       for(const g of sumGroups(L)){ g.rows.sort((a,b)=>String(a.n.code).localeCompare(String(b.n.code),undefined,{numeric:true}));
         g.rows.forEach(r=>A.push([r.b.code,r.b.name||'',r.c.code||'',(r.b.code?r.b.code+'.':'')+r.n.code,r.n.name,r.n.unit,R2(r.net),r.w||null,R2(r.q),R2(r.t),r.q?R2(r.t/r.q):null]));
         Object.entries(sumUnitTot(g.rows)).forEach(([u,v])=>{ A.push(['','סה"כ '+g.b.code+' '+(g.b.name||''),'','','',u,R2(v.net),null,R2(v.q),R2(v.t),v.q?R2(v.t/v.q):null]); B.push(A.length); }); A.push([]); }
@@ -1843,7 +1843,7 @@ function ofAtoms(of){
     for(const b of state.tree){ if(OHC&&OB.has(b.code)) continue; const bl=b.code+' '+(b.name||'');
       if(of.lvl==='tot'){ add('T','סה"כ עבודות לפי '+(state.project||'הפרויקט'),val(b)); continue; }
       if(of.lvl==='b'){ add('b:'+b.code,bl,val(b)); continue; }
-      for(const c of b.ch||[]){ if(c.t!=='c') continue; const cl=c.code+' '+(cm[c.code]||nodeName(c)||'');
+      for(const c of b.ch||[]){ if(c.t!=='c') continue; if(OHC&&OHC.OC&&OHC.OC.has(c.code)) continue; const cl=c.code+' '+(cm[c.code]||nodeName(c)||'');
         if(of.lvl==='c'){ add(of.merge?'c:'+c.code:'b:'+b.code+'|c:'+c.code,(of.merge?'':bl+' – ')+cl,val(c)); continue; }
         for(const s of c.ch||[]){ if(s.t!=='s') continue; const sl=s.code+' '+(nodeName(s)||'');
           if(of.lvl==='s'){ add(of.merge?'s:'+s.code:'b:'+b.code+'|s:'+s.code,(of.merge?'':bl+' – ')+sl,val(s)); continue; }
@@ -2341,6 +2341,8 @@ function qcServes(sec,bld){ // מבנים שהסעיף משרת: שדה "משר�
 }
 /* ---------- העמסת תקורות: תצוגה מחושבת בלבד – לא נוגעת בנתונים, בסה"כ הפרויקט או בייצוא פריוריטי ---------- */
 function ohBlds(){ if(Array.isArray(state.ohB)) return state.ohB; return state.tree.filter(b=>/תקור/.test(b.name||'')).map(b=>b.code); }
+/* פרקי תקורה בתוך מבנה (למשל פרק 60 בפרויקט של מבנה אחד). ברירת מחדל: אם אין מבנה תקורה ויש פרק 60 – פרק 60 */
+function ohChs(){ if(Array.isArray(state.ohC)) return state.ohC; return ohBlds().length?[]:(state.tree.some(b=>(b.ch||[]).some(c=>c.t==='c'&&c.code==='60'))?['60']:[]); }
 let OHC=null;
 const OH_BY={cost:'לפי עלות',conc:'לפי מ"ק בטון',area:'לפי מ"ר בנוי (מבנה)',units:'לפי יח"ד (מבנה)'};
 function ohIsPump(n){ const s=(n.name||''); return qcAutoCat(n.code,s)==='שאיבה'||/משאב(ה|ות).{0,12}בטון|משאבה\s*סטטית/.test(s); }
@@ -2348,6 +2350,7 @@ function ohTplGet(code){ try{ return (typeof SETTINGS!=='undefined'&&SETTINGS&&S
 function ohCfg(n,b,OB){ // הגדרת העמסה לסעיף תקורה: שמורה בסעיף, אחרת תבנית, אחרת הצעה
   const D=state.tree.filter(x=>!OB.has(x.code)).map(x=>x.code);
   if(n.oha) return {b:(n.oha.b||[]).filter(c=>D.includes(c)),c:n.oha.c||[],by:n.oha.by||'cost',src:'set'};
+  for(let x=parentOf(n.id);x&&x.t!=='b';x=parentOf(x.id)) if(x.oha) return {b:(x.oha.b||[]).filter(c=>D.includes(c)),c:x.oha.c||[],by:x.oha.by||'cost',src:x.t==='s'?'sub':'ch',from:x};
   const T=ohTplGet(n.code); if(T) return {b:(T.b||[]).filter(c=>D.includes(c)),c:T.c||[],by:T.by||'cost',src:'tpl'};
   const sv=qcServes(n,b).filter(c=>D.includes(c));
   if(ohIsPump(n)) return {b:sv,c:['02'],by:'conc',src:'sugg'};
@@ -2355,15 +2358,16 @@ function ohCfg(n,b,OB){ // הגדרת העמסה לסעיף תקורה: שמור
 }
 function ohConc(sec){ let v=0; walk(sec.ch||[],x=>{ if((x.t==='r'&&!hasItems(x))||x.t==='k'){ if(qcCat(x)==='בטון'&&UNORM(x.unit)==='מ"ק'){ const q=qcQ(x); if(q&&!Number.isNaN(q)) v+=q; } } }); return v; }
 function ohCalc(){
-  const OB=new Set(ohBlds()); const load=new Map(); const direct=[]; const pools=[]; const isOH=new Set();
-  if(!OB.size) return null;
+  const OB=new Set(ohBlds()), OC=new Set(ohChs()); const load=new Map(); const direct=[]; const pools=[]; const isOH=new Set();
+  if(!OB.size&&!OC.size) return null;
   for(const b of state.tree){ const oh=OB.has(b.code); if(oh) isOH.add(b.id);
-    walk(b.ch||[],(n,p)=>{ if(n.t!=='i') return; const T=total(n); if(oh){ isOH.add(n.id); if(T) pools.push({n,b,T}); } else if(T) direct.push({n,b,c:(p[0]||{}).code||'',T}); }); }
-  const base=direct.reduce((a,x)=>a+x.T,0); if(!base) return null;
+    walk(b.ch||[],(n,p)=>{ const cc=n.t==='c'?n.code:((p[0]||{}).code||''); const inOH=oh||OC.has(cc); if(inOH&&n.t!=='i') isOH.add(n.id);
+      if(n.t!=='i') return; const T=total(n); if(inOH){ isOH.add(n.id); pools.push({n,b,T,c:cc}); } else if(T) direct.push({n,b,c:cc,T}); }); }
+  const base=direct.reduce((a,x)=>a+x.T,0); if(!base&&!pools.length) return null;
   const byB={}; direct.forEach(x=>{ byB[x.b.code]=(byB[x.b.code]||0)+x.T; });
   const bMeta=Object.fromEntries(state.tree.map(b=>[b.code,b]));
   for(const P of pools){
-    const cfg=ohCfg(P.n,P.b,OB); P.cfg=cfg; P.warn='';
+    const cfg=ohCfg(P.n,P.b,OB); P.cfg=cfg; P.warn=''; if(!P.T||!base) continue;
     const SB=new Set(cfg.b), SC=new Set(cfg.c);
     let tg=direct.filter(x=>(!SB.size||SB.has(x.b.code))&&(!SC.size||SC.has(x.c)));
     let W;
@@ -2378,7 +2382,7 @@ function ohCalc(){
   }
   const pool=pools.reduce((a,x)=>a+x.T,0);
   let ff=1, fin=0; if(state.ohFin&&typeof finCalc==='function'){ const FC=finCalc(); fin=FC.sum; const G=base+pool; ff=G?(G+fin)/G:1; }
-  return {OB,load,isOH,pools,direct,base,pool,k:pool/base,byB,ff,fin};
+  return {OB,OC,load,isOH,pools,direct,base,pool,k:base?pool/base:0,byB,ff,fin};
 }
 function ohTot(n){ // סה"כ מועמס לשורה (מבנה/פרק/תת-פרק/סעיף) – כולל עלויות כלכליות ורווח אם נבחר
   if(!OHC) return total(n); return ohTot0(n)*(OHC.ff||1); }
@@ -2390,7 +2394,7 @@ function ohTot0(n){
   if(n.t==='r'||n.t==='k') return total(n);
   return (n.ch||[]).reduce((a,c)=>a+ohTot0(c),0);
 }
-function ohInOHB(n){ if(!OHC) return false; if(n.t==='b') return OHC.OB.has(n.code); const f=find(n.id); return !!(f&&f.path[0]&&OHC.OB.has(f.path[0].code)); }
+function ohInOHB(n){ if(!OHC) return false; if(n.t==='b') return OHC.OB.has(n.code); return OHC.isOH.has(n.id)||(()=>{ const f=find(n.id); return !!(f&&f.path.some(x=>OHC.isOH.has(x.id))); })(); }
 function ohDlg(){
   const OB=new Set(ohBlds()); PCTB=null; const C=ohCalc();
   let el=document.getElementById('ohDlgEl'); const sc=el?el.scrollTop:0; if(el) el.remove(); el=document.createElement('div'); el.id='ohDlgEl';
@@ -2398,13 +2402,18 @@ function ohDlg(){
   const DB_=state.tree.filter(b=>!OB.has(b.code));
   const chs=[...new Set(C?C.direct.map(x=>x.c):[])].sort();
   const chName=c=>{ const m=(state.lists.chapters||[]).find(x=>x.c===c); return m?m.n:''; };
-  const rows=C?C.pools.slice().sort((a,b)=>b.T-a.T):[];
+  const rows=C?C.pools.slice().sort((a,b)=>String(a.b.code+a.n.code).localeCompare(String(b.b.code+b.n.code),undefined,{numeric:true})):[];
+  const groups=[]; rows.forEach(P=>{ const sb=parentOf(P.n.id); let g=groups.find(x=>x.s===sb); if(!g){ g={s:sb,b:P.b,rows:[]}; groups.push(g); } g.rows.push(P); });
+  const ctl=(cfg,attr)=>`<td style="white-space:nowrap;min-width:${DB_.length*46}px">${DB_.map(b=>`<label style="display:inline-flex;align-items:center;gap:2px;margin-inline-end:8px;cursor:pointer" title="${esc(b.name||'')}"><input type="checkbox" data-ob="${esc(b.code)}" ${cfg&&cfg.b.includes(b.code)?'checked':''}><span class="mono">${esc(b.code)}</span></label>`).join('')}</td>
+     <td><input data-oc value="${esc(cfg?cfg.c.join(','):'')}" placeholder="כולם" list="ohChList" style="width:90px" title="קודי פרקים מופרדים בפסיק, למשל 02 או 02,04,09"></td>
+     <td><select data-oby>${Object.entries(OH_BY).map(([k,v])=>`<option value="${k}" ${cfg&&cfg.by===k?'selected':''}>${v}</option>`).join('')}</select></td>`;
   const pcts=[]; state.tree.forEach(b=>{ if(OB.has(b.code)) walk(b.ch||[],n=>{ if(n.t==='i'&&!isPct(n)&&(/%/.test(n.unit||'')||/^(רווח|ביטוח|בצ"?מ)/.test((n.name||'').trim()))) pcts.push(n); }); });
   const rateGuess=n=>{ const q=+n.qty, s=+n.sp; if(q>0&&q<1&&s>1000) return +(q*100).toFixed(4); if(s>0&&s<1&&q>1000) return +(s*100).toFixed(4); const m=(n.note||'').match(/([\d.]+)\s*%/); return m?+m[1]:''; };
   el.innerHTML=`<div style="background:var(--bg,#fff);border-radius:12px;max-width:1100px;width:100%;padding:18px 20px;box-shadow:0 10px 40px rgba(0,0,0,.25)">
    <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">העמסת תקורות על מחירי הסעיפים</h3><button class="btn" id="oh_x">סגור</button></div>
    <p style="color:var(--muted);font-size:13px;margin:6px 0 10px">כל סעיף תקורה (כולל רווח, ביטוח, בצ"מ) מחולק על הסעיפים הישירים שבחרת לו – מבנים, פרקים ושיטת חלוקה. ריק = הכל. <b>תצוגה בלבד</b> – הנתונים, סה"כ הפרויקט וייצוא פריוריטי לא משתנים.</p>
    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><b>מבני תקורה:</b>${state.tree.map(b=>`<label style="display:inline-flex;gap:4px;align-items:center"><input type="checkbox" data-ohb="${esc(b.code)}" ${OB.has(b.code)?'checked':''}> ${esc(b.code)} ${esc(b.name||'')}</label>`).join('')}</div>
+   ${(()=>{ const OC=new Set(ohChs()); const L=[...new Set(state.tree.filter(b=>!OB.has(b.code)).flatMap(b=>(b.ch||[]).filter(c=>c.t==='c').map(c=>c.code)))].sort(); return L.length?`<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><b>פרקי תקורה</b> <span class="hint" style="margin:0">(בתוך המבנים – למשל 60 בפרויקט של מבנה אחד):</span>${L.map(c=>`<label style="display:inline-flex;gap:3px;align-items:center" title="${esc(chName(c))}"><input type="checkbox" data-ohc="${esc(c)}" ${OC.has(c)?'checked':''}><span class="mono">${esc(c)}</span></label>`).join('')}</div>`:''; })()}
    <label style="display:flex;gap:6px;align-items:center;margin-bottom:10px;font-size:13px"><input type="checkbox" id="oh_fin" ${state.ohFin?'checked':''}> להעמיס גם את העלויות הכלכליות והרווח (טופס פרויקט) – המחיר המועמס = המחיר הסופי ללקוח${C&&C.fin?` <b>(+${fmt(C.fin)} ₪, ${fmt((C.ff-1)*100,2)}%)</b>`:''}</label>
    ${pcts.length?`<div style="border:1px solid #fec84b;background:#fffaeb;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:13px"><b>סעיפי אחוז עם בסיס קבוע (${pcts.length})</b> – המרה לבסיס אוטומטי. בדוק אחוז ובסיס לפני ההמרה (ביטוח/בצ"מ – מישיר; רווח – מישיר + תקורות):
      <table style="width:100%;margin-top:4px">${pcts.map(n=>`<tr><td class="mono">${esc(n.code)}</td><td>${esc(n.name||'')}</td><td class="num">היום ${fmt(total(n))} ₪</td><td>${esc(n.note||'')}</td><td><input data-pcr="${n.id}" value="${rateGuess(n)}" style="width:60px" inputmode="decimal">%</td><td><select data-pcb="${n.id}"><option value="d" ${pctDefB(n)==='d'?'selected':''}>מישיר</option><option value="do" ${pctDefB(n)==='do'?'selected':''}>מישיר + תקורות</option></select></td></tr>`).join('')}</table>
@@ -2412,13 +2421,13 @@ function ohDlg(){
    ${C?`<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px;font-size:14px"><span>ישיר <b>${fmt(C.base)}</b></span><span>תקורות + רווח <b>${fmt(C.pool)}</b></span><span>מקדם ממוצע <b>${fmt(C.k*100,2)}%</b></span><span>${Math.abs(C.base+C.pool-state.tree.reduce((a,n)=>a+total(n),0))<1?'סגירה ✓':'⚠ פער בסגירה'}</span></div>
    <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:8px">${Object.entries(C.byB).map(([c,v])=>{ let L=0; C.direct.forEach(x=>{ if(x.b.code===c) L+=C.load.get(x.n.id)||0; }); return `<span>מבנה ${esc(c)}: ישיר ${fmt(v)} · העמסה ${fmt(L)} (<b>${fmt(L/v*100,1)}%</b>)</span>`; }).join('')}</div>
    <div style="overflow:auto"><table class="boq" style="min-width:0;width:100%;font-size:12px;table-layout:auto"><thead><tr><th>סעיף</th><th>תאור</th><th class="n">עלות</th><th>מבנים (ריק = כולם)</th><th>פרקים (ריק = כולם)</th><th>חלוקה</th><th></th></tr></thead><tbody>
-   ${rows.map(P=>`<tr data-pid="${P.n.id}"><td class="mono">${esc(P.n.code||'')}</td><td>${esc((P.n.name||'').slice(0,48))}${isPct(P.n)?` <span class="pill note">${fmt(+P.n.pct,2)}% ${P.n.pctB==='d'?'מישיר':'מישיר+תקורות'}</span>`:''}</td><td class="n num">${fmt(P.T)}</td>
-     <td style="white-space:nowrap;min-width:${DB_.length*46}px">${DB_.map(b=>`<label style="display:inline-flex;align-items:center;gap:2px;margin-inline-end:8px;cursor:pointer" title="${esc(b.name||'')}"><input type="checkbox" data-ob="${esc(b.code)}" ${P.cfg.b.includes(b.code)?'checked':''}><span class="mono">${esc(b.code)}</span></label>`).join('')}</td>
-     <td><input data-oc value="${esc(P.cfg.c.join(','))}" placeholder="כולם" list="ohChList" style="width:90px" title="קודי פרקים מופרדים בפסיק, למשל 02 או 02,04,09"></td>
-     <td><select data-oby>${Object.entries(OH_BY).map(([k,v])=>`<option value="${k}" ${P.cfg.by===k?'selected':''}>${v}</option>`).join('')}</select></td>
-     <td style="font-size:11px">${P.cfg.src==='sugg'?'<span class="pill">הצעה</span>':P.cfg.src==='tpl'?'<span class="pill note">תבנית</span>':''}${P.warn?`<div style="color:#b54708">⚠ ${esc(P.warn)}</div>`:''}</td></tr>`).join('')}</tbody></table></div>
+   ${groups.map(g=>{ const so=g.s&&g.s.oha?{b:g.s.oha.b||[],c:g.s.oha.c||[],by:g.s.oha.by||'cost'}:null; const gt=g.rows.reduce((a,P)=>a+P.T,0);
+     return `<tr data-gid="${g.s?g.s.id:''}" style="background:#eef4ff;font-weight:600"><td class="mono">${esc(g.s?g.s.code:'')}</td><td>תת-פרק: ${esc(g.s?(nodeName(g.s)||''):'')} <span class="hint" style="margin:0;font-weight:400">(${g.rows.length} סעיפים · מבנה ${esc(g.b.code)}) – הגדרה כאן חלה על כל הסעיפים שבלי הגדרה משלהם</span></td><td class="n num">${fmt(gt)}</td>${ctl(so)}<td style="font-size:11px">${so?'<button class="ib" data-gclr style="color:var(--accent)">נקה</button>':'<span class="hint" style="margin:0">לא הוגדר</span>'}</td></tr>`
+     + g.rows.map(P=>`<tr data-pid="${P.n.id}" style="${P.T?'':'color:var(--muted)'}"><td class="mono">${esc(P.n.code||'')}</td><td>${esc((P.n.name||'').slice(0,48))}${isPct(P.n)?` <span class="pill note">${fmt(+P.n.pct,2)}% ${P.n.pctB==='d'?'מישיר':'מישיר+תקורות'}</span>`:''}</td><td class="n num">${P.T?fmt(P.T):'—'}</td>
+     ${ctl(P.cfg)}
+     <td style="font-size:11px">${P.cfg.src==='sugg'?'<span class="pill">הצעה</span>':P.cfg.src==='tpl'?'<span class="pill note">תבנית</span>':P.cfg.src==='sub'?'<span class="pill note">מתת-פרק</span>':P.cfg.src==='ch'?'<span class="pill note">מפרק</span>':'<button class="ib" data-pclr title="מחיקת ההגדרה של הסעיף – חזרה לירושה מתת-הפרק" style="color:var(--accent)">↺ ירושה</button>'}${P.warn?`<div style="color:#b54708">⚠ ${esc(P.warn)}</div>`:''}</td></tr>`).join(''); }).join('')}</tbody></table></div>
    <datalist id="ohChList">${chs.map(c=>`<option value="${c}">${esc(chName(c))}</option>`).join('')}</datalist>`
-   :'<p style="color:#b54708">לא הוגדר מבנה תקורה או שאין עלות ישירה.</p>'}
+   :'<p style="color:#b54708">לא הוגדרו מבנה או פרק תקורה.</p>'}
    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:12px;flex-wrap:wrap"><div style="display:flex;gap:8px">${C?'<button class="btn" id="oh_acc" title="קבע את ההצעות/התבניות כהגדרה של הפרויקט">קבע את כל ההצעות</button><button class="btn" id="oh_tpl" title="שומר את ההגדרות לפי קוד סעיף – יוצעו אוטומטית בפרויקטים הבאים">שמור כתבנית לפרויקטים הבאים</button>':''}</div>
    <div style="display:flex;gap:8px">${state.ohView?'<button class="btn" id="oh_off">כבה תצוגה מועמסת</button>':''}<button class="btn primary" id="oh_on" ${C?'':'disabled'}>${state.ohView?'רענן תצוגה':'הצג מחירים מועמסים בכתב הכמויות'}</button></div></div></div>`;
   document.body.appendChild(el); el.scrollTop=sc;
@@ -2428,8 +2437,11 @@ function ohDlg(){
   el.querySelectorAll('[data-ohb]').forEach(x=>x.onchange=()=>{ state.ohB=[...el.querySelectorAll('[data-ohb]:checked')].map(y=>y.dataset.ohb); again(); });
   const nodeOf=id=>{ const f=find(+id); return f&&f.n; };
   const setCfg=tr=>{ const n=nodeOf(tr.dataset.pid); if(!n) return; n.oha={b:[...tr.querySelectorAll('[data-ob]:checked')].map(y=>y.dataset.ob),c:tr.querySelector('[data-oc]').value.split(/[^0-9]+/).filter(Boolean).map(c=>c.padStart(2,'0')),by:tr.querySelector('[data-oby]').value}; again(); };
-  el.querySelectorAll('tr[data-pid]').forEach(tr=>{ tr.querySelectorAll('[data-ob],[data-oby]').forEach(x=>x.onchange=()=>setCfg(tr)); tr.querySelector('[data-oc]').onchange=()=>setCfg(tr); });
-  const acc=el.querySelector('#oh_acc'); if(acc) acc.onclick=()=>{ let k=0; C.pools.forEach(P=>{ if(P.cfg.src!=='set'){ P.n.oha={b:P.cfg.b,c:P.cfg.c,by:P.cfg.by}; k++; } }); again(); toast(k+' הגדרות נקבעו'); };
+  el.querySelectorAll('tr[data-pid]').forEach(tr=>{ tr.querySelectorAll('[data-ob],[data-oby]').forEach(x=>x.onchange=()=>setCfg(tr)); tr.querySelector('[data-oc]').onchange=()=>setCfg(tr); const c=tr.querySelector('[data-pclr]'); if(c) c.onclick=()=>{ const n=nodeOf(tr.dataset.pid); if(n){ delete n.oha; again(); } }; });
+  const setG=tr=>{ const n=nodeOf(tr.dataset.gid); if(!n) return; n.oha={b:[...tr.querySelectorAll('[data-ob]:checked')].map(y=>y.dataset.ob),c:tr.querySelector('[data-oc]').value.split(/[^0-9]+/).filter(Boolean).map(c=>c.padStart(2,'0')),by:tr.querySelector('[data-oby]').value}; again(); };
+  el.querySelectorAll('tr[data-gid]').forEach(tr=>{ tr.querySelectorAll('[data-ob],[data-oby]').forEach(x=>x.onchange=()=>setG(tr)); tr.querySelector('[data-oc]').onchange=()=>setG(tr); const c=tr.querySelector('[data-gclr]'); if(c) c.onclick=()=>{ const n=nodeOf(tr.dataset.gid); if(n){ delete n.oha; again(); } }; });
+  el.querySelectorAll('[data-ohc]').forEach(x=>x.onchange=()=>{ state.ohC=[...el.querySelectorAll('[data-ohc]:checked')].map(y=>y.dataset.ohc); again(); });
+  const acc=el.querySelector('#oh_acc'); if(acc) acc.onclick=()=>{ let k=0; C.pools.forEach(P=>{ if(P.cfg.src==='sugg'||P.cfg.src==='tpl'){ P.n.oha={b:P.cfg.b,c:P.cfg.c,by:P.cfg.by}; k++; } }); again(); toast(k+' הגדרות נקבעו'); };
   const tp=el.querySelector('#oh_tpl'); if(tp) tp.onclick=async()=>{ if(typeof SETTINGS==='undefined'||!DB||!DB.saveSettings){ toast('שמירת תבנית זמינה רק בגרסת הענן'); return; }
     const T=Object.assign({},SETTINGS.ohTpl||{}); let k=0; C.pools.forEach(P=>{ if(P.n.code){ T[P.n.code]={b:P.cfg.b,c:P.cfg.c,by:P.cfg.by,name:P.n.name||''}; k++; } });
     try{ SETTINGS=Object.assign({},SETTINGS,{ohTpl:T}); await DB.saveSettings(SETTINGS); toast(k+' הגדרות נשמרו כתבנית'); }catch(e){ toast('שגיאה בשמירת תבנית: '+e.message); } };
