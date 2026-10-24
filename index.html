@@ -3384,7 +3384,9 @@ function editPlan(rows){
   // only report rows whose section is still in the file (or sections themselves)
   const goneRep=gone.filter(x=>x.n.t==='i'||seen.has(x.p[x.p.length-1]?.id)||!gone.some(g=>g.n===x.p[x.p.length-1]));
   ops.forEach(o=>{ if(optL.has(o.line)) o.opt=true; }); dupMark(ops);
-  return {ops,warn,gone:goneRep};
+  // שמות לתתי-פרקים חדשים (עמודת "שם תת-פרק" – רשות): נוספים לרשימות הפרויקט אם הקוד לא קיים בהן
+  const subNames={}; rows.forEach(r=>{ const sc=S(r['תת-פרק']), nm=S(r['שם תת-פרק']); if(/^\d{2}\.\d{2}$/.test(sc)&&nm&&!(state.lists.subs||[]).some(x=>x.c===sc)) subNames[sc]=nm; });
+  return {ops,warn,gone:goneRep,subNames};
 }
 function effiPlan(rows){
   const idMap={}; walk(state.tree,(n,p)=>{ if(n.t==='i') idMap[n.id]={n,p}; });
@@ -3526,13 +3528,14 @@ function editImportPreview(rows,fname,P0){
     if(gone.length&&!confirm(`למחוק ${gone.length} שורות שהוסרו מהקובץ? (נשמרות בסל המחזור)`)) return;
     await flushCloud(); if(cloudDirty||CONFLICT){ toast('יש שינויים שלא נשמרו בענן – נסה שוב בעוד רגע'); return; }
     await pushCloud(false,'לפני טעינת עריכה מאקסל ('+fname+')');
-    const r=applyEditPlan({ops,warn:P.warn,gone},true); h.innerHTML=''; PMAP=null; save(); render();
+    const r=applyEditPlan({ops,warn:P.warn,gone,subNames:P.subNames},true); h.innerHTML=''; PMAP=null; save(); render();
     await pushCloud(false,`טעינת עריכה מאקסל (${S2.length}/${IT.length} נבחרו): ${r.upd} עודכנו, ${r.addS} סעיפים ו-${r.addR} משאבים נוספו, ${r.del} נמחקו`);
     toast(`בוצע (${S2.length} מתוך ${IT.length}): ${r.upd} עודכנו · ${r.addS} סעיפים חדשים · ${r.addR} משאבים חדשים · ${r.del} נמחקו`);
   };
   draw();
 }
 function applyEditPlan(P,delGone){
+  if(P.subNames) for(const [c,n] of Object.entries(P.subNames)) if(!state.lists.subs.some(x=>x.c===c)){ state.lists.subs.push({ch:c.slice(0,2),c,n}); state.lists.subs.sort((a,b)=>a.c.localeCompare(b.c)); }
   const res={upd:0,addS:0,addR:0,del:0}; const secNode=new Map();
   const remove=n=>{ const f=find(n.id); if(!f) return; const p=f.path[f.path.length-1]; const arr=p?p.ch:state.tree; const i=arr.indexOf(n); if(i>=0){ trashNode(n,f.path); arr.splice(i,1); res.del++; } };
   for(const o of P.ops){
