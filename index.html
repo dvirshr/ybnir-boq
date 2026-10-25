@@ -501,6 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
+const APP_VER='25.10.26-3'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -3260,7 +3261,8 @@ function buildResList(){
 function renderLists(){
   const L=state.lists;
   let ul=document.getElementById('unitList'); if(!ul){ ul=document.createElement('datalist'); ul.id='unitList'; ul.innerHTML=UNITS.map(u=>`<option value="${esc(u)}">`).join(''); document.body.appendChild(ul); }
-  $('listsInfo').textContent=`טעון כרגע: ${L.chapters.length} פרקים, ${L.subs.length} תתי-פרקים, ${L.res.filter(r=>!r.off).length} משאבים פעילים${L.res.some(r=>r.off)?` (+${L.res.filter(r=>r.off).length} לא פעילים)`:''}. רשימת המשאבים משותפת לכל הפרויקטים.`;
+  $('listsInfo').dataset.v=APP_VER;
+  $('listsInfo').textContent=`גרסת אפליקציה ${APP_VER} · טעון כרגע: ${L.chapters.length} פרקים, ${L.subs.length} תתי-פרקים, ${L.res.filter(r=>!r.off).length} משאבים פעילים${L.res.some(r=>r.off)?` (+${L.res.filter(r=>r.off).length} לא פעילים)`:''}. רשימת המשאבים משותפת לכל הפרויקטים.`;
   const tbl=(h,rows)=>`<div class="panel"><h3>${h} (${rows.length})</h3><div class="scroll"><table>${rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${i===0?'mono':''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</table></div></div>`;
   const used=new Set(); walk(state.tree,n=>{ if(n.t==='r'&&n.code) used.add(n.code); });
   const q=(window.__lq||'').toLowerCase();
