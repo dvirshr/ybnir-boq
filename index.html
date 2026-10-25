@@ -656,14 +656,17 @@ const leadQ=x=>x.t==='k'?kQty(x):rQty(x);
 const _qg=new Set();
 /* כמות לפי בטון: סעיף (בד"כ ברזל) שכמותו = בטון (כולל פחת) × מקדם. n.byc={k:ק"ג למ"ק, all:true=כל הפרויקט, sc:"02.04,02.01.010"} */
 const isByc=n=>n&&n.t==='i'&&n.byc&&+n.byc.k>0;
+/* קבוצת קישור: 'pump' = סעיף שאיבה בתקורות (יח' מ"ק / שם שאיבה), 'steel' = ברזל. בדיקת "נספר פעמיים" – בתוך אותה קבוצה בלבד */
+const bycGrp=n=>(UNORM(n.unit)==='מ"ק'||/שאיב|משאב/.test(n.name||''))?'pump':'steel';
 let CONCC=null;
 function bycConcRows(){ if(CONCC) return CONCC; CONCC=[]; walk(state.tree,(x,p)=>{ if(x.t==='i'&&!isByc(x)&&typeof sumTopicSec==='function'&&sumTopicSec(x,(p[1]||{}).code||'')==='בטון') CONCC.push({x,b:(p[0]||{}).code||''}); }); return CONCC; }
 /* קודים/קידומות: "02.04" = כולל, "-02.04.012" = חוץ מ-. רק החרגות = כל הבטון חוץ מהן */
-function bycMatch(n,code){ const T=String(n.byc.sc||'').split(/[\s,;]+/).filter(Boolean); const inc=T.filter(s=>!/^[-!]/.test(s)), exc=T.filter(s=>/^[-!]/.test(s)).map(s=>s.slice(1)); code=code||'';
-  if(exc.some(s=>code.startsWith(s))) return false; return !inc.length||inc.some(s=>code.startsWith(s)); }
+function bycMatch(n,code,b){ const T=String(n.byc.sc||'').split(/[\s,;]+/).filter(Boolean); const inc=T.filter(s=>!/^[-!]/.test(s)), exc=T.filter(s=>/^[-!]/.test(s)).map(s=>s.slice(1)); code=code||'';
+  const m=s=>{ const i=s.indexOf('/'); if(i<0) return code.startsWith(s); return String(b||'')===s.slice(0,i)&&code.startsWith(s.slice(i+1)); }; /* "10/02.04" = מבנה 10 בלבד */
+  if(exc.some(m)) return false; return !inc.length||inc.some(m); }
 function bycBase(n){ return bycLinked(n).reduce((a,r)=>{ const q=secQty(r.x); return a+(q&&!Number.isNaN(q)?q:0); },0); }
-function bycLinked(n){ const f=find(n.id); const b=f&&f.path[0]?f.path[0].code:''; return bycConcRows().filter(r=>(n.byc.all||r.b===b)&&bycMatch(n,r.x.code)); }
-function bycMap(){ const M=new Map(); walk(state.tree,x=>{ if(isByc(x)) for(const r of bycLinked(x)){ if(!M.has(r.x.id)) M.set(r.x.id,[]); M.get(r.x.id).push(x); } }); return M; }
+function bycLinked(n){ const f=find(n.id); const b=f&&f.path[0]?f.path[0].code:''; return bycConcRows().filter(r=>(n.byc.all||r.b===b)&&bycMatch(n,r.x.code,r.b)); }
+function bycMap(g){ const M=new Map(); walk(state.tree,x=>{ if(isByc(x)&&(!g||bycGrp(x)===g)) for(const r of bycLinked(x)){ if(!M.has(r.x.id)) M.set(r.x.id,[]); M.get(r.x.id).push(x); } }); return M; }
 function bycQty(n){ const base=bycBase(n), k=+n.byc.k; const u=UNORM(n.unit); return u==='טון'?base*k/1000:base*k; }
 function secQtyNet(n){ if(isPct(n)) return pctBase(n); if(isByc(n)){ if(_qg.has(n.id)) return NaN; _qg.add(n.id); try{ return bycQty(n); } finally{ _qg.delete(n.id); } } const r=leadOf(n); if(r){ if(_qg.has(n.id)) return NaN; _qg.add(n.id); try{ return leadQ(r); } finally{ _qg.delete(n.id); } }
   if(n.calc&&n.calc.length) return calcQty(n); if(isApt(n)) return aptCount(n); return evalExpr(n.qty); }
@@ -1427,7 +1430,7 @@ function drawBody(n){
       <div class="grid2"><div class="field"><label for="d_serves">משרת מבנים (לבקרה, למשל 01,05)</label><input id="d_serves" class="mono" value="${esc(n.serves??'')}" placeholder="ריק = המבנה של הסעיף"></div>
         <div class="field"><label style="display:flex;gap:6px;align-items:center;margin-top:22px"><input type="checkbox" id="d_isw" ${n.isW?'checked':''}> סעיף פחת (נספר כסבולת בבקרה)</label></div></div>
       <div id="d_pkg"></div>
-      <div class="field"><label>כמות לפי בטון (ברזל) – ק"ג למ"ק × כמות הבטון כולל פחת</label>
+      <div class="field"><label>כמות לפי בטון – ברזל: ק"ג למ"ק × בטון כולל פחת · שאיבה בתקורות (יח' מ"ק): מקדם 1</label>
         <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center"><input id="d_bk" class="mono" style="width:80px" placeholder="ק&quot;ג/מ&quot;ק" value="${esc((n.byc||{}).k??'')}" inputmode="decimal">
         <select id="d_ball"><option value="" ${!(n.byc||{}).all?'selected':''}>בטון המבנה של הסעיף</option><option value="1" ${(n.byc||{}).all?'selected':''}>כל הבטון בפרויקט</option></select>
         <input id="d_bsc" class="mono" style="width:170px" placeholder="קודים/קידומות (ריק = הכל)" value="${esc((n.byc||{}).sc??'')}" title="למשל 02.04.012,02.04.013 (רק אלה) או -02.04.012,-02.04.013 (הכל חוץ מאלה). קידומת 02.04 = כל הסעיפים שמתחילים כך"></div>
@@ -1450,7 +1453,7 @@ function drawBody(n){
     document.getElementById('d_isw').onchange=e=>{ if(e.target.checked) n.isW=true; else delete n.isW; save(); };
     { const fixed=()=>n.ch.filter(r=>r.t==='r'&&!hasItems(r)&&!(r.calc&&r.calc.length)&&String(r.qexpr??'').trim()!==''&&!String(r.qexpr).trim().startsWith('='));
       const bl=()=>{ const l=document.getElementById('d_bl'); if(!l) return; CONCC=null; l.textContent=isByc(n)?`בסיס: ${fmtQ(bycBase(n))} מ"ק בטון (כולל פחת) × ${n.byc.k} ק"ג/מ"ק = ${fmtQ(secQtyNet(n))} ${n.unit||''}${wVal(n)?' + פחת סעיף '+fmt(wVal(n),1)+'%':''}`:'';
-        if(isByc(n)){ const L=bycLinked(n), M=bycMap(); const dup=L.filter(r=>(M.get(r.x.id)||[]).length>1);
+        if(isByc(n)){ const L=bycLinked(n), M=bycMap(bycGrp(n)); const dup=L.filter(r=>(M.get(r.x.id)||[]).length>1);
           l.innerHTML=esc(l.textContent)+`<div style="font-size:11px;margin-top:2px">מקושרים ${L.length} סעיפי בטון: ${L.map(r=>esc(r.b+'·'+(r.x.code||''))).join(', ')}</div>`+(dup.length?`<div style="color:#d92d20;font-size:12px;font-weight:600">⚠ ${dup.length} סעיפי בטון מקושרים גם לסעיף ברזל אחר (${[...new Set(dup.flatMap(r=>M.get(r.x.id).filter(y=>y!==n).map(y=>y.code)))].join(', ')}) – הבטון נספר פעמיים. הגדר קודים/קידומות כך שכל סעיף בטון יהיה בסעיף ברזל אחד</div>`:''); }
         const fx=document.getElementById('d_bfix'); const F=isByc(n)?fixed():[];
         fx.innerHTML=F.length?`<div style="border:1px solid #fec84b;background:#fffaeb;border-radius:6px;padding:4px 8px;font-size:12px">⚠ ${F.map(r=>esc((r.code||'')+' בכמות קבועה '+r.qexpr)).join(' · ')} – לא יתעדכן לפי הבטון, והעלות לא תשתנה. <button class="btn small" id="d_bq">הצמד לכמות הסעיף (=Q)</button></div>`:'';
@@ -2552,11 +2555,11 @@ function qcRun(){
         if(L.length>=2&&(o.pr>=med*R||o.pr<=med/R)) add({rule:16,sev:'warn',msg:`${lab}: ${fmt(o.pr,2)} ₪/${o.x.unit||''} – פי ${fmt(o.pr>med?o.pr/med:med/o.pr,1)} מהמחיר הנפוץ בפרויקט (${fmt(med,2)}, ${L.length} שורות). טעות הקלדה?`,src:[{id:o.x.id,t:'שורה'}]});
         else if(ref&&(o.pr>=ref*R||o.pr<=ref/R)) add({rule:16,sev:'warn',msg:`${lab}: ${fmt(o.pr,2)} ₪ – פי ${fmt(o.pr>ref?o.pr/ref:ref/o.pr,1)} ממחיר המחירון (${fmt(ref,2)}, ${esc(pl.project_name||'')}). טעות הקלדה?`,src:[{id:o.x.id,t:'שורה'}]}); } } }
   // ---- כלל 17: קישור ברזל ↔ בטון – בטון שנספר בשני סעיפי ברזל, או בטון בלי ברזל במבנה שיש בו קישור ----
-  { CONCC=null; const M=bycMap(); const bl=new Set(); walk(state.tree,(x,p)=>{ if(isByc(x)) bl.add(x.byc.all?'*':(p[0]||{}).code); });
+  { CONCC=null; const M=bycMap('steel'); const bl=new Set(); walk(state.tree,(x,p)=>{ if(isByc(x)&&bycGrp(x)==='steel') bl.add(x.byc.all?'*':(p[0]||{}).code); });
     if(bl.size){ for(const r of bycConcRows()){ const L=M.get(r.x.id)||[];
       if(L.length>1) add({rule:17,sev:'err',msg:`${r.b} · ${r.x.code} ${(r.x.name||'').slice(0,40)}: הבטון (${fmtQ(secQty(r.x))} מ"ק) נספר ב-${L.length} סעיפי ברזל: ${L.map(y=>y.code).join(', ')}`,src:[{id:r.x.id,t:'בטון'}].concat(L.map(y=>({id:y.id,t:'ברזל '+y.code})))});
       else if(!L.length&&(bl.has(r.b)||bl.has('*'))) add({rule:17,sev:'warn',msg:`${r.b} · ${r.x.code} ${(r.x.name||'').slice(0,40)}: ${fmtQ(secQty(r.x))} מ"ק בטון לא מקושר לאף סעיף ברזל`,src:[{id:r.x.id,t:'בטון'}]}); }
-      walk(state.tree,(x,p)=>{ if(isByc(x)){ const L=bycLinked(x); add({rule:17,sev:L.length?'ok':'warn',msg:`${(p[0]||{}).code} · ${x.code}: ${x.byc.k} ק"ג/מ"ק × ${fmtQ(bycBase(x))} מ"ק (${L.length} סעיפי בטון) = ${fmtQ(secQtyNet(x))} ${x.unit||''}`,src:[{id:x.id,t:'ברזל'}]}); } }); } }
+      walk(state.tree,(x,p)=>{ if(isByc(x)&&bycGrp(x)==='steel'){ const L=bycLinked(x); add({rule:17,sev:L.length?'ok':'warn',msg:`${(p[0]||{}).code} · ${x.code}: ${x.byc.k} ק"ג/מ"ק × ${fmtQ(bycBase(x))} מ"ק (${L.length} סעיפי בטון) = ${fmtQ(secQtyNet(x))} ${x.unit||''}`,src:[{id:x.id,t:'ברזל'}]}); } }); } }
   // ---- כלל 18: תוקף הצעות מחיר + מחירים ישנים ----
   { const today=new Date().toISOString().slice(0,10), soon=new Date(Date.now()+30*864e5).toISOString().slice(0,10);
     for(const {n,b} of secs){ const pb=typeof pbOf==='function'?pbOf(n):null; if(!pb||pb.k!=='q') continue; const F=liveFiles(n).concat(filesUp(n)).filter(x=>x.exp); if(!F.length) continue; const best=F.map(x=>x.exp).sort().pop();
@@ -2574,9 +2577,12 @@ function qcRun(){
     add({rule:20,sev:'info',msg:`בסיס השוואה: ${BN.n} פרויקטים (${(BN.names||[]).join(', ')}) · נשמר ${new Date(BN.at).toLocaleDateString('he-IL')}${BN.month?' · מוצמד ל-'+BN.month:''}`}); } }
   // ---- כלל 21: פחת מצטבר – שורה שמקבלת פחת מכמה שכבות (סעיף / מוביל / משאב / בטון מקושר + השורה עצמה) ----
   try{ wScan().filter(r=>r.dbl).forEach(r=>add({rule:21,sev:'warn',msg:`${r.b.code||''} · ${(r.s||{}).code||''} · ${r.x.code||''}: ${r.L.map(a=>a.kind+' '+fmt(a.w,1)+'%').join(' + ')} = ${fmt(r.eff,2)}% (${fmt(r.add)} ₪) – ראה לשונית פחת`,src:[{id:r.x.id,t:'שורה'},...r.L.filter(a=>a.n).map(a=>({id:a.n.id,t:a.kind}))]})); }catch(e){}
+  // ---- כלל 22: כיסוי שאיבה ----
+  try{ const PR=pumpRows(); if(PR.some(r=>r.st!=='none')||PR.length){ const B={}; PR.forEach(r=>{ if(r.st==='dbl') add({rule:22,sev:'err',msg:`${r.b} · ${r.x.code}: שאיבה כפולה – ${r.hp?'משאב שאיבה בסעיף':''}${r.hp&&r.L.length?' + ':''}${r.L.map(y=>'תקורות '+y.code).join(' + ')}`,src:[{id:r.x.id,t:'בטון'}].concat(r.L.map(y=>({id:y.id,t:'שאיבה '+y.code})))}); if(r.st==='none') (B[r.b]=B[r.b]||[]).push(r); });
+    for(const b in B){ const L=B[b], q=L.reduce((a,r)=>a+r.q,0); add({rule:22,sev:'warn',msg:`מבנה ${b}: ${fmtQ(Math.round(q))} מ"ק בטון ב-${L.length} סעיפים בלי שאיבה (לא בסעיף, לא בתקורות, לא סומן יציקה עם מנוף) – לשונית שאיבה`,src:L.slice(0,12).map(r=>({id:r.x.id,t:r.x.code}))}); } } }catch(e){}
   return F;
 }
-const QC_RULES={18:'תוקף הצעות מחיר ומחירים ישנים',20:'חריגה מפרויקטים קודמים',17:'קישור ברזל ↔ בטון',1:'שאיבה ≤ בטון',2:'ריצוף / חיפוי מול שטח',15:'סעיפי אחוז (רווח / ביטוח / בצ"מ)',16:'מחיר חריג – חשד להקלדה',12:'סעיף בלי עלות / בלי כמות',13:'יחידות סעיף ↔ מוביל',14:'פחת',21:'פחת מצטבר (כמה שכבות על אותה שורה)'};
+const QC_RULES={18:'תוקף הצעות מחיר ומחירים ישנים',20:'חריגה מפרויקטים קודמים',17:'קישור ברזל ↔ בטון',1:'שאיבה ≤ בטון',2:'ריצוף / חיפוי מול שטח',15:'סעיפי אחוז (רווח / ביטוח / בצ"מ)',16:'מחיר חריג – חשד להקלדה',12:'סעיף בלי עלות / בלי כמות',13:'יחידות סעיף ↔ מוביל',14:'פחת',21:'פחת מצטבר (כמה שכבות על אותה שורה)',22:'כיסוי שאיבה – בטון בלי שאיבה / שאיבה כפולה'};
 function qcGo(id){ const f=find(+id); if(!f) return; f.path.forEach(p=>state.collapsed[p.id]=false); if(query){ query=''; const q=document.getElementById('q'); if(q) q.value=''; }
   document.getElementById('printDlgHost').innerHTML=''; render();
   setTimeout(()=>{ const tr=document.querySelector(`tr[data-id="${f.n.id}"]`); if(tr){ tr.scrollIntoView({block:'center'}); tr.style.outline='2px solid #d92d20'; setTimeout(()=>tr.style.outline='',3000); } },60); }
@@ -2628,6 +2634,42 @@ function wTabBind(h){
     ws['!cols']=[{wch:6},{wch:12},{wch:12},{wch:40},{wch:6},{wch:11},{wch:11},{wch:60},{wch:10},{wch:10},{wch:8}];
     const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'בקרת פחת'); XLSX.writeFile(wb,`בקרת פחת ${state.project||''} ${new Date().toLocaleDateString('he-IL').replace(/\./g,'-')}.xlsx`); };
 }
+/* ---------- בקרת כיסוי שאיבה ----------
+   לכל סעיף בטון: ✅ שאיבה בסעיף (משאב/מק"ט בסיווג "שאיבה") · 🔗 מכוסה בתקורות (מקושר לסעיף שאיבה "כמות לפי בטון") · ⬜ יציקה עם מנוף (סימון) · ❌ לא מכוסה · ⛔ כפל (גם בסעיף וגם בתקורות).
+   סימון "יציקה עם מנוף": x.pmp='c' בסעיף או בתת-פרק; בסעיף x.pmp='n' = דריסה (לא מנוף) גם אם תת-הפרק מסומן. */
+const PSTAT={dbl:['⛔','כפל – שאיבה בסעיף וגם בתקורות','#d92d20'],none:['❌','לא מכוסה','#d92d20'],sec:['✅','שאיבה בסעיף','#12b76a'],oh:['🔗','שאיבה בתקורות','#2e90fa'],crane:['⬜','יציקה עם מנוף','#667085']};
+function pumpRows(){ CONCC=null; const M=bycMap('pump'), R=[];
+  for(const r of bycConcRows()){ const x=r.x, sb=parentOf(x.id); let hp=false; walk(x.ch||[],y=>{ if((y.t==='r'||y.t==='k')&&qcCat(y)==='שאיבה') hp=true; });
+    const L=M.get(x.id)||[], cr=x.pmp==='c'||(x.pmp!=='n'&&sb&&sb.pmp==='c');
+    const st=hp&&L.length?'dbl':hp?'sec':L.length?(L.length>1?'dbl':'oh'):cr?'crane':'none';
+    R.push({x,b:r.b,sb,q:secQty(x)||0,st,L,hp,cr,subCr:!!(sb&&sb.pmp==='c')}); }
+  return R; }
+function pumpTab(){ const R=pumpRows(), B={}; R.forEach(r=>{ const o=B[r.b]=B[r.b]||{sec:0,oh:0,crane:0,none:0,dbl:0,t:0}; o[r.st]+=r.q; o.t+=r.q; });
+  const T=Object.values(B).reduce((a,o)=>{ for(const k in o) a[k]=(a[k]||0)+o[k]; return a; },{});
+  const bad=R.filter(r=>r.st==='none'||r.st==='dbl'), only=window.__pqo;
+  const td=v=>`<td class="n">${v?fmtQ(Math.round(v*10)/10):''}</td>`;
+  const subs=[...new Map(R.filter(r=>r.sb).map(r=>[r.sb.id,r])).values()];
+  return `<p class="hint" style="margin:0">לכל סעיף בטון: איך הוא נשאב. <b>שאיבה בתקורות</b> = סעיף שאיבה (יח' מ"ק) עם "כמות לפי בטון" בטופס – מקדם 1, ובקודים את סעיפי הבטון שנשאבים בתקורות (למשל עד התקנת המנוף). <b>יציקה עם מנוף</b> = סימון כאן, ברמת תת-פרק או סעיף. כמויות כולל פחת.</p>
+  <div style="overflow:auto;margin:6px 0"><table class="boq" style="min-width:0;table-layout:auto"><thead><tr><th>מבנה</th><th>בטון מ"ק</th><th>✅ בסעיף</th><th>🔗 בתקורות</th><th>⬜ יציקה עם מנוף</th><th style="color:#d92d20">❌ לא מכוסה</th><th style="color:#d92d20">⛔ כפל</th></tr></thead><tbody>
+  ${Object.keys(B).sort().map(b=>{ const o=B[b]; return `<tr><td class="mono">${esc(b)}</td>${td(o.t)}${td(o.sec)}${td(o.oh)}${td(o.crane)}${td(o.none)}${td(o.dbl)}</tr>`; }).join('')}
+  <tr style="font-weight:700"><td>סה"כ</td>${td(T.t)}${td(T.sec)}${td(T.oh)}${td(T.crane)}${td(T.none)}${td(T.dbl)}</tr></tbody></table></div>
+  <details style="margin:4px 0"><summary style="cursor:pointer">סימון "יציקה עם מנוף" לפי תת-פרק (${subs.filter(r=>r.subCr).length} מסומנים)</summary><div style="display:flex;flex-wrap:wrap;gap:4px 12px;margin:6px 0">${subs.map(r=>`<label style="font-size:12px"><input type="checkbox" data-psub="${r.sb.id}" ${r.subCr?'checked':''}> ${esc(r.b)} · ${esc(r.sb.code||'')} ${esc((r.sb.name||'').slice(0,28))}</label>`).join('')}</div></details>
+  <div class="row" style="gap:14px;margin:6px 0"><b style="color:${bad.length?'#d92d20':'#12b76a'}">${bad.length} סעיפים לטיפול</b><label><input type="checkbox" id="pq_o" ${only?'checked':''}> רק לא מכוסה / כפל</label></div>
+  <div style="max-height:48vh;overflow:auto"><table class="boq" style="min-width:0;table-layout:auto"><thead><tr><th>מב</th><th>סעיף</th><th>תאור</th><th>מ"ק</th><th>סטטוס</th><th>יציקה עם מנוף</th><th></th></tr></thead><tbody>
+  ${R.filter(r=>!only||r.st==='none'||r.st==='dbl').sort((a,b)=>String(a.b).localeCompare(String(b.b))||String(a.x.code||'').localeCompare(String(b.x.code||''))).map(r=>{ const S=PSTAT[r.st];
+    return `<tr style="${r.st==='none'||r.st==='dbl'?'background:#fef3f2':''}"><td class="mono">${esc(r.b)}</td><td class="mono">${esc(r.x.code||'')}</td><td>${esc((r.x.name||'').slice(0,50))}</td><td class="n">${fmtQ(Math.round(r.q*100)/100)}</td><td style="color:${S[2]}">${S[0]} ${S[1]}${r.L.length?' <span class="hint" style="margin:0">('+r.L.map(y=>esc(y.code||'')).join(', ')+')</span>':''}</td>
+      <td>${r.hp||r.L.length?'':`<input type="checkbox" data-pcr="${r.x.id}" ${r.cr?'checked':''}>${r.subCr?' <span class="hint" style="margin:0">מתת-פרק</span>':''}`}</td><td><button class="ib" data-go="${r.x.id}" style="font-size:11px">פתח</button></td></tr>`; }).join('')||'<tr><td colspan="7" class="hint">אין סעיפי בטון</td></tr>'}
+  </tbody></table></div><div class="row" style="margin-top:8px"><button class="btn" id="pq_x">ייצוא לאקסל</button></div>`; }
+function pumpTabBind(h){
+  const o=document.getElementById('pq_o'); if(o) o.onchange=()=>{ window.__pqo=o.checked; qcDlg('p'); };
+  h.querySelectorAll('[data-psub]').forEach(i=>i.onchange=()=>{ const f=find(+i.dataset.psub); if(!f) return; if(i.checked) f.n.pmp='c'; else delete f.n.pmp; save(); qcDlg('p'); });
+  h.querySelectorAll('[data-pcr]').forEach(i=>i.onchange=()=>{ const f=find(+i.dataset.pcr); if(!f) return; const x=f.n, sb=parentOf(x.id), subC=!!(sb&&sb.pmp==='c');
+    if(i.checked){ if(subC) delete x.pmp; else x.pmp='c'; } else { if(subC) x.pmp='n'; else delete x.pmp; } save(); qcDlg('p'); });
+  const x=document.getElementById('pq_x'); if(x) x.onclick=()=>{ if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; }
+    const ws=XLSX.utils.json_to_sheet(pumpRows().map(r=>({'מבנה':r.b,'תת-פרק':(r.sb||{}).code||'','סעיף':r.x.code||'','תאור':r.x.name||'','בטון מ"ק (כולל פחת)':Math.round(r.q*100)/100,'סטטוס':PSTAT[r.st][1],'סעיף שאיבה בתקורות':r.L.map(y=>y.code).join(', ')})));
+    ws['!cols']=[{wch:6},{wch:9},{wch:12},{wch:45},{wch:12},{wch:26},{wch:18}];
+    const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'כיסוי שאיבה'); XLSX.writeFile(wb,`כיסוי שאיבה ${state.project||''} ${new Date().toLocaleDateString('he-IL').replace(/\./g,'-')}.xlsx`); };
+}
 function qcBadge(){ const b=document.getElementById('btnQC'); if(!b) return; try{ const F=qcRun().filter(x=>x.rule!==12); const e=F.filter(x=>x.sev==='err').length, w=F.filter(x=>x.sev==='warn').length; b.innerHTML='בקרה'+(e?` <span class="pill" style="background:#d92d20;color:#fff">${e}</span>`:'')+(w?` <span class="pill" style="background:#f79009;color:#fff">${w}</span>`:''); }catch(e){ b.textContent='בקרה'; } }
 let qcT=null; function qcSoon(){ clearTimeout(qcT); qcT=setTimeout(qcBadge,900); }
 function qcDlg(tab){
@@ -2642,18 +2684,20 @@ function qcDlg(tab){
     body+=`<div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px;align-items:center"><span class="label">ספים:</span>${[['pumpTol','שאיבה מעל בטון %'],['tileTol','ריצוף מעל שטח %'],['wConc','פחת בטון %'],['wTile','פחת ריצוף %'],['wSteel','פחת ברזל %'],['wDef','פחת אחר %'],['pctBaseTol','בסיס אחוז – פער %'],['pctMax','אחוז מקסימלי'],['priceX','מחיר חריג פי']].map(([k,l])=>`<label class="hint" style="margin:0;display:inline-flex;gap:4px;align-items:center">${l}<input data-qs="${k}" value="${S[k]}" style="width:46px;border:1px solid var(--line);border-radius:6px;padding:2px 4px" inputmode="decimal"></label>`).join('')}</div>
       <p class="hint" style="margin:6px 0 0">כלל 1 משווה לפי קבוצת מבנים: סעיף שאיבה משויך למבנים שבשדה "משרת מבנים" בטופס הסעיף, או לפי השם ("מבנים 01 + 05"), אחרת למבנה שלו. בטון = סעיפים ביחידת מ"ק (פרק 02 / "בטון" בשם). פחת בטון (סעיף מסומן "סעיף פחת" או שורה "פחת בטון") נוסף לסבולת.</p>`; }
   else if(tab==='w'){ body=wTab(); }
+  else if(tab==='p'){ body=pumpTab(); }
   else { const M=new Map(); walk(state.tree,x=>{ if((x.t==='r'||x.t==='k')&&x.code&&!M.has(x.code)) M.set(x.code,nodeName(x)||''); });
     const rows=[...M.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
     body=`<p class="hint" style="margin:0">הסיווג האוטומטי לפי קוד ותאור. שינוי כאן חל על כל השורות עם אותו קוד בפרויקט.</p><input id="qc_f" placeholder="סינון" style="margin:6px 0;border:1px solid var(--line);border-radius:6px;padding:4px 8px;width:220px">
       <div style="max-height:55vh;overflow:auto"><table class="boq" style="min-width:0;table-layout:auto"><thead><tr><th>קוד</th><th>תאור</th><th>אוטומטי</th><th>סיווג</th></tr></thead><tbody>${rows.map(([c,nm])=>{ const a=qcAutoCat(c,nm), o=(state.cats||{})[c]||''; return `<tr data-f="${esc((c+' '+nm).toLowerCase())}"><td class="num">${esc(c)}</td><td>${esc(nm.slice(0,60))}</td><td>${a}</td><td><select data-cat="${esc(c)}"><option value="">(אוטומטי)</option>${QC_CATS.map(k=>`<option ${o===k?'selected':''}>${k}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>`; }
   h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="בקרת כמויות" style="width:min(1000px,100%);max-height:92vh;overflow:auto">
-    <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">בקרת כמויות</h2><div class="seg"><button data-qt="f" ${tab==='f'?'class="on" style="font-weight:700"':''}>ממצאים</button><button data-qt="c" ${tab==='c'?'class="on" style="font-weight:700"':''}>סיווג משאבים</button><button data-qt="w" ${tab==='w'?'class="on" style="font-weight:700"':''}>פחת${(()=>{ const n=wScan().filter(r=>r.dbl).length; return n?` <span style="color:#d92d20">(${n} מצטבר)</span>`:''; })()}</button></div></div>
+    <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">בקרת כמויות</h2><div class="seg"><button data-qt="f" ${tab==='f'?'class="on" style="font-weight:700"':''}>ממצאים</button><button data-qt="c" ${tab==='c'?'class="on" style="font-weight:700"':''}>סיווג משאבים</button><button data-qt="p" ${tab==='p'?'class="on" style="font-weight:700"':''}>שאיבה${(()=>{ const n=pumpRows().filter(r=>r.st==='none'||r.st==='dbl').length; return n?` <span style="color:#d92d20">(${n})</span>`:''; })()}</button><button data-qt="w" ${tab==='w'?'class="on" style="font-weight:700"':''}>פחת${(()=>{ const n=wScan().filter(r=>r.dbl).length; return n?` <span style="color:#d92d20">(${n} מצטבר)</span>`:''; })()}</button></div></div>
     ${body}
     <div class="row" style="justify-content:flex-end;margin-top:10px">${tab==='f'?'<button class="btn" id="qc_x">ייצוא לאקסל</button>':''}<button class="btn" id="qc_close">סגור</button></div></div></div>`;
   document.getElementById('qc_close').onclick=()=>{ h.innerHTML=''; qcBadge(); };
   h.querySelectorAll('[data-qt]').forEach(b=>b.onclick=()=>qcDlg(b.dataset.qt));
   h.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>qcGo(b.dataset.go));
   if(tab==='w') wTabBind(h);
+  if(tab==='p') pumpTabBind(h);
   h.querySelectorAll('[data-qs]').forEach(i=>i.onchange=()=>{ const v=+i.value; if(!Number.isFinite(v)) return; state.qc=Object.assign({},state.qc||{},{[i.dataset.qs]:v}); save(); qcDlg('f'); });
   h.querySelectorAll('[data-cat]').forEach(s=>s.onchange=()=>{ state.cats=state.cats||{}; if(s.value) state.cats[s.dataset.cat]=s.value; else delete state.cats[s.dataset.cat]; save(); });
   const ff=document.getElementById('qc_f'); if(ff) ff.oninput=()=>{ const v=ff.value.toLowerCase(); h.querySelectorAll('tr[data-f]').forEach(tr=>tr.hidden=!!v&&!tr.dataset.f.includes(v)); };
