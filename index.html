@@ -589,7 +589,34 @@ function calcQty(n){ // from calc lines
   return t;
 }
 /* פחת (%): מגדיל את הכמות בשורה עצמה; מה שנגזר ממנה (Q / R) מקבל את הכמות כולל הפחת */
-const wVal=n=>{ const v=n&&n.w; if(v===undefined||v===null||String(v).trim()==='') return 0; const x=+String(v).replace('%','').replace(/,/g,''); return Number.isFinite(x)?x:0; };
+/* פחת כללי (טבלה משותפת לכל הפרויקטים, SETTINGS.wTbl) – פעיל רק בפרויקט שהפעיל אותו (state.wAuto).
+   כלל: {k:'code'|'sub'|'ch'|'topic', v, w, lv:'r'|'i', note}
+   lv='r' (ברירת מחדל) = פחת על כמות החומר (משאב/מק"ט). כמות הסעיף לא משתנה – רק כמות החומר ולכן המחיר.
+       כללי תת-פרק/פרק/נושא ברמה זו חלים רק על משאבי חומרים (מק"ט משאב שמתחיל ב-5).
+   lv='i' = פחת על כמות הסעיף (בטון): משנה את כמות הסעיף, ומשם את המשאבים (=Q) ואת הברזל המחושב לפי בטון (כולל פחת).
+       לא חל על סעיף "כמות לפי בטון" (ברזל) ולא על סעיף אחוזים.
+   עדיפות: פחת שהוקלד בשורה > "ללא פחת כללי" (wOff) > כלל מק"ט (הקידומת הארוכה) > תת-פרק > פרק > נושא.
+   משאב/מק"ט תחת סעיף שיש לו פחת סעיף – לא מקבל פחת כללי נוסף (מניעת כפל). */
+function wRules(){ try{ return (typeof SETTINGS!=='undefined'&&SETTINGS&&Array.isArray(SETTINGS.wTbl))?SETTINGS.wTbl:[]; }catch(e){ return []; } }
+function wCtx(n){ let s=n; while(s&&s.t!=='i') s=parentOf(s.id); const sb=s?parentOf(s.id):null, ch=sb?parentOf(sb.id):null; return {s,sc:String(sb&&sb.code||''),cc:String(ch&&ch.code||'')}; }
+function wPick(T,lv,codes,sc,cc,topic){
+  let best=null;
+  for(const r of T){ if(r.k!=='code'||(r.lv||'r')!==lv) continue; let v=String(r.v||'').trim(); if(!v) continue; const pre=v.endsWith('*'); if(pre) v=v.slice(0,-1); if(!v) continue;
+    if(codes.some(c=>c&&(pre?c.startsWith(v):c===v))&&(!best||v.length>best.len)) best={w:+r.w||0,len:v.length}; }
+  if(best) return {w:best.w,code:true};
+  const f=(k,v)=>v&&T.find(r=>r.k===k&&(r.lv||'r')===lv&&String(r.v||'').trim()===v);
+  const r=f('sub',sc)||f('ch',cc)||f('topic',topic); return r?{w:+r.w||0}:null; }
+function wAuto(n){ if(!n||!state.wAuto||n.wOff) return 0; const T=wRules(); if(!T.length) return 0;
+  if(n.t==='i'){ if(isByc(n)||isPct(n)||!T.some(r=>r.lv==='i')) return 0; const {sc,cc}=wCtx(n); const m=wPick(T,'i',[String(n.code||'')],sc,cc,sumTopicSec(n,cc)); return m?m.w:0; }
+  if(!(n.t==='r'||n.t==='k')) return 0;
+  if(hasItems(n)) return 0; /* משאב עם מק"טים – הפחת על המק"טים */
+  const {s,sc,cc}=wCtx(n); if(s&&wVal(s)) return 0;
+  const pr=n.t==='k'?parentOf(n.id):null; if(pr&&wOwn(pr)) return 0;
+  const code=String(n.code||''), rc=n.t==='k'?String((pr||{}).code||''):code;
+  const m=wPick(T,'r',[code,rc],sc,cc,s?sumTopicSec(s,cc):''); if(!m) return 0;
+  if(!m.code&&!rc.startsWith('5')) return 0; return m.w; }
+const wOwn=n=>{ const v=n&&n.w; return !(v===undefined||v===null||String(v).trim()===''); };
+const wVal=n=>{ if(!wOwn(n)) return wAuto(n); const x=+String(n.w).replace('%','').replace(/,/g,''); return Number.isFinite(x)?x:0; };
 const withW=(n,v)=>{ const w=wVal(n); return (!w||v===null||v===undefined||Number.isNaN(v))?v:v*(1+w/100); };
 function rQtyNet(n){
   if(n.calc && n.calc.length) return calcQty(n);
@@ -649,8 +676,8 @@ function isApt(n){ if(!n||UNORM(n.unit)!=='דירה'||(n.calc&&n.calc.length)) r
 const aptTag=n=>isApt(n)?`<div style="font-size:10px;color:var(--accent);white-space:nowrap" title="כמות אוטומטית = ${esc(aptSrc(n))}. הקלדת כמות = דריסה ידנית; מחיקתה מחזירה לאוטומטי">⌂ ${fmtQ(aptCount(n))} אוטו'</div>`:'';
 function secQty(n){ return withW(n,secQtyNet(n)); }
 const netQ=n=>n.t==='i'?secQtyNet(n):n.t==='r'?rQtyNet(n):kQtyNet(n);
-function wChip(n){ const w=wVal(n); if(!w) return ''; const net=netQ(n), g=withW(n,net);
-  return `<button class="ib" data-act="form" data-id="${n.id}" style="display:block;margin-inline-start:auto;margin-top:2px;font-size:10px;line-height:1.2;padding:1px 4px;border-radius:6px;background:#fff4e5;color:#b54708;border:1px solid #f5c48a;text-align:end" title="נטו ${fmtQ(net)} + פחת ${fmt(w,1)}% = ${fmtQ(g)}. לחיצה = טופס">פחת ${fmt(w,1)}%<br><span class="num">${fmtQ(g)}</span></button>`; }
+function wChip(n){ const w=wVal(n); if(!w) return ''; const net=netQ(n), g=withW(n,net); const au=!wOwn(n);
+  return `<button class="ib" data-act="form" data-id="${n.id}" style="display:block;margin-inline-start:auto;margin-top:2px;font-size:10px;line-height:1.2;padding:1px 4px;border-radius:6px;background:#fff4e5;color:#b54708;border:1px solid #f5c48a;text-align:end" title="נטו ${fmtQ(net)} + ${au?'פחת כללי (טבלת פחת)':'פחת'} ${fmt(w,1)}% = ${fmtQ(g)}. לחיצה = טופס">${au?'פחת כללי':'פחת'} ${fmt(w,1)}%<br><span class="num">${fmtQ(g)}</span></button>`; }
 const usesQ=r=>!(r.calc&&r.calc.length)&&(r.t==='k'?/[qr]/i:/q/i).test(String(r.qexpr||''));   // מק"ט עם R תלוי במשאב – לא מוביל
 const canLead=x=>{ if(usesQ(x)) return false; const q=leadQ(x); return !!q&&!Number.isNaN(q); };
 const UNORM=u=>{ u=String(u||'').replace(/\s/g,''); return ({'קוב':'מ"ק','קו"ב':'מ"ק','מ3':'מ"ק','מק':'מ"ק','מ2':'מ"ר','מר':'מ"ר','מ\'':'מ"א','מא':'מ"א','יח':'יח\'','יח"ד':'יח\'','קומפלט':'קומפ\'','דירות':'דירה','דיר\'':'דירה'})[u]||u; };
@@ -1395,7 +1422,7 @@ function drawBody(n){
         <div class="field"><label for="d_code">קוד סעיף</label><input id="d_code" class="mono" value="${esc(n.code)}"></div>
         <div class="field"><label for="d_unit">יחידה</label><select id="d_unit"><option></option>${UNITS.map(u=>`<option ${u===n.unit?'selected':''}>${esc(u)}</option>`).join('')}${n.unit&&!UNITS.includes(n.unit)?`<option selected>${esc(n.unit)}</option>`:''}</select></div>
         <div class="field"><label for="d_q">כמות סעיף${leadOf(n)?' (★ מהמשאב '+esc(leadOf(n).code||'')+')':n.calc.length?' (לפי חישוב ידני)':''}</label><input id="d_q" class="mono" value="${leadOf(n)?fmtQ(secQtyNet(n)):n.calc.length?fmtQ(calcQty(n)):esc(n.qty??'')}" ${n.calc.length||leadOf(n)?'readonly':''}></div>
-        <div class="field"><label for="d_w">פחת %</label><input id="d_w" class="mono" value="${esc(n.w??'')}" placeholder="0" inputmode="decimal"><div class="hint" id="d_wl" style="margin:2px 0 0"></div></div>
+        <div class="field"><label for="d_w">פחת %</label><input id="d_w" class="mono" value="${esc(n.w??'')}" placeholder="${(()=>{ const o=n.wOff; n.wOff=false; const a=state.wAuto?wAuto(n):0; n.wOff=o; return a?'כללי '+fmt(a,1):'0'; })()}" inputmode="decimal">${state.wAuto&&(()=>{ const o=n.wOff; n.wOff=false; const a=wAuto(n); n.wOff=o; return a; })()?`<label style="font-size:11px;display:flex;gap:4px;align-items:center;margin-top:2px"><input type="checkbox" id="d_woff" ${n.wOff?'checked':''}>ללא פחת כללי</label>`:''}<div class="hint" id="d_wl" style="margin:2px 0 0"></div></div>
       </div>
       <div class="grid2"><div class="field"><label for="d_serves">משרת מבנים (לבקרה, למשל 01,05)</label><input id="d_serves" class="mono" value="${esc(n.serves??'')}" placeholder="ריק = המבנה של הסעיף"></div>
         <div class="field"><label style="display:flex;gap:6px;align-items:center;margin-top:22px"><input type="checkbox" id="d_isw" ${n.isW?'checked':''}> סעיף פחת (נספר כסבולת בבקרה)</label></div></div>
@@ -1450,7 +1477,7 @@ function drawBody(n){
         <div class="field"><label for="d_unit">יחידה</label><select id="d_unit"><option></option>${UNITS.map(u=>`<option ${u===n.unit?'selected':''}>${esc(u)}</option>`).join('')}${n.unit&&!UNITS.includes(n.unit)?`<option selected>${esc(n.unit)}</option>`:''}</select></div>
         <div class="field"><label for="d_price">מחיר יחידה ₪ ${n.pdate?'<span class="hint" style="margin:0">('+esc(n.psrc||'')+' · '+fmtDt(n.pdate)+')</span>':''}</label><input id="d_price" class="mono" value="${esc(n.price??'')}"></div>
         <div class="field"><label for="d_q">כמות${n.calc.length?' (לפי חישוב ידני)':' (Q=סעיף, R=משאב)'}</label><input id="d_q" class="mono" value="${n.calc.length?fmtQ(calcQty(n)):esc(n.qexpr??'')}" ${n.calc.length?'readonly':''}></div>
-        <div class="field"><label for="d_w">פחת %</label><input id="d_w" class="mono" value="${esc(n.w??'')}" placeholder="0" inputmode="decimal"><div class="hint" id="d_wl" style="margin:2px 0 0"></div></div>
+        <div class="field"><label for="d_w">פחת %</label><input id="d_w" class="mono" value="${esc(n.w??'')}" placeholder="${(()=>{ const o=n.wOff; n.wOff=false; const a=state.wAuto?wAuto(n):0; n.wOff=o; return a?'כללי '+fmt(a,1):'0'; })()}" inputmode="decimal">${state.wAuto&&(()=>{ const o=n.wOff; n.wOff=false; const a=wAuto(n); n.wOff=o; return a; })()?`<label style="font-size:11px;display:flex;gap:4px;align-items:center;margin-top:2px"><input type="checkbox" id="d_woff" ${n.wOff?'checked':''}>ללא פחת כללי</label>`:''}<div class="hint" id="d_wl" style="margin:2px 0 0"></div></div>
       </div>
       ${calcBlock(n)}`;
     document.getElementById('d_item').onchange=e=>{ if(pickItem(n,e.target.value)){ save(); drawBody(n); } };
@@ -1468,7 +1495,7 @@ function drawBody(n){
         <div class="field"><label for="d_unit">יחידה</label><select id="d_unit"><option></option>${UNITS.map(u=>`<option ${u===n.unit?'selected':''}>${esc(u)}</option>`).join('')}</select></div>
         <div class="field"><label for="d_price">מחיר יחידה ₪</label><input id="d_price" class="mono" value="${esc(n.price??'')}"></div>
         <div class="field"><label for="d_q">כמות${n.calc.length?' (לפי חישוב ידני)':''}</label><input id="d_q" class="mono" value="${n.calc.length?fmtQ(calcQty(n)):esc(n.qexpr??'')}" ${n.calc.length?'readonly':''}></div>
-        <div class="field"><label for="d_w">פחת %</label><input id="d_w" class="mono" value="${esc(n.w??'')}" placeholder="0" inputmode="decimal"><div class="hint" id="d_wl" style="margin:2px 0 0"></div></div>
+        <div class="field"><label for="d_w">פחת %</label><input id="d_w" class="mono" value="${esc(n.w??'')}" placeholder="${(()=>{ const o=n.wOff; n.wOff=false; const a=state.wAuto?wAuto(n):0; n.wOff=o; return a?'כללי '+fmt(a,1):'0'; })()}" inputmode="decimal">${state.wAuto&&(()=>{ const o=n.wOff; n.wOff=false; const a=wAuto(n); n.wOff=o; return a; })()?`<label style="font-size:11px;display:flex;gap:4px;align-items:center;margin-top:2px"><input type="checkbox" id="d_woff" ${n.wOff?'checked':''}>ללא פחת כללי</label>`:''}<div class="hint" id="d_wl" style="margin:2px 0 0"></div></div>
       </div>
       ${calcBlock(n)}`;
     document.getElementById('d_res').onchange=e=>{
@@ -1481,7 +1508,8 @@ function drawBody(n){
     const dq=document.getElementById('d_q'); if(!n.calc.length){ dq.oninput=e=>{ n.qexpr=e.target.value; save(); updTot(n); }; dq.onchange=()=>releaseSp(n); }
     bindCalc(n,'qexpr');
   }
-  const dw=document.getElementById('d_w'); if(dw) dw.oninput=e=>{ n.w=e.target.value.trim(); if(!wVal(n)&&n.w==='') delete n.w; save(); updTot(n); };
+  const dw=document.getElementById('d_w'); if(dw) dw.oninput=e=>{ n.w=e.target.value.trim(); if(n.w==='') delete n.w; save(); updTot(n); };
+  const dwo=document.getElementById('d_woff'); if(dwo) dwo.onchange=e=>{ if(e.target.checked) n.wOff=true; else delete n.wOff; save(); updTot(n); };
   updTot(n);
 }
 function calcBlock(n){
@@ -1523,7 +1551,7 @@ function lineSums(n){
   const dq=document.getElementById('d_q'); if(dq&&n.calc.length) dq.value=fmtQ(calcQty(n));
 }
 function updTot(n){ const t=document.getElementById('dTot'); if(t) t.textContent='₪ '+fmt(total(n));
-  const wl=document.getElementById('d_wl'); if(wl){ const w=wVal(n), net=netQ(n); wl.textContent=w?`נטו ${fmtQ(net)} + ${fmt(w,1)}% = ${fmtQ(withW(n,net))} ${n.unit||''}`:'ללא פחת'; } }
+  const wl=document.getElementById('d_wl'); if(wl){ const w=wVal(n), net=netQ(n); wl.textContent=w?`נטו ${fmtQ(net)} + ${fmt(w,1)}%${wOwn(n)?'':' (פחת כללי)'} = ${fmtQ(withW(n,net))} ${n.unit||''}`:(n.wOff?'ללא פחת (בוטל פחת כללי)':'ללא פחת'); } }
 
 /* ---------- datalist ---------- */
 function buildResList(){
@@ -2991,7 +3019,7 @@ $('p_file').onchange=async e=>{
 };
 $('p_new').onclick=async()=>{
   const name='פרויקט חדש '+new Date().toLocaleDateString('he-IL');
-  try{ const r=await DB.createProject(name,{project:name,nid:1,tree:[],collapsed:{},lists:LISTS},'פרויקט חדש'); openProject(r.id); }catch(e){ toast(e.message); }
+  try{ const r=await DB.createProject(name,{project:name,nid:1,tree:[],collapsed:{},lists:LISTS,wAuto:true},'פרויקט חדש'); openProject(r.id); }catch(e){ toast(e.message); }
 };
 
 /* ---------- bulk add sections from pasted list (to several projects) ---------- */
@@ -3140,7 +3168,7 @@ function renderLists(){
   const used=new Set(); walk(state.tree,n=>{ if(n.t==='r'&&n.code) used.add(n.code); });
   const q=(window.__lq||'').toLowerCase();
   const rr=L.res.filter(r=>!q||(r.c+' '+r.n).toLowerCase().includes(q));
-  $('listTables').innerHTML=`<div class="panel" style="grid-column:1/-1"><h3>טבלת מק"טים</h3><p class="hint" style="margin-top:0">ייצוא "טבלת מקטים" מפריוריטי (משאב בקרה, מק"ט, תאור, יח', מחיר קניה אחרון, תאריך, מקור). הטבלה משותפת לכל הפרויקטים. מחירים שכבר הוזנו בפרויקטים לא משתנים.</p>
+  $('listTables').innerHTML=wTblHtml()+`<div class="panel" style="grid-column:1/-1"><h3>טבלת מק"טים</h3><p class="hint" style="margin-top:0">ייצוא "טבלת מקטים" מפריוריטי (משאב בקרה, מק"ט, תאור, יח', מחיר קניה אחרון, תאריך, מקור). הטבלה משותפת לכל הפרויקטים. מחירים שכבר הוזנו בפרויקטים לא משתנים.</p>
     <div class="row" style="display:flex;gap:8px;align-items:center"><button class="btn" id="btnItems">טען טבלת מק"טים…</button><input type="file" id="fileItems" accept=".xlsx,.xls" hidden><span class="hint" id="itemsInfo" style="margin:0"></span></div></div>
     <div class="panel" style="grid-column:1/-1"><h3>משאבים (${L.res.length})</h3>
     <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
@@ -3161,6 +3189,26 @@ function renderLists(){
     if(!c||!n){ toast('חובה מק"ט ותיאור'); return; } if(L.res.some(r=>r.c===c)){ toast('המק"ט כבר קיים'); return; }
     try{ await editRes(c,{n,u,off:false}); window.__lq=c; renderLists(); toast('המשאב נוסף לכל הפרויקטים'); }catch(e){ toast('שגיאה בשמירה בענן: '+e.message); } };
 }
+/* ---------- טבלת פחת כללי (משותפת לכל הפרויקטים) ---------- */
+const WK={code:'מק"ט משאב/פריט',sub:'תת-פרק',ch:'פרק',topic:'נושא'}, WTOPICS=['בטון','ברזל','טפסנות','בלוקים','ריצוף','חיפוי','איטום','טיח','צבע'];
+function wTblHtml(){ const T=wRules(); let nA=0,nI=0; if(state.wAuto) walk(state.tree,x=>{ if(!wOwn(x)&&wAuto(x)) (x.t==='i'?nI++:nA++); });
+  const opt=(o,v)=>Object.entries(o).map(([k,t])=>`<option value="${k}" ${k===v?'selected':''}>${t}</option>`).join('');
+  return `<div class="panel" style="grid-column:1/-1"><h3>טבלת פחת כללי (${T.length})</h3>
+  <p class="hint" style="margin-top:0">משותפת לכל הפרויקטים. <b>חומר</b> = פחת על כמות החומר בלבד (משאבי 5-xxxx): כמות הסעיף לא משתנה, המחיר עולה. <b>כמות סעיף</b> (לבטון) = משנה את כמות הסעיף, ומשם המשאבים (=Q) והברזל המחושב לפי בטון. כלל מק"ט חל על כל סוג משאב; "*" בסוף = קידומת. סדר: מק"ט › תת-פרק › פרק › נושא. פחת שהוקלד בשורה גובר; בשורה אפשר לסמן "ללא פחת כללי".</p>
+  <label style="display:flex;gap:6px;align-items:center;margin:4px 0 8px"><input type="checkbox" id="wt_on" ${state.wAuto?'checked':''}><b>להחיל פחת כללי בפרויקט זה</b>${state.wAuto?`<span class="hint" style="margin:0"> · חל כעת על ${nA} משאבים/מק"טים ו-${nI} סעיפים</span>`:'<span class="hint" style="margin:0"> · כבוי – הסכומים לא מושפעים</span>'}</label>
+  <datalist id="wt_tp">${WTOPICS.map(t=>`<option value="${t}">`).join('')}</datalist>
+  <div class="scroll"><table><tr><th>לפי</th><th>ערך</th><th>על</th><th>פחת %</th><th>הערה</th><th></th></tr>
+  ${T.map((r,i)=>`<tr><td><select data-wt="${i}" data-f="k">${opt(WK,r.k)}</select></td><td><input class="mono" data-wt="${i}" data-f="v" value="${esc(r.v||'')}" ${r.k==='topic'?'list="wt_tp"':''} style="width:110px"></td><td><select data-wt="${i}" data-f="lv">${opt({r:'חומר',i:'כמות סעיף'},r.lv||'r')}</select></td><td><input class="mono" data-wt="${i}" data-f="w" value="${esc(r.w??'')}" inputmode="decimal" style="width:60px"></td><td><input data-wt="${i}" data-f="note" value="${esc(r.note||'')}" style="width:180px"></td><td><button class="btn small" data-wtdel="${i}">מחק</button></td></tr>`).join('')}
+  </table></div><button class="btn small" id="wt_add" style="margin-top:6px">+ כלל</button></div>`; }
+async function wTblSave(T){ SETTINGS=Object.assign({},SETTINGS,{wTbl:T}); render(); renderLists(); try{ if(DB&&DB.saveSettings) await DB.saveSettings(SETTINGS); toast('טבלת הפחת נשמרה – משותפת לכל הפרויקטים'); }catch(e){ toast('שגיאה בשמירה בענן: '+e.message); } }
+document.getElementById('listTables').addEventListener('change',e=>{ const t=e.target;
+  if(t.id==='wt_on'){ if(t.checked) state.wAuto=true; else delete state.wAuto; save(); render(); renderLists(); toast(t.checked?'פחת כללי הופעל בפרויקט':'פחת כללי כובה בפרויקט'); return; }
+  if(!t.hasAttribute('data-wt')) return; const T=wRules().map(r=>Object.assign({},r)), i=+t.dataset.wt, f=t.dataset.f; if(!T[i]) return;
+  let v=t.value.trim(); if(f==='w'){ v=v.replace('%',''); if(v!==''&&!Number.isFinite(+v)){ toast('פחת חייב להיות מספר'); renderLists(); return; } v=v===''?'':+v; }
+  T[i][f]=v; wTblSave(T); });
+document.getElementById('listTables').addEventListener('click',e=>{ const t=e.target;
+  if(t.id==='wt_add'){ wTblSave([...wRules(),{k:'topic',v:'',lv:'r',w:'',note:''}]); return; }
+  if(t.hasAttribute('data-wtdel')){ const T=wRules().slice(); T.splice(+t.dataset.wtdel,1); wTblSave(T); } });
 document.getElementById('listTables').addEventListener('change',async e=>{
   const t=e.target; let code,patch;
   if(t.dataset.rn){ code=t.dataset.rn; const v=t.value.trim(); if(!v){ toast('תיאור לא יכול להיות ריק'); renderLists(); return; } patch={n:v}; }
