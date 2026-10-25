@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='25.10.26-3'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='25.10.26-4'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2117,7 +2117,8 @@ function renderProj0(){
        <tr style="font-weight:700"><td>ברוטו</td><td class="n num">${gross?fmt(gross):'—'}</td></tr><tr style="font-weight:700"><td>שווה-ערך</td><td class="n num">${eq?fmt(eq):'—'}</td></tr>
        <tr><td colspan="2" class="hint" style="margin:0;font-size:11px">ברוטו = עיקרי${pfFlag('balcInMain')?' ללא מרפסות':''} ${fmt(main)} + מרפסות ${fmt(balc)} + שירות${pfFlag('baseInServ')?' ללא מרתף':''} ${fmt(serv)} + מרתף ${fmt(base)}</td></tr></table></div>
      <div><b style="font-size:13px">מגרש ופיתוח (מ"ר)</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_X.map(([k,l])=>`<tr><td>${l}</td><td class="n">${inp(`data-pp="${k}"`,P[k])}</td></tr>`).join('')}</table></div>
-     <div><b style="font-size:13px">כמויות ומשך</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_N.map(([k,l])=>`<tr><td>${l}</td><td class="n">${k==='units'?inp('data-pu="1"',state.units,90,projU()?fmt(projU()):''):inp(`data-pp="${k}"`,P[k])}</td></tr>`).join('')}
+     <div><b style="font-size:13px">כמויות ומשך</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_N.map(([k,l])=>`<tr><td>${l}</td><td class="n">${k==='units'?inp('data-pu="1"',state.units,90,projU()?fmt(projU()):''):inp(`data-pp="${k}"`,P[k])}</td></tr>`+(k==='units'&&state.tree.filter(b=>b.t==='b').length>1?(()=>{ const BB=state.tree.filter(b=>b.t==='b'), su=BB.reduce((a,b)=>a+(aptNum(b.units)||0),0), UU=aptNum(state.units)||projU();
+         return BB.map(b=>`<tr><td style="padding-inline-start:14px;font-size:12px">↳ דירות במבנה ${esc(b.code||'')}</td><td class="n">${inp(`data-bu="${b.id}"`,b.units,70,'')}</td></tr>`).join('')+`<tr><td style="padding-inline-start:14px;font-size:11px" class="hint">סה"כ במבנים (לכמות "דירה" בכל מבנה)</td><td class="n num" style="font-size:12px;${su&&UU&&su!==UU?'color:#d92d20;font-weight:700':''}" title="${su&&UU&&su!==UU?'לא שווה ליח&quot;ד בפרויקט':''}">${su||'—'}</td></tr>`; })():'')).join('')}
        <tr><td>שיטת ביצוע</td><td class="n"><select data-pp="method" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px"><option></option>${['ברנוביץ','קונבנציונלי','משולב','טרומי'].map(x=>`<option ${P.method===x?'selected':''}>${x}</option>`).join('')}</select></td></tr></table></div>
      <div><b style="font-size:13px">תמהיל דירות</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_MIX.map(([k,l])=>`<tr><td>${l}</td><td class="n">${inp(`data-mix="${k}"`,mix[k],70)}</td></tr>`).join('')}
        <tr style="font-weight:700"><td>סה"כ</td><td class="n num" ${ms&&U&&ms!==U?'style="color:#d92d20"':''}>${ms||'—'}</td></tr></table></div>
@@ -2150,6 +2151,7 @@ document.addEventListener('change',e=>{ const x=e.target; if(pfRendering||!x.clo
   else if(x.dataset.pp){ if(raw==='') delete P[x.dataset.pp]; else P[x.dataset.pp]=raw; if(x.dataset.pp==='parkU'||x.dataset.pp==='parkA') delete P.parking; }
   else if(x.dataset.pc){ P.coef=P.coef||{}; if(raw==='') delete P.coef[x.dataset.pc]; else P.coef[x.dataset.pc]=raw; }
   else if(x.dataset.pu){ if(raw==='') delete state.units; else state.units=raw; }
+  else if(x.dataset.bu){ const b=state.tree.find(y=>String(y.id)===x.dataset.bu); if(!b) return; if(raw==='') delete b.units; else b.units=raw; }
   else if(x.dataset.mix){ P.mix=P.mix||{}; if(raw==='') delete P.mix[x.dataset.mix]; else P.mix[x.dataset.mix]=raw; }
   else if(x.dataset.role){ const b=state.tree.find(y=>String(y.id)===x.dataset.role); if(!b) return; b.role=x.value; }
   else if(x.dataset.pt){ P.char=P.char||{}; const v=String(x.value).trim(); if(v) P.char[x.dataset.pt]=v; else delete P.char[x.dataset.pt]; }
