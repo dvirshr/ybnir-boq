@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='25.10.26-4'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='26.10.26-1'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -1121,7 +1121,7 @@ function selBar(){ let b=document.getElementById('selBar'); if(!b){ b=document.c
   if(!SELMODE){ b.hidden=true; return; } b.hidden=false;
   const T=selTop(); const cnt={c:0,s:0,i:0}; let secs=0, sum=0; T.forEach(f=>{ cnt[f.n.t]++; sum+=total(f.n); if(f.n.t==='i') secs++; else walk(f.n.ch,x=>{ if(x.t==='i') secs++; }); });
   b.innerHTML=T.length?`<b>נבחרו:</b> ${[cnt.c?cnt.c+' פרקים':'',cnt.s?cnt.s+' תתי-פרקים':'',cnt.i?cnt.i+' סעיפים':''].filter(Boolean).join(' · ')} <span class="hint" style="margin:0">(${secs} סעיפים · ${fmt(sum)} ₪)</span>
-    <button class="btn small primary" id="sel_mv">העבר / העתק…</button><button class="btn small" id="sel_pull" title="השלמת משאבים ומחירים לסעיפים שנבחרו מסעיפים מקבילים בפרויקט אחר – הכמויות נשארות">📥 משאבים מפרויקט אחר</button><button class="btn small" id="sel_clip" title="העתקה ללוח – פותחים פרויקט אחר ולוחצים &quot;📋 הדבק&quot;">📋 לפרויקט אחר</button><button class="btn small" id="sel_clr">נקה בחירה</button><button class="btn small" id="sel_off">סגור</button>`
+    <button class="btn small primary" id="sel_mv">העבר / העתק…</button><button class="btn small" id="sel_pull" title="השלמת משאבים ומחירים לסעיפים שנבחרו מסעיפים מקבילים במבנה אחר בפרויקט או בפרויקט אחר – הכמויות נשארות">📥 משאבים ממבנה / פרויקט אחר</button><button class="btn small" id="sel_clip" title="העתקה ללוח – פותחים פרויקט אחר ולוחצים &quot;📋 הדבק&quot;">📋 לפרויקט אחר</button><button class="btn small" id="sel_clr">נקה בחירה</button><button class="btn small" id="sel_off">סגור</button>`
     :`<b>בחירה מרובה:</b> <span class="hint" style="margin:0">סמן בתיבות שליד הקוד – פרקים, תתי-פרקים וסעיפים, גם ממבנים שונים. בחירה של פרק / תת-פרק כוללת את כל מה שמתחתיו.</span><button class="btn small" id="sel_off">סגור</button>`;
   const q=i=>document.getElementById(i);
   if(q('sel_mv')) q('sel_mv').onclick=()=>bulkMoveDlg();
@@ -1138,14 +1138,16 @@ function getCh(b,code){ let c=b.ch.find(x=>x.t==='c'&&x.code===code); if(!c){ c=
 function getSub(b,code){ const c=getCh(b,code.slice(0,2)); let s=c.ch.find(x=>x.t==='s'&&x.code===code); if(!s){ s=mk('s',{code}); c.ch.push(s); sortByCode(c.ch); } return s; }
 /* ---------- משיכת משאבים + מחירים לסעיף קיים מסעיף מקביל בפרויקט אחר (הכמות של הסעיף נשארת) ---------- */
 function withSt(st,fn){ const keep=state,kOH=OHC; try{ st=Object.assign({},st); st.tree=st.tree||[]; st.lists=Object.assign({},keep.lists||{},st.lists||{}); st.collapsed=st.collapsed||{}; state=st; PMAP=null; PCTB=null; CONCC=null; OHC=null; return fn(); } finally { state=keep; PMAP=null; PCTB=null; CONCC=null; OHC=kOH; } }
-function pullSecCatalog(st,pname){ return withSt(st,()=>{ const out=[];
+/* חתימת משאבים לסעיף – להשוואה (קוד, נוסחה, מחיר, פחת; מק"טים) */
+const resSig=ch=>JSON.stringify((ch||[]).filter(c=>c.t==='r').map(r=>[r.code||'',String(r.qexpr??''),String(r.price??''),String(r.w??''),(r.ch||[]).filter(k=>k.t==='k').map(k=>[k.code||'',String(k.qexpr??''),String(k.price??''),String(k.w??'')])]));
+function pullSecCatalog(st,pname,self){ return withSt(st,()=>{ const out=[];
   walk(state.tree,(n,p)=>{ if(n.t!=='i'||isPct(n)) return; const res=(n.ch||[]).filter(c=>c.t==='r'); if(!res.length&&!secPriced(n)) return;
     const q=secQty(n); let conv=0; const tpl=JSON.parse(JSON.stringify(res));
     // כמות קבועה (מספר / פירוט) – נשמרת גם כיחס (_ratio) לבחירה בזמן ההעתקה; נוסחאות (Q / R) עוברות כמו שהן
     const fix=(x,orig)=>{ let v=null; if(orig.calc&&orig.calc.length) v=calcQty(orig); else { const e=String(orig.qexpr??'').trim(); if(e&&!/[QR]/i.test(e)) v=evalExpr(e); }
-      if(v!==null&&!Number.isNaN(v)){ x._fixed=1; if(q>0) x._ratio='=Q*'+(+(v/q).toFixed(6)); conv++; } delete x.lead; if(evalExpr(x.price)) x.psrc='פרויקט '+pname; delete x.files; };
+      if(v!==null&&!Number.isNaN(v)){ x._fixed=1; if(q>0) x._ratio='=Q*'+(+(v/q).toFixed(6)); conv++; } delete x.lead; if(evalExpr(x.price)&&!self) x.psrc='פרויקט '+pname; delete x.files; };
     tpl.forEach((r,i)=>{ fix(r,res[i]); (r.ch||[]).forEach((k,j)=>fix(k,res[i].ch[j])); });
-    const t=total(n); out.push({b:(p[0]||{}).code||'',bn:(p[0]||{}).name||'',code:n.code||'',name:n.name||'',unit:n.unit||'',q,up:q?t/q:0,sp:res.length?'':String(n.sp??''),tpl,nres:res.length,nk:res.reduce((a,r)=>a+((r.ch||[]).filter(k=>k.t==='k').length),0),conv}); });
+    const t=total(n); out.push({sig:resSig(n.ch),id:n.id,b:(p[0]||{}).code||'',bn:(p[0]||{}).name||'',code:n.code||'',name:n.name||'',unit:n.unit||'',q,up:q?t/q:0,sp:res.length?'':String(n.sp??''),tpl,nres:res.length,nk:res.reduce((a,r)=>a+((r.ch||[]).filter(k=>k.t==='k').length),0),conv}); });
   return out; }); }
 function pullSecRank(t,C){ const u=UNORM(t.unit); return C.map(c=>({c,sc:c.code&&c.code===t.code&&UNORM(c.unit)===u?1.01:(UNORM(c.unit)===u?dupSim(t.name,c.name):dupSim(t.name,c.name)*0.6)})).filter(x=>x.sc>=0.35).sort((a,b)=>b.sc-a.sc); }
 async function pullSecDlg(targets){
@@ -1153,16 +1155,19 @@ async function pullSecDlg(targets){
   const h=document.getElementById('printDlgHost'); let projs=[]; try{ projs=(await DB.listProjects()).filter(r=>!CUR||r.id!==CUR.id); }catch(e){ toast(e.message); return; }
   const one=targets.length===1; let C=[], src=null, srcName='', flt='';
   const curUp=n=>{ const q=secQty(n); return q?total(n)/q:0; };
-  const rows=()=>targets.map(t=>{ const R=pullSecRank(t,C); const best=R[0]; const has=hasPricedRes(t); return {t,R,pick:best&&(one||best.sc>=0.75)?best.c:null,on:!!(best&&(one||best.sc>=0.75)&&!has),has}; });
+  let SELF=false; const tb=t=>{ const f=find(t.id); return f&&f.path[0]?f.path[0].code:''; };
+  const rows=()=>targets.map(t=>{ let R=pullSecRank(t,SELF?C.filter(c=>c.id!==t.id):C); const best=R[0]; const has=hasPricedRes(t);
+    if(SELF){ const pick=best&&best.sc>1?best.c:null; const same=!!pick&&pick.sig===resSig(t.ch); return {t,R,pick,on:!!pick&&!same,has:false,same}; }
+    return {t,R,pick:best&&(one||best.sc>=0.75)?best.c:null,on:!!(best&&(one||best.sc>=0.75)&&!has),has}; });
   let RW=[];
   h.innerHTML=`<div class="pdlg" style="z-index:9999"><div class="box" style="width:min(1100px,100%);max-height:94vh;overflow:auto">
-    <h2>📥 משאבים ומחירים מפרויקט אחר</h2>
+    <h2>📥 משאבים ומחירים ממבנה / פרויקט אחר</h2>
     <p class="hint" style="margin:0 0 6px">מעתיק לסעיף את המשאבים, המק"טים והמחירים מסעיף מקביל בפרויקט המקור. <b>הכמות של הסעיף נשארת.</b> נוסחאות (=Q, =R) עוברות כמו שהן. מקור המחיר נרשם ("אקוויוולנטי – שם הפרויקט").</p>
     <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
-      <label class="hint" style="margin:0">פרויקט מקור <select id="ps_src"><option value="">בחר…</option>${projs.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select></label>
+      <label class="hint" style="margin:0">פרויקט מקור <select id="ps_src"><option value="">בחר…</option>${(()=>{ const tB=new Set(targets.map(t=>{ const f=find(t.id); return f&&f.path[0]?f.path[0].code:''; })); const Bs=state.tree.filter(b=>b.t==='b'&&b.code); return Bs.length>1?`<optgroup label="פרויקט זה – מבנה מקור">${Bs.map(b=>`<option value="self:${esc(b.code)}" ${tB.has(b.code)?'':''}>מבנה ${esc(b.code)} ${esc(b.name||'')}${tB.has(b.code)?' (יעד)':''}</option>`).join('')}</optgroup>`:''; })()}<optgroup label="פרויקט אחר">${projs.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('')}</optgroup></select></label>
       <label class="hint" style="margin:0"><input type="radio" name="ps_m" value="rep" checked> להחליף משאבים קיימים</label>
       <label class="hint" style="margin:0"><input type="radio" name="ps_m" value="add"> להוסיף לקיימים</label>
-      <label class="hint" style="margin:0" title="משאב / מק&quot;ט עם מספר קבוע או פירוט כמויות בפרויקט המקור">כמות קבועה במשאב: <select id="ps_fx"><option value="empty">ריק – אחשב בעצמי</option><option value="same">כמו במקור</option><option value="ratio">יחס מכמות הסעיף (=Q×…)</option></select></label>
+      <label class="hint" style="margin:0" title="משאב / מק&quot;ט עם מספר קבוע או פירוט כמויות בפרויקט המקור">כמות קבועה במשאב: <select id="ps_fx"><option value="keep">שמור כמות קיימת ביעד (לפי קוד משאב), חדש = ריק</option><option value="empty" selected>ריק – אחשב בעצמי</option><option value="same">כמו במקור</option><option value="ratio">יחס מכמות הסעיף (=Q×…)</option></select></label>
       ${one?'<input id="ps_f" placeholder="חיפוש סעיף במקור (קוד / תאור)" style="flex:1;min-width:180px">':''}
       <b id="ps_n"></b></div>
     <div id="ps_body" style="margin-top:8px;max-height:58vh;overflow:auto;border:1px solid var(--line);border-radius:8px"><div class="hint" style="padding:10px">בחר פרויקט מקור</div></div>
@@ -1176,26 +1181,32 @@ async function pullSecDlg(targets){
       B.innerHTML=`<div style="padding:6px 8px;background:var(--bg)"><b>יעד:</b> <span class="mono">${esc(t.code)}</span> ${esc(t.name)} · ${esc(t.unit)} · כמות ${fmtQ(secQty(t))} · מחיר יח' נוכחי ${fmt(curUp(t),2)}${RW[0].has?' · <span style="color:#b54708">יש כבר משאבים מתומחרים</span>':''}</div>
         <table class="boq" style="min-width:0;width:100%;table-layout:auto;font-size:12px"><thead><tr><th></th><th>סעיף במקור</th><th class="n">התאמה</th><th class="n">מחיר יח' במקור</th></tr></thead><tbody>${L.map((x,i)=>`<tr><td><input type="radio" name="ps_pick" value="${C.indexOf(x.c)}" ${RW[0].pick===x.c?'checked':''}></td><td>${srcCell(x.c)}</td><td class="n">${x.sc?(x.sc>1?'אותו קוד':Math.round(x.sc*100)+'%'):''}</td><td class="n num">${fmt(x.c.up,2)}</td></tr>`).join('')||'<tr><td colspan="4" class="hint">אין התאמות – חפש בשדה החיפוש</td></tr>'}</tbody></table>`;
       B.querySelectorAll('[name="ps_pick"]').forEach(r=>r.onchange=()=>{ RW[0].pick=C[+r.value]; RW[0].on=true; cnt(); }); }
-    else { B.innerHTML=`<table class="boq" style="min-width:0;width:100%;table-layout:auto;font-size:12px"><thead><tr><th><input type="checkbox" id="ps_all"></th><th>סעיף יעד</th><th class="n">כמות</th><th class="n">מחיר יח' נוכחי</th><th>סעיף במקור</th><th class="n">מחיר יח' במקור</th></tr></thead><tbody>${RW.map((w,i)=>`<tr style="${w.has?'background:#fffaeb':''}"><td><input type="checkbox" data-pi="${i}" ${w.on&&w.pick?'checked':''} ${w.pick?'':'disabled'}></td><td><span class="mono">${esc(w.t.code)}</span> ${esc(w.t.name.slice(0,50))}${w.has?'<div class="hint" style="margin:0;font-size:11px;color:#b54708">יש משאבים מתומחרים – לא מסומן מראש</div>':''}</td><td class="n num">${fmtQ(secQty(w.t))} ${esc(w.t.unit)}</td><td class="n num">${fmt(curUp(w.t),2)}</td><td><select data-ps="${i}" style="max-width:420px"><option value="">— ללא —</option>${w.R.slice(0,8).map(x=>`<option value="${C.indexOf(x.c)}" ${w.pick===x.c?'selected':''}>${esc((x.c.b?x.c.b+'.':'')+x.c.code+' '+x.c.name.slice(0,55))} (${x.sc>1?'אותו קוד':Math.round(x.sc*100)+'%'})</option>`).join('')}</select></td><td class="n num">${w.pick?fmt(w.pick.up,2):''}</td></tr>`).join('')}</tbody></table>`;
+    else { B.innerHTML=`<table class="boq" style="min-width:0;width:100%;table-layout:auto;font-size:12px"><thead><tr><th><input type="checkbox" id="ps_all"></th><th>סעיף יעד</th><th class="n">כמות</th><th class="n">מחיר יח' נוכחי</th><th>סעיף במקור</th><th class="n">מחיר יח' במקור</th></tr></thead><tbody>${RW.map((w,i)=>`<tr style="${w.has?'background:#fffaeb':''}"><td><input type="checkbox" data-pi="${i}" ${w.on&&w.pick?'checked':''} ${w.pick?'':'disabled'}></td><td><span class="mono">${esc(w.t.code)}</span> ${esc(w.t.name.slice(0,50))}${w.has?'<div class="hint" style="margin:0;font-size:11px;color:#b54708">יש משאבים מתומחרים – לא מסומן מראש</div>':''}${SELF&&w.pick?`<div class="hint" style="margin:0;font-size:11px;color:${w.same?'#12b76a':'#b54708'}">${w.same?'✓ זהה למקור':'≠ שונה מהמקור'}</div>`:''}${SELF&&!w.pick?'<div class="hint" style="margin:0;font-size:11px">אין סעיף באותו קוד במבנה המקור</div>':''}</td><td class="n num">${fmtQ(secQty(w.t))} ${esc(w.t.unit)}</td><td class="n num">${fmt(curUp(w.t),2)}</td><td><select data-ps="${i}" style="max-width:420px"><option value="">— ללא —</option>${w.R.slice(0,8).map(x=>`<option value="${C.indexOf(x.c)}" ${w.pick===x.c?'selected':''}>${esc((x.c.b?x.c.b+'.':'')+x.c.code+' '+x.c.name.slice(0,55))} (${x.sc>1?'אותו קוד':Math.round(x.sc*100)+'%'})</option>`).join('')}</select></td><td class="n num">${w.pick?fmt(w.pick.up,2):''}</td></tr>`).join('')}</tbody></table>`;
       B.querySelectorAll('[data-pi]').forEach(x=>x.onchange=()=>{ RW[+x.dataset.pi].on=x.checked; cnt(); });
       B.querySelectorAll('[data-ps]').forEach(x=>x.onchange=()=>{ const w=RW[+x.dataset.ps]; w.pick=x.value===''?null:C[+x.value]; w.on=!!w.pick; draw(); });
       const al=$q('ps_all'); if(al) al.onchange=()=>{ RW.forEach(w=>{ if(w.pick) w.on=al.checked; }); draw(); }; }
     cnt(); };
   const cnt=()=>{ const n=RW.filter(w=>w.on&&w.pick).length; $q('ps_n').textContent=src?`${n} מתוך ${targets.length} סעיפים`:''; $q('ps_go').disabled=!n; };
   $q('ps_src').onchange=async()=>{ src=$q('ps_src').value; C=[]; RW=[]; if(!src){ draw(); return; } $q('ps_body').innerHTML='<div class="hint" style="padding:10px">טוען…</div>';
-    try{ const P=await DB.getProject(src); srcName=P.name; C=pullSecCatalog(P.state,P.name); RW=rows(); draw(); }catch(e){ toast('טעינה נכשלה: '+e.message); } };
+    if(src.startsWith('self:')){ const b=src.slice(5); SELF=true; srcName='מבנה '+b; C=pullSecCatalog(state,srcName,true).filter(c=>c.b===b); $q('ps_fx').value='keep'; RW=rows(); draw(); return; }
+    SELF=false; try{ const P=await DB.getProject(src); srcName=P.name; C=pullSecCatalog(P.state,P.name); RW=rows(); draw(); }catch(e){ toast('טעינה נכשלה: '+e.message); } };
   if(one) $q('ps_f').oninput=e=>{ flt=e.target.value.trim().toLowerCase(); if(C.length) draw(); };
   $q('ps_go').onclick=async()=>{ const rep=document.querySelector('[name="ps_m"]:checked').value==='rep'; const S=RW.filter(w=>w.on&&w.pick); if(!S.length) return;
     try{ if(typeof flushCloud==='function'){ await flushCloud(); await pushCloud(false,'לפני משיכת משאבים מ-'+srcName); } }catch(e){}
     const d=new Date().toLocaleDateString('he-IL'); let nr=0;
-    const fx=$q('ps_fx').value; const fxc=x=>{ if(x._fixed){ if(fx==='empty'){ x.qexpr=''; x.calc=[]; } else if(fx==='ratio'&&x._ratio){ x.qexpr=x._ratio; x.calc=[]; } } delete x._fixed; delete x._ratio; (x.ch||[]).forEach(fxc); return x; };
-    for(const w of S){ const n=w.t, c=w.pick; const cl=c.tpl.map(r=>fxc(cloneNode(r)));
+    const fx=$q('ps_fx').value; const Q0=new Map(S.map(w=>[w.t.id,secQty(w.t)]));
+    const QF=['qexpr','calc','lead','w','wOff']; const keepQ=(x,old)=>{ QF.forEach(k=>{ if(old[k]!==undefined) x[k]=JSON.parse(JSON.stringify(old[k])); else delete x[k]; }); delete x._fixed; delete x._ratio; };
+    const keepFx=(cl,oldCh)=>{ const M=new Map(); (oldCh||[]).forEach(o=>{ if(o.code&&!M.has(o.code)) M.set(o.code,o); });
+      cl.forEach(x=>{ const o=x.code&&M.get(x.code); if(o){ M.delete(x.code); keepQ(x,o); } else if(x._fixed){ x.qexpr=''; x.calc=[]; } delete x._fixed; delete x._ratio; if(x.t==='r') keepFx((x.ch||[]).filter(k=>k.t==='k'),o?(o.ch||[]).filter(k=>k.t==='k'):[]); }); };
+    const fxc=x=>{ if(fx==='keep') return x; if(x._fixed){ if(fx==='empty'){ x.qexpr=''; x.calc=[]; } else if(fx==='ratio'&&x._ratio){ x.qexpr=x._ratio; x.calc=[]; } } delete x._fixed; delete x._ratio; (x.ch||[]).forEach(fxc); return x; };
+    for(const w of S){ const n=w.t, c=w.pick; const cl=c.tpl.map(r=>fxc(cloneNode(r))); if(fx==='keep') keepFx(cl,(n.ch||[]).filter(x=>x.t==='r'));
       if(rep) n.ch=(n.ch||[]).filter(x=>x.t!=='r'); n.ch=(n.ch||[]).concat(cl); nr+=cl.length;
       if(c.sp&&!cl.length) n.sp=c.sp; else if(cl.length&&spSet(n)) delete n.sp;
-      if(!n.pb){ n.pb='x'; n.pbRef=srcName; }
-      n.note=((n.note?n.note+' | ':'')+`משאבים ומחירים מ-${srcName} ${(c.b?c.b+'.':'')+c.code} (${d})`).trim(); }
+      if(!n.pb&&!SELF){ n.pb='x'; n.pbRef=srcName; }
+      if(!SELF) n.note=((n.note?n.note+' | ':'')+`משאבים ומחירים מ-${srcName} ${(c.b?c.b+'.':'')+c.code} (${d})`).trim(); }
     PMAP=null; h.innerHTML=''; save(); render(); if(document.querySelector('.drawer')&&one) drawBody(targets[0]);
-    toast(`הועתקו משאבים ל-${S.length} סעיפים (${nr} משאבים) מ-${srcName}. הכמויות לא השתנו`); };
+    CONCC=null; const chg=S.filter(w=>{ const a=Q0.get(w.t.id), b=secQty(w.t); return !(a===b||(Number.isNaN(a)&&Number.isNaN(b))||Math.abs((a||0)-(b||0))<1e-9); });
+    toast(chg.length?`⚠ הועתק ל-${S.length} סעיפים, אבל כמות הסעיף השתנתה ב-${chg.length}: ${chg.slice(0,6).map(w=>w.t.code).join(', ')} – בדוק (מוביל ★)`:`הועתקו משאבים ל-${S.length} סעיפים (${nr} משאבים) מ-${srcName}. כמויות הסעיפים לא השתנו`); };
   draw(); }
 /* ---------- העתקה בין פרויקטים: לוח (בדפדפן הזה) ---------- */
 const CLIP_K='ybnir-boq-clip';
@@ -1447,7 +1458,7 @@ function drawBody(n){
         ${n.ch.map(r=>`<tr><td class="mono">${esc(r.code)}</td><td>${esc(nodeName(r))}</td><td class="num">${fmtQ(rQty(r))} ${esc(r.unit||'')}</td><td class="num">${fmt(rUnitCost(r),2)}</td><td class="num">${fmt(total(r))}</td></tr>`).join('') || '<tr><td colspan="5" class="none" style="padding:8px">אין משאבים עדיין</td></tr>'}
         </tbody></table></div>
       </div>
-      <div class="row" style="gap:6px"><button class="btn" id="d_addr">+ משאב לסעיף</button><button class="btn" id="d_pullsec" title="העתקת המשאבים, המק&quot;טים והמחירים מסעיף מקביל בפרויקט אחר – הכמות של הסעיף נשארת">📥 משאבים מפרויקט אחר</button></div>`;
+      <div class="row" style="gap:6px"><button class="btn" id="d_addr">+ משאב לסעיף</button><button class="btn" id="d_pullsec" title="העתקת המשאבים, המק&quot;טים והמחירים מסעיף מקביל במבנה אחר או בפרויקט אחר – הכמות של הסעיף נשארת">📥 משאבים ממבנה / פרויקט אחר</button></div>`;
     const bind=(id,k)=>document.getElementById(id).oninput=e=>{ n[k]=e.target.value; save(); updTot(n); };
     { const ab=B.querySelector('[data-act2="att"]'); if(ab) ab.onclick=()=>attDlg(n.id); }
     bind('d_name','name'); bind('d_code','code'); bind('d_note','note'); bind('d_sp','sp'); const dps=document.getElementById('d_pullsec'); if(dps) dps.onclick=()=>pullSecDlg([n]); const spc=document.getElementById('d_spclr'); if(spc) spc.onclick=()=>{ delete n.sp; save(); drawBody(n); }; bind('d_serves','serves');
