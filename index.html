@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='26.10.26-2'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='26.10.26-3'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -1121,10 +1121,11 @@ function selBar(){ let b=document.getElementById('selBar'); if(!b){ b=document.c
   if(!SELMODE){ b.hidden=true; return; } b.hidden=false;
   const T=selTop(); const cnt={c:0,s:0,i:0}; let secs=0, sum=0; T.forEach(f=>{ cnt[f.n.t]++; sum+=total(f.n); if(f.n.t==='i') secs++; else walk(f.n.ch,x=>{ if(x.t==='i') secs++; }); });
   b.innerHTML=T.length?`<b>נבחרו:</b> ${[cnt.c?cnt.c+' פרקים':'',cnt.s?cnt.s+' תתי-פרקים':'',cnt.i?cnt.i+' סעיפים':''].filter(Boolean).join(' · ')} <span class="hint" style="margin:0">(${secs} סעיפים · ${fmt(sum)} ₪)</span>
-    <button class="btn small primary" id="sel_mv">העבר / העתק…</button><button class="btn small" id="sel_pull" title="השלמת משאבים ומחירים לסעיפים שנבחרו מסעיפים מקבילים במבנה אחר בפרויקט או בפרויקט אחר – הכמויות נשארות">📥 משאבים ממבנה / פרויקט אחר</button><button class="btn small" id="sel_clip" title="העתקה ללוח – פותחים פרויקט אחר ולוחצים &quot;📋 הדבק&quot;">📋 לפרויקט אחר</button><button class="btn small" id="sel_clr">נקה בחירה</button><button class="btn small" id="sel_off">סגור</button>`
+    <button class="btn small primary" id="sel_mv">העבר / העתק…</button><button class="btn small" id="sel_sp" title="מחירי סעיף, משאבים ומק&quot;טים ממבנה אחר בפרויקט לסעיפים שנבחרו – בלי לשנות כמויות, כל התנגשות באישור">💲 מחירים ממבנה אחר</button><button class="btn small" id="sel_pull" title="השלמת משאבים ומחירים לסעיפים שנבחרו מסעיפים מקבילים במבנה אחר בפרויקט או בפרויקט אחר – הכמויות נשארות">📥 משאבים ממבנה / פרויקט אחר</button><button class="btn small" id="sel_clip" title="העתקה ללוח – פותחים פרויקט אחר ולוחצים &quot;📋 הדבק&quot;">📋 לפרויקט אחר</button><button class="btn small" id="sel_clr">נקה בחירה</button><button class="btn small" id="sel_off">סגור</button>`
     :`<b>בחירה מרובה:</b> <span class="hint" style="margin:0">סמן בתיבות שליד הקוד – פרקים, תתי-פרקים וסעיפים, גם ממבנים שונים. בחירה של פרק / תת-פרק כוללת את כל מה שמתחתיו.</span><button class="btn small" id="sel_off">סגור</button>`;
   const q=i=>document.getElementById(i);
   if(q('sel_mv')) q('sel_mv').onclick=()=>bulkMoveDlg();
+  if(q('sel_sp')) q('sel_sp').onclick=()=>{ const L=[]; selTop().forEach(f=>walk([f.n],x=>{ if(x.t==='i'&&!isPct(x)) L.push(x); })); if(L.length) syncPriceDlg(L); else toast('לא נבחרו סעיפים'); };
   if(q('sel_pull')) q('sel_pull').onclick=()=>{ const L=[]; selTop().forEach(f=>walk([f.n],x=>{ if(x.t==='i'&&!isPct(x)) L.push(x); })); if(L.length) pullSecDlg(L); };
   if(q('sel_clip')) q('sel_clip').onclick=()=>{ const T=selTop(); if(!T.length) return; clipSet(T); SELMODE=false; SEL.clear(); render(); toast(`הועתקו ללוח ${T.length} פריטים. פתח פרויקט אחר ולחץ "📋 הדבק"`); }; if(q('sel_clr')) q('sel_clr').onclick=()=>{ SEL.clear(); render(); };
   q('sel_off').onclick=()=>{ SELMODE=false; SEL.clear(); render(); }; }
@@ -2684,6 +2685,74 @@ function pumpTabBind(h){
     ws['!cols']=[{wch:6},{wch:9},{wch:12},{wch:45},{wch:12},{wch:26},{wch:18}];
     const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'כיסוי שאיבה'); XLSX.writeFile(wb,`כיסוי שאיבה ${state.project||''} ${new Date().toLocaleDateString('he-IL').replace(/\./g,'-')}.xlsx`); };
 }
+/* ---------- 💲 מחירים ממבנה אחר באותו פרויקט – בלי לשנות כמויות, כל שינוי / התנגשות באישור ----------
+   התאמה: סעיף לפי קוד (+יחידה), משאב/מק"ט לפי קוד בתוך הסעיף (כפילות קוד – לפי הסדר).
+   עדכוני מחיר = מסומנים מראש. התנגשויות (משאב חסר / עודף, מחיר סעיף ידני מול משאבים, יחידה שונה) = לא מסומנות. */
+function syncPriceDlg(targets){
+  const h=document.getElementById('printDlgHost');
+  const bOf=x=>{ const f=find(x.id); return f&&f.path[0]?f.path[0]:null; };
+  const tB=new Set(targets.map(t=>(bOf(t)||{}).code));
+  const Bs=state.tree.filter(b=>b.t==='b'&&b.code&&!tB.has(b.code));
+  if(!Bs.length){ toast('אין מבנה מקור אחר בפרויקט'); return; }
+  const P=v=>{ const x=evalExpr(v); return Number.isFinite(x)?x:0; }, f2=v=>fmt(v,2);
+  const meta=x=>[x.psrc||'',x.pdate?fmtDt(x.pdate):''].filter(Boolean).join(' · ');
+  const copyP=(d,s)=>{ d.price=s.price; ['psrc','pdate'].forEach(k=>{ if(s[k]!==undefined) d[k]=s[k]; else delete d[k]; }); };
+  const fixQ=x=>{ x=cloneNode(x); const st=y=>{ delete y.lead; const e=String(y.qexpr??'').trim(); if((y.calc&&y.calc.length)||(e&&!/[QR]/i.test(e))){ y.qexpr=''; y.calc=[]; y._fx=1; } (y.ch||[]).forEach(st); }; st(x); return x; };
+  let SRC=Bs[0].code, CH=[], onlyC=false;
+  const build=()=>{ CH=[]; const sb=state.tree.find(b=>b.code===SRC); const SM=new Map(); walk(sb?sb.ch:[],x=>{ if(x.t==='i'&&!isPct(x)){ const k=x.code||''; if(!SM.has(k)) SM.set(k,[]); SM.get(k).push(x); } });
+    let id=0; const add=o=>CH.push(Object.assign({id:id++},o));
+    for(const t of targets){ const L=SM.get(t.code||'')||[]; const tl=`${(bOf(t)||{}).code||''}·${t.code||''}`;
+      if(!L.length){ add({t,tl,kind:'info',lbl:'אין סעיף באותו קוד במבנה '+SRC,on:false,dis:true}); continue; }
+      const s=L[0]; if(L.length>1) add({t,tl,kind:'conf',lbl:`${L.length} סעיפים בקוד הזה במבנה ${SRC} – נלקח הראשון`,on:false,dis:true});
+      if(UNORM(s.unit)!==UNORM(t.unit)){ add({t,tl,kind:'conf',lbl:`יחידה שונה: ${t.unit||'—'} מול ${s.unit||'—'} – הסעיף לא הושווה`,on:false,dis:true}); continue; }
+      // מחיר סעיף ידני
+      const ts=spSet(t), ss=spSet(s), q=secQty(t)||0;
+      if(ts&&ss&&String(t.sp)!==String(s.sp)) add({t,tl,kind:'price',lbl:'מחיר סעיף (ידני)',a:f2(P(t.sp)),b:f2(P(s.sp)),d:q*(P(s.sp)-P(t.sp)),on:true,ap:()=>{ t.sp=s.sp; }});
+      else if(ts&&!ss) add({t,tl,kind:'conf',lbl:`ב-${(bOf(t)||{}).code} מחיר סעיף ידני (גובר על המשאבים), ב-${SRC} לפי משאבים – לבטל את המחיר הידני?`,a:f2(P(t.sp)),b:'לפי משאבים',on:false,ap:()=>{ delete t.sp; }});
+      else if(!ts&&ss) add({t,tl,kind:'conf',lbl:`ב-${SRC} מחיר סעיף ידני – להחיל גם כאן (יגבר על המשאבים)?`,a:'לפי משאבים',b:f2(P(s.sp)),on:false,ap:()=>{ t.sp=s.sp; }});
+      if((t.pb||'')!==(s.pb||'')||(t.pbRef||'')!==(s.pbRef||'')) add({t,tl,kind:'price',lbl:'בסיס מחיר הסעיף',a:esc(typeof pbText==='function'?pbText(t):(t.pb||'')),b:esc(typeof pbText==='function'?pbText(s):(s.pb||'')),on:true,ap:()=>{ ['pb','pbRef'].forEach(k=>{ if(s[k]!==undefined) t[k]=s[k]; else delete t[k]; }); }});
+      // משאבים ומק"טים
+      const cmp=(tp,sp,lvl)=>{ const typ=lvl==='r'?'משאב':'מק"ט'; const T=(tp.ch||[]).filter(x=>x.t===lvl), S=(sp.ch||[]).filter(x=>x.t===lvl);
+        const used=new Set();
+        for(const x of T){ const m=S.find(y=>!used.has(y)&&(y.code||'')===(x.code||'')); if(!m){ add({t,tl,kind:'conf',lbl:`${typ} רק ב-${(bOf(t)||{}).code} – למחוק?${x.lead?' (★ מוביל – לא ניתן)':''}`,it:`${x.code||''} ${nodeName(x)||''}`,a:f2(P(x.price)),b:'—',d:-total(x),on:false,dis:!!x.lead||(lvl==='k'&&x.lead),ap:()=>{ tp.ch=tp.ch.filter(y=>y!==x); }}); continue; }
+          used.add(m); const it=`${x.code||''} ${nodeName(x)||''}`;
+          if(UNORM(x.unit)!==UNORM(m.unit)) add({t,tl,kind:'conf',lbl:`${typ}: יחידה שונה (${x.unit||'—'} / ${m.unit||'—'}) – להעביר מחיר בכל זאת?`,it,a:f2(P(x.price)),b:f2(P(m.price)),on:false,ap:()=>copyP(x,m)});
+          else if(!(lvl==='r'&&hasItems(x))&&String(x.price??'')!==String(m.price??'')){ const qq=lvl==='r'?rQty(x):kQty(x); add({t,tl,kind:'price',lbl:'מחיר '+typ+(spSet(t)?' (לא משפיע כל עוד יש מחיר סעיף ידני)':''),it,a:f2(P(x.price))+(meta(x)?`<div class="hint" style="margin:0;font-size:10px">${esc(meta(x))}</div>`:''),b:f2(P(m.price))+(meta(m)?`<div class="hint" style="margin:0;font-size:10px">${esc(meta(m))}</div>`:''),d:spSet(t)?0:(qq||0)*(P(m.price)-P(x.price)),on:true,ap:()=>copyP(x,m)}); }
+          if(lvl==='r') cmp(x,m,'k'); }
+        for(const y of S) if(!used.has(y)){ const c=fixQ(y); add({t,tl,kind:'conf',lbl:`${typ} חסר ב-${(bOf(t)||{}).code} – להוסיף?${c._fx?' (כמות קבועה במקור – תיכנס ריקה)':''}`,it:`${y.code||''} ${nodeName(y)||''}`,a:'—',b:f2(P(y.price))+(c._fx?'':' · '+esc(y.qexpr||'')),on:false,ap:()=>{ const z=fixQ(y); const cl=x=>{ delete x._fx; (x.ch||[]).forEach(cl); }; cl(z); tp.ch=(tp.ch||[]).concat(z); }}); } };
+      cmp(t,s,'r'); } };
+  const draw=()=>{ const L=CH.filter(c=>!onlyC||c.kind!=='price'); const np=CH.filter(c=>c.kind==='price').length, nc=CH.filter(c=>c.kind==='conf').length, ni=CH.filter(c=>c.kind==='info').length;
+    const dsum=CH.filter(c=>c.on&&c.d).reduce((a,c)=>a+c.d,0);
+    $('sp_sum').innerHTML=`<b>${np}</b> עדכוני מחיר · <b style="color:#b54708">${nc}</b> התנגשויות לאישור · ${ni} סעיפים ללא מקביל · מסומנים: <b>${CH.filter(c=>c.on).length}</b> · השפעה: <b>${dsum>=0?'+':''}${fmt(dsum)} ₪</b>`;
+    const K={price:['עדכון','#12b76a'],conf:['התנגשות','#b54708'],info:['מידע','#667085']};
+    $('sp_body').innerHTML=`<table class="boq" style="min-width:0;width:100%;table-layout:auto;font-size:12px"><thead><tr><th></th><th>סעיף</th><th>סוג</th><th>משאב / מק"ט</th><th class="n">נוכחי</th><th class="n">ממבנה ${esc(SRC)}</th><th class="n">השפעה ₪</th></tr></thead><tbody>${L.map(c=>`<tr style="${c.kind==='conf'?'background:#fffaeb':c.kind==='info'?'color:var(--muted)':''}"><td>${c.dis?'':`<input type="checkbox" data-sc="${c.id}" ${c.on?'checked':''}>`}</td><td class="mono"><button class="ib" data-go="${c.t.id}" style="font-size:11px">${esc(c.tl)}</button></td><td><span style="color:${K[c.kind][1]};font-weight:600">${K[c.kind][0]}</span> ${esc(c.lbl)}</td><td>${esc((c.it||'').slice(0,50))}</td><td class="n num">${c.a??''}</td><td class="n num">${c.b??''}</td><td class="n num">${c.d?fmt(c.d):''}</td></tr>`).join('')||'<tr><td colspan="7" class="hint">אין הבדלים</td></tr>'}</tbody></table>`;
+    $('sp_body').querySelectorAll('[data-sc]').forEach(x=>x.onchange=()=>{ CH[+x.dataset.sc].on=x.checked; draw(); });
+    $('sp_body').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{ h.innerHTML=''; qcGo(b.dataset.go); }); };
+  h.innerHTML=`<div class="pdlg" style="z-index:9999"><div class="box" style="width:min(1150px,100%);max-height:94vh;overflow:auto">
+    <h2>💲 מחירים ממבנה אחר – בלי לשנות כמויות</h2>
+    <p class="hint" style="margin:0 0 6px">מחירי סעיף (ידני), משאבים ומק"טים מהמבנה המקור לסעיפים שנבחרו (${targets.length}), לפי קוד. <b>עדכוני מחיר</b> מסומנים מראש; <b>התנגשויות</b> (משאב חסר/עודף, מחיר סעיף ידני מול משאבים, יחידה שונה) – רק אם תסמן. כמויות, נוסחאות, פחת ו-★ לא נוגעים. לפני ההחלה נשמרת גרסה, ואחריה נבדק שאף כמות סעיף לא השתנתה.</p>
+    <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center"><label class="hint" style="margin:0">מבנה מקור <select id="sp_src">${Bs.map(b=>`<option value="${esc(b.code)}">${esc(b.code+' '+(b.name||''))}</option>`).join('')}</select></label>
+      <label class="hint" style="margin:0"><input type="checkbox" id="sp_oc"> רק התנגשויות</label>
+      <button class="btn small" id="sp_ap">סמן כל עדכוני המחיר</button><button class="btn small" id="sp_cl">נקה הכל</button></div>
+    <div id="sp_sum" style="margin:6px 0"></div>
+    <div id="sp_body" style="max-height:58vh;overflow:auto;border:1px solid var(--line);border-radius:8px"></div>
+    <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn" id="sp_x">ייצוא לאקסל</button><button class="btn" id="sp_c">ביטול</button><button class="btn primary" id="sp_go">החל מסומנים</button></div></div></div>`;
+  $('sp_c').onclick=()=>h.innerHTML='';
+  $('sp_src').onchange=e=>{ SRC=e.target.value; build(); draw(); };
+  $('sp_oc').onchange=e=>{ onlyC=e.target.checked; draw(); };
+  $('sp_ap').onclick=()=>{ CH.forEach(c=>{ if(c.kind==='price') c.on=true; }); draw(); };
+  $('sp_cl').onclick=()=>{ CH.forEach(c=>c.on=false); draw(); };
+  $('sp_x').onclick=()=>{ if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; } const tx=v=>String(v??'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+    const ws=XLSX.utils.json_to_sheet(CH.map(c=>({'מסומן':c.on?'כן':'','סעיף':c.tl,'סוג':c.kind==='price'?'עדכון':c.kind==='conf'?'התנגשות':'מידע','תאור':c.lbl,'משאב / מק"ט':c.it||'','נוכחי':tx(c.a),['ממבנה '+SRC]:tx(c.b),'השפעה ₪':c.d?Math.round(c.d):''})));
+    ws['!cols']=[{wch:6},{wch:16},{wch:9},{wch:60},{wch:40},{wch:14},{wch:14},{wch:10}]; const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'מחירים'); XLSX.writeFile(wb,`מחירים ממבנה ${SRC} ${state.project||''}.xlsx`); };
+  $('sp_go').onclick=async()=>{ const S=CH.filter(c=>c.on&&c.ap&&!c.dis); if(!S.length){ toast('לא סומן דבר'); return; }
+    try{ if(typeof flushCloud==='function'){ await flushCloud(); await pushCloud(false,'לפני מחירים ממבנה '+SRC); } }catch(e){}
+    CONCC=null; const Q0=new Map(targets.map(t=>[t.id,secQty(t)]));
+    S.forEach(c=>c.ap()); PMAP=null; CONCC=null;
+    const chg=targets.filter(t=>{ const a=Q0.get(t.id), b=secQty(t); return !(a===b||(Number.isNaN(a)&&Number.isNaN(b))||Math.abs((a||0)-(b||0))<1e-9); });
+    h.innerHTML=''; save(); render();
+    toast(chg.length?`⚠ הוחלו ${S.length} שינויים, אבל כמות הסעיף השתנתה ב-${chg.length}: ${chg.slice(0,6).map(t=>t.code).join(', ')} – בדוק`:`הוחלו ${S.length} שינויים ממבנה ${SRC}. כמויות הסעיפים לא השתנו`); };
+  build(); draw(); }
 function qcBadge(){ const b=document.getElementById('btnQC'); if(!b) return; try{ const F=qcRun().filter(x=>x.rule!==12); const e=F.filter(x=>x.sev==='err').length, w=F.filter(x=>x.sev==='warn').length; b.innerHTML='בקרה'+(e?` <span class="pill" style="background:#d92d20;color:#fff">${e}</span>`:'')+(w?` <span class="pill" style="background:#f79009;color:#fff">${w}</span>`:''); }catch(e){ b.textContent='בקרה'; } }
 let qcT=null; function qcSoon(){ clearTimeout(qcT); qcT=setTimeout(qcBadge,900); }
 function qcDlg(tab){
