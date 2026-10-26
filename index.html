@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='26.10.26-3'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='26.10.26-4'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -782,7 +782,7 @@ function codeCell(n){
     code=`<select class="cell-in mono" data-f="code" data-id="${n.id}" aria-label="תת-פרק"><option value="">בחר</option>${opts.map(s=>`<option value="${s.c}" ${s.c===n.code?'selected':''}>${s.c}</option>`).join('')}${n.code&&!opts.some(s=>s.c===n.code)?`<option selected>${esc(n.code)}</option>`:''}<option value="__new">➕ חדש…</option></select>`;
   }
   else code=`<span class="mono" title="${n.oldCodes&&n.oldCodes.length?'קוד קודם: '+esc(n.oldCodes.join(' → ')):''}">${esc(n.code||'')}</span>`;
-  const sb=SELMODE&&['c','s','i'].includes(n.t)?`<input type="checkbox" data-sel="${n.id}" ${SEL.has(n.id)?'checked':''} ${selAnc(n.id)?'disabled title="נבחר דרך הרמה שמעל"':''} style="margin:0 0 0 2px;width:14px;height:14px;flex:none;accent-color:var(--accent)" aria-label="בחירה">`:'';
+  const sb=SELMODE&&['b','c','s','i'].includes(n.t)?`<input type="checkbox" data-sel="${n.id}" ${SEL.has(n.id)?'checked':''} ${selAnc(n.id)?'disabled title="נבחר דרך הרמה שמעל"':''} style="margin:0 0 0 2px;width:14px;height:14px;flex:none;accent-color:var(--accent)" aria-label="בחירה">`:'';
   return `<td class="code" style="padding-inline-start:${4+(L-1)*12}px"><span style="display:inline-flex;align-items:center;gap:2px">${sb}${car}${code}</span>${!leaf&&cnt&&closed?`<span class="pill">${cnt}</span>`:''}</td>`;
 }
 
@@ -1119,11 +1119,13 @@ function selTop(){ return [...SEL].map(id=>find(id)).filter(f=>f&&!f.path.some(p
 function selBar(){ let b=document.getElementById('selBar'); if(!b){ b=document.createElement('div'); b.id='selBar'; b.style.cssText='position:fixed;bottom:14px;inset-inline-end:14px;z-index:55;background:var(--surface);border:2px solid var(--accent);padding:8px 12px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.2);font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:min(760px,calc(100vw - 28px))'; document.body.appendChild(b); }
   const btn=document.getElementById('btnSel'); if(btn){ btn.classList.toggle('primary',SELMODE); btn.textContent=SELMODE?'☑ בחירה מרובה (פעיל)':'☑ בחירה מרובה'; }
   if(!SELMODE){ b.hidden=true; return; } b.hidden=false;
-  const T=selTop(); const cnt={c:0,s:0,i:0}; let secs=0, sum=0; T.forEach(f=>{ cnt[f.n.t]++; sum+=total(f.n); if(f.n.t==='i') secs++; else walk(f.n.ch,x=>{ if(x.t==='i') secs++; }); });
-  b.innerHTML=T.length?`<b>נבחרו:</b> ${[cnt.c?cnt.c+' פרקים':'',cnt.s?cnt.s+' תתי-פרקים':'',cnt.i?cnt.i+' סעיפים':''].filter(Boolean).join(' · ')} <span class="hint" style="margin:0">(${secs} סעיפים · ${fmt(sum)} ₪)</span>
+  const T=selTop(); const cnt={b:0,c:0,s:0,i:0}; let secs=0, sum=0; T.forEach(f=>{ cnt[f.n.t]++; sum+=total(f.n); if(f.n.t==='i') secs++; else walk(f.n.ch,x=>{ if(x.t==='i') secs++; }); });
+  b.innerHTML=T.length?`<b>נבחרו:</b> ${[cnt.b?cnt.b+' מבנים':'',cnt.c?cnt.c+' פרקים':'',cnt.s?cnt.s+' תתי-פרקים':'',cnt.i?cnt.i+' סעיפים':''].filter(Boolean).join(' · ')} <span class="hint" style="margin:0">(${secs} סעיפים · ${fmt(sum)} ₪)</span>
     <button class="btn small primary" id="sel_mv">העבר / העתק…</button><button class="btn small" id="sel_sp" title="מחירי סעיף, משאבים ומק&quot;טים ממבנה אחר בפרויקט לסעיפים שנבחרו – בלי לשנות כמויות, כל התנגשות באישור">💲 מחירים ממבנה אחר</button><button class="btn small" id="sel_pull" title="השלמת משאבים ומחירים לסעיפים שנבחרו מסעיפים מקבילים במבנה אחר בפרויקט או בפרויקט אחר – הכמויות נשארות">📥 משאבים ממבנה / פרויקט אחר</button><button class="btn small" id="sel_clip" title="העתקה ללוח – פותחים פרויקט אחר ולוחצים &quot;📋 הדבק&quot;">📋 לפרויקט אחר</button><button class="btn small" id="sel_clr">נקה בחירה</button><button class="btn small" id="sel_off">סגור</button>`
-    :`<b>בחירה מרובה:</b> <span class="hint" style="margin:0">סמן בתיבות שליד הקוד – פרקים, תתי-פרקים וסעיפים, גם ממבנים שונים. בחירה של פרק / תת-פרק כוללת את כל מה שמתחתיו.</span><button class="btn small" id="sel_off">סגור</button>`;
+    :`<b>בחירה מרובה:</b> <span class="hint" style="margin:0">סמן בתיבות שליד הקוד – מבנים, פרקים, תתי-פרקים וסעיפים, גם ממבנים שונים. בחירה של פרק / תת-פרק כוללת את כל מה שמתחתיו.</span><button class="btn small" id="sel_off">סגור</button>`;
   const q=i=>document.getElementById(i);
+  /* מבנה שלם: רק פעולות מחיר/משאבים. העברה / העתקה ללוח – לפרקים ומטה */
+  if(cnt.b){ ['sel_mv','sel_clip'].forEach(i=>{ const x=q(i); if(x){ x.disabled=true; x.title='לא זמין כשנבחר מבנה שלם – בחר פרקים'; } }); }
   if(q('sel_mv')) q('sel_mv').onclick=()=>bulkMoveDlg();
   if(q('sel_sp')) q('sel_sp').onclick=()=>{ const L=[]; selTop().forEach(f=>walk([f.n],x=>{ if(x.t==='i'&&!isPct(x)) L.push(x); })); if(L.length) syncPriceDlg(L); else toast('לא נבחרו סעיפים'); };
   if(q('sel_pull')) q('sel_pull').onclick=()=>{ const L=[]; selTop().forEach(f=>walk([f.n],x=>{ if(x.t==='i'&&!isPct(x)) L.push(x); })); if(L.length) pullSecDlg(L); };
