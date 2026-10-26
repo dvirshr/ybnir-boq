@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='26.10.26-1'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='26.10.26-2'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2729,12 +2729,20 @@ let toastT; function toast(m){ const h=document.getElementById('toastHost'); h.i
 /* ---------- print / PDF ---------- */
 function openPrintDlg(){
   const h=document.getElementById('printDlgHost');
-  const bOpts=state.tree.map(b=>`<option value="${b.id}">${esc(b.code)} ${esc(b.name)}</option>`).join('');
+  /* בחירת היקף: עץ מבנים › פרקים › תתי-פרקים. הבחירה האחרונה נשמרת לפרויקט (בדפדפן הזה) */
+  let last=null; try{ last=JSON.parse(localStorage.getItem('ybnir-boq-psel-'+(state.project||''))||'null'); }catch(e){}
+  const LS=last?new Set(last):null;
+  const nd=(n,depth)=>{ const kids=depth<3?(n.ch||[]).filter(c=>c.t==='c'||c.t==='s'):[]; const on=!LS||LS.has(n.id)||(()=>{ let f=false; walk(kids,x=>{ if(LS.has(x.id)) f=true; }); return f; })();
+    const lab=`<label style="display:inline-flex;gap:5px;align-items:center;font-size:${depth===1?13:12}px${depth===1?';font-weight:700':''}"><input type="checkbox" data-pt="${n.id}" ${on?'checked':''}> <span class="mono">${esc(n.code||'')}</span> ${esc((n.t==='b'?n.name:nodeName(n))||'')}</label>`;
+    if(!kids.length) return `<div class="ptn" data-n="${n.id}">${lab}</div>`;
+    return `<div class="ptn" data-n="${n.id}"><details ${depth===1?'open':''}><summary style="cursor:pointer">${lab}</summary><div style="padding-inline-start:18px">${kids.map(c=>nd(c,depth+1)).join('')}</div></details></div>`; };
+  const tree=state.tree.filter(b=>b.t==='b').map(b=>nd(b,1)).join('');
   h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="הדפסה">
     <h2>הדפסה / שמירה כ-PDF</h2>
     <div class="field"><label for="p_lv">הצג עד רמה</label><select id="p_lv">
       <option value="1">מבנה</option><option value="2">פרק</option><option value="3">תת-פרק</option><option value="4" selected>סעיף</option><option value="5">משאב</option><option value="6">מק"ט</option></select></div>
-    <div class="field"><label for="p_b">היקף</label><select id="p_b"><option value="all">כל המבנים</option>${bOpts}</select></div>
+    <div class="field"><label>היקף – מבנים, פרקים, תתי-פרקים <button class="btn small" id="p_all" type="button">הכל</button> <button class="btn small" id="p_none" type="button">נקה</button> <b id="p_cnt" class="hint" style="margin:0"></b></label>
+      <div id="p_tree" style="max-height:42vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 8px">${tree}</div></div>
     <div class="row"><label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="p_notes"> כולל הערות סעיף</label></div>
     <div class="row"><label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="p_prices" checked> כולל עמודות מחיר וסה"כ</label></div>
     ${ohBlds().length?`<div class="row"><label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="p_oh" ${state.ohView?'checked':''}> מחירים מועמסים בתקורות ורווח (מבנה התקורה לא מודפס – העלות שלו בתוך המחירים)</label></div>`:''}
@@ -2743,8 +2751,22 @@ function openPrintDlg(){
   </div></div>`;
   document.getElementById('p_cancel').onclick=()=>h.innerHTML='';
   document.getElementById('pdlg').onclick=e=>{ if(e.target.id==='pdlg') h.innerHTML=''; };
+  const PT=document.getElementById('p_tree'), boxes=()=>[...PT.querySelectorAll('[data-pt]')];
+  const kidsOf=cb=>{ const d=cb.closest('.ptn'); return [...d.querySelectorAll(':scope > details > div > .ptn')].map(x=>x.querySelector('[data-pt]')); };
+  const sync=()=>{ /* מלמטה למעלה: הורה מסומן אם כל הילדים, חלקי אם חלקם */
+    [...PT.querySelectorAll('.ptn')].reverse().forEach(d=>{ const cb=d.querySelector('[data-pt]'); const K=kidsOf(cb); if(!K.length) return; const n=K.filter(k=>k.checked).length, ind=K.some(k=>k.indeterminate);
+      cb.checked=n===K.length&&!ind; cb.indeterminate=!cb.checked&&(n>0||ind); });
+    const L=boxes().filter(b=>!kidsOf(b).length); $('p_cnt').textContent=`${L.filter(b=>b.checked).length} / ${L.length} נבחרו`; };
+  PT.addEventListener('click',e=>{ if(e.target.matches('[data-pt]')) e.stopPropagation(); });
+  PT.addEventListener('change',e=>{ const cb=e.target; if(!cb.matches('[data-pt]')) return; cb.closest('.ptn').querySelectorAll('[data-pt]').forEach(x=>{ x.checked=cb.checked; x.indeterminate=false; }); sync(); });
+  document.getElementById('p_all').onclick=()=>{ boxes().forEach(b=>{ b.checked=true; b.indeterminate=false; }); sync(); };
+  document.getElementById('p_none').onclick=()=>{ boxes().forEach(b=>{ b.checked=false; b.indeterminate=false; }); sync(); };
+  sync();
   document.getElementById('p_go').onclick=()=>{
-    const lv=+document.getElementById('p_lv').value, bsel=document.getElementById('p_b').value;
+    const lv=+document.getElementById('p_lv').value;
+    const full=boxes().filter(b=>b.checked).map(b=>+b.dataset.pt); if(!full.length){ toast('לא נבחר דבר להדפסה'); return; }
+    const all=boxes().every(b=>b.checked); const bsel=all?'all':new Set(full);
+    try{ localStorage.setItem('ybnir-boq-psel-'+(state.project||''),JSON.stringify(full)); }catch(e){}
     const notes=document.getElementById('p_notes').checked, prices=document.getElementById('p_prices').checked;
     const oh=!!document.getElementById('p_oh')?.checked;
     h.innerHTML=''; doPrint(lv,bsel,notes,prices,oh);
@@ -2752,16 +2774,21 @@ function openPrintDlg(){
 }
 function doPrint(lv,bsel,notes,prices,oh){
   const ohWas=OHC; OHC=oh?ohCalc():null;
-  let scope=bsel==='all'?state.tree:state.tree.filter(b=>String(b.id)===bsel);
+  const SELP=bsel instanceof Set?bsel:null; /* null = הכל */
+  const hasSel=n=>{ let f=false; walk([n],x=>{ if(!f&&SELP.has(x.id)) f=true; }); return f; };
+  const inc=(n,anc)=>!SELP||anc||hasSel(n); /* anc = אב מסומן במלואו */
+  let scope=state.tree.filter(b=>inc(b,false));
   if(OHC) scope=scope.filter(b=>!OHC.OB.has(b.code));
-  const TT=n=>OHC&&['b','c','s','i'].includes(n.t)?ohTot(n):total(n);
-  const G=scope.reduce((a,n)=>a+TT(n),0);
+  const TT0=n=>OHC&&['b','c','s','i'].includes(n.t)?ohTot(n):total(n);
+  const PTot=(n,anc)=>{ if(!SELP||anc||SELP.has(n.id)) return TT0(n); return (n.ch||[]).filter(c=>hasSel(c)).reduce((a,c)=>a+PTot(c,false),0); };
+  let TT=n=>TT0(n);
+  const G=scope.reduce((a,n)=>a+PTot(n,false),0);
   const lvName={1:'מבנה',2:'פרק',3:'תת-פרק',4:'סעיף',5:'משאב',6:'מק"ט'};
   const cols=prices?7:4;
   const rows=[];
-  const emit=list=>{ for(const n of list){
-    const L=LV[n.t]; if(L>lv) continue;
-    const t=TT(n); const pad=(L-1)*10;
+  const emit=(list,anc)=>{ for(const n of list){
+    const L=LV[n.t]; if(L>lv) continue; if(!inc(n,anc)) continue; const fa=anc||!SELP||SELP.has(n.id);
+    const t=PTot(n,anc); const pad=(L-1)*10;
     let unit='',qty='',price='';
     if(n.t==='i'){ unit=n.unit||''; const q=secQty(n); qty=(q!==null&&q!==undefined&&!Number.isNaN(q))?fmtQ(q):''; if(q&&t) price=fmt(t/q,2); }
     if(n.t==='r'){ unit=n.unit||''; qty=fmtQ(rQty(n)); price=fmt(rUnitCost(n),2); }
@@ -2770,12 +2797,13 @@ function doPrint(lv,bsel,notes,prices,oh){
     const pr = prices?`<td class="n">${price}</td><td class="n">${t?fmt(t):''}</td><td class="n">${G&&t?fmt(t/G*100,1)+'%':''}</td>`:'';
     rows.push(`<tr class="P${L}"><td class="code" style="padding-inline-start:${4+pad}px">${esc(n.code||'')}</td><td>${esc(nodeName(n))}</td><td>${esc(unit)}</td><td class="n">${qty}</td>${pr}</tr>`);
     if(notes && (n.t==='i'||n.t==='r'||n.t==='k') && n.note) rows.push(`<tr class="pn"><td></td><td colspan="${cols-1}">${esc(n.note)}</td></tr>`);
-    if(n.ch && L<lv) emit(n.ch);
+    if(n.ch && L<lv) emit(n.ch,fa);
   }};
-  emit(scope);
+  emit(scope,false);
   if(prices) rows.push(`<tr class="tot"><td></td><td>סה"כ</td><td></td><td></td><td></td><td class="n">${fmt(G)}</td><td></td></tr>`);
   const d=new Date().toLocaleDateString('he-IL');
-  const scopeName=bsel==='all'?'כל המבנים':scope.map(b=>b.code+' '+b.name).join('');
+  const tops=[]; if(SELP){ const go=(l,bc)=>l.forEach(x=>{ const c=x.t==='b'?'מבנה '+(x.code||''):(bc?bc+'·':'')+(x.code||''); if(SELP.has(x.id)) tops.push(c); else if(hasSel(x)) go(x.ch||[],x.t==='b'?x.code:bc); }); go(scope,''); }
+  const scopeName=!SELP?'כל המבנים':'בחירה חלקית: '+(tops.length>14?tops.slice(0,14).join(', ')+` ועוד ${tops.length-14}`:tops.join(', '));
   document.getElementById('printArea').innerHTML=`<h1>כתב כמויות${state.project?' – '+esc(state.project):''}</h1>
     <div class="meta">${esc(scopeName)} · עד רמת ${lvName[lv]} · ${d}${OHC?' · <b>מחירים מועמסים בתקורות ורווח ('+fmt(OHC.k*100,1)+'% בממוצע)</b>':''}</div>
     <table><thead><tr><th style="width:${lv>=4?'17%':'12%'}">קוד</th><th>תאור</th><th style="width:7%">יח'</th><th class="n" style="width:10%">כמות</th>${prices?'<th class="n" style="width:10%">מחיר יח\'</th><th class="n" style="width:12%">סה"כ ₪</th><th class="n" style="width:7%">%</th>':''}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
