@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='27.10.26-10'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='27.10.26-11'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2699,7 +2699,7 @@ function pumpTab(){ const R=pumpRows(), B={}; R.forEach(r=>{ const o=B[r.b]=B[r.
   ${R.filter(r=>!only||['none','dbl','unk','mis'].includes(r.st)).sort((a,b)=>String(a.b).localeCompare(String(b.b))||String(a.x.code||'').localeCompare(String(b.x.code||''))).map(r=>{ const S=PSTAT[r.st]; const ov=r.x.pmp==='n'?'p':r.x.pmp||'';
     const auto=r.pm.src==='כלל'?PM[r.pm.m]:r.pm.src==='תת-פרק'?PM[r.pm.m]+' (תת-פרק)':'—';
     return `<tr style="${['none','dbl','unk','mis'].includes(r.st)?'background:#fef3f2':''}"><td class="mono">${esc(r.b)}</td><td class="mono">${esc(r.x.code||'')}</td><td>${esc((r.x.name||'').slice(0,48))}</td><td class="n">${fmtQ(Math.round(r.q*100)/100)}</td><td style="font-size:11px;max-width:150px">${esc(PEL[r.c.el])}<br><span style="color:var(--muted)">${esc(PLV[r.c.lv]||'')}</span></td>
-      <td>${r.hp&&r.st!=='mis'?'<span class="hint" style="margin:0">משאב בסעיף</span>':`<select data-pcr="${r.x.id}" style="font-size:12px"><option value="">אוטו' (${esc(auto)})</option>${opt(PM,ov)}</select>`}</td><td style="color:${S[2]};font-size:12px">${S[0]} ${S[1]}${r.L.length?' <span class="hint" style="margin:0">('+r.L.map(y=>esc(y.code||'')).join(', ')+')</span>':''}</td><td style="text-align:center">${r.hp&&r.st!=='dbl'?`<input type="checkbox" data-pmv="${r.x.id}" title="להעביר לתקורות">`:''}</td><td><button class="ib" data-go="${r.x.id}" style="font-size:11px">פתח</button></td></tr>`; }).join('')||'<tr><td colspan="9" class="hint">אין סעיפי בטון</td></tr>'}
+      <td>${r.hp&&r.st!=='mis'?'<span class="hint" style="margin:0">משאב בסעיף</span>':`<select data-pcr="${r.x.id}" style="font-size:12px"><option value="">אוטו' (${esc(auto)})</option>${opt(PM,ov)}</select>`}</td><td style="color:${S[2]};font-size:12px">${S[0]} ${S[1]}${r.L.length?' <span class="hint" style="margin:0">('+r.L.map(y=>esc(y.code||'')).join(', ')+')</span>':''}</td><td style="text-align:center">${r.hp&&r.st!=='dbl'?`<input type="checkbox" data-pmv="${r.x.id}" title="להעביר לתקורות">`:''}</td><td><button class="ib" data-go="${r.x.id}" style="font-size:11px">פתח</button></td></tr>`; }).join('')||`<tr><td colspan="9" class="hint">${only&&R.length?'✓ אין סעיפים לטיפול – לביטול הסינון: הסר את הסימון "רק לטיפול"':'אין סעיפי בטון'}</td></tr>`}
   </tbody></table></div><div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap"><button class="btn" id="pq_x">ייצוא לאקסל</button></div>`; }
 async function pumpRulesSave(T){ SETTINGS=Object.assign({},SETTINGS,{pumpRules:T}); CONCC=null; render(); qcDlg('p'); try{ if(DB&&DB.saveSettings) await DB.saveSettings(SETTINGS); toast('כללי השאיבה נשמרו – משותפים לכל הפרויקטים'); }catch(e){ toast('שגיאה בשמירה בענן: '+e.message); } }
 function pumpTabBind(h){
