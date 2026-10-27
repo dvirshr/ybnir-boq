@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='27.10.26-9'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='27.10.26-10'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2544,7 +2544,9 @@ function qcRun(){
   // ---- כלל 13: יחידת סעיף ≠ יחידת המוביל ----
   for(const {n,b} of secs){ const ld=leadOf(n); if(ld&&n.unit&&ld.unit&&UNORM(n.unit)!==UNORM(ld.unit)) add({rule:13,sev:'warn',msg:`${b.code} · ${n.code}: יחידת הסעיף ${n.unit} ≠ יחידת המוביל ★ ${ld.code||''} (${ld.unit})`,src:[{id:n.id,t:'סעיף'},{id:ld.id,t:'מוביל'}]}); }
   // ---- כלל 14: פחת כפול / פחת מעל הסף ----
-  const thr=c=>c==='בטון'||c==='שאיבה'?S.wConc:(c==='ריצוף'||c==='חיפוי')?S.wTile:c==='ברזל'?S.wSteel:S.wDef;
+  /* הסף לא נמוך מהפחת הכללי שהוגדר לנושא (כשהפחת הכללי פעיל בפרויקט) */
+  const gT=c=>{ if(!state.wAuto) return 0; return Math.max(0,...wRules().filter(r=>r.k==='topic'&&String(r.v).trim()===c).map(r=>+r.w||0)); };
+  const thr=c=>Math.max(c==='בטון'||c==='שאיבה'?S.wConc:(c==='ריצוף'||c==='חיפוי')?S.wTile:c==='ברזל'?S.wSteel:S.wDef, gT(c==='שאיבה'?'בטון':c));
   for(const {n,b} of secs){ const ld=leadOf(n);
     if(ld&&wVal(n)&&wVal(ld)) add({rule:14,sev:'err',msg:`${b.code} · ${n.code}: פחת כפול – ${fmt(wVal(n),1)}% בסעיף + ${fmt(wVal(ld),1)}% במוביל ★ ${ld.code||''}`,src:[{id:n.id,t:'סעיף'},{id:ld.id,t:'מוביל'}]});
     const chk=(x,c)=>{ const w=wVal(x); if(w&&w>thr(c)) add({rule:14,sev:'warn',msg:`${b.code} · ${n.code}${x===n?'':' · '+(x.code||'')}: פחת ${fmt(w,1)}% מעל הסף ל${c} (${thr(c)}%)`,src:[{id:x.id,t:x===n?'סעיף':'שורה'}]}); };
