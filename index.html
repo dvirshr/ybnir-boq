@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='27.10.26-7'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='27.10.26-8'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2716,7 +2716,8 @@ function pumpTabBind(h){
   const mv=document.getElementById('pq_mv'); if(mv) mv.onclick=async()=>{ const ids=[...h.querySelectorAll('[data-pmv]:checked')].map(c=>+c.dataset.pmv); if(!ids.length){ toast('לא סומנו סעיפים'); return; }
     const R=pumpRows().filter(r=>ids.includes(r.x.id)); const noCov=R.filter(r=>!pumpSecs().some(s=>s.x.byc&&Array.isArray(s.x.byc.pmp)&&s.x.byc.pmp.includes(String(r.b))));
     let rm=0, sum=0; R.forEach(r=>walk(r.x.ch||[],y=>{ if((y.t==='r'||y.t==='k')&&qcCat(y)==='שאיבה'){ rm++; sum+=total(y); } }));
-    if(!confirm(`להעביר את השאיבה של ${R.length} סעיפים לתקורות?\nיימחקו ${rm} משאבי שאיבה (${fmt(sum)} ₪) מסעיפי הבטון.${noCov.length?`\n⚠ ${noCov.length} סעיפים במבנים שאין להם סעיף שאיבה בתקורות (שלב 1) – יישארו לא מכוסים.`:''}\nלפני השינוי נשמרת גרסה.`)) return;
+    const toOH=R.filter(r=>pumpMeth(r.x).m==='p'), gone=R.filter(r=>pumpMeth(r.x).m!=='p'); const mq=L=>fmtQ(Math.round(L.reduce((a,r)=>a+r.q,0)));
+    if(!confirm(`להעביר את השאיבה של ${R.length} סעיפים?\nיימחקו ${rm} משאבי שאיבה (${fmt(sum)} ₪) מסעיפי הבטון.\n• ${toOH.length} סעיפים (${mq(toOH)} מ"ק) בשיטת שאיבה – ייספרו בסעיפי השאיבה בתקורות.${gone.length?`\n• ${gone.length} סעיפים (${mq(gone)} מ"ק) לפי הכללים במנוף/ידני – השאיבה שלהם תימחק ולא תעבור לתקורות.`:''}${noCov.length?`\n⚠ ${noCov.length} סעיפים במבנים שאין להם סעיף שאיבה בתקורות (שלב 1) – יישארו לא מכוסים.`:''}\nלפני השינוי נשמרת גרסה.`)) return;
     try{ if(typeof flushCloud==='function'){ await flushCloud(); await pushCloud(false,'לפני העברת שאיבה לתקורות'); } }catch(e){}
     CONCC=null; const Q0=new Map(R.map(r=>[r.x.id,secQty(r.x)]));
     R.forEach(r=>{ const del=x=>{ x.ch=(x.ch||[]).filter(y=>!((y.t==='r'||y.t==='k')&&qcCat(y)==='שאיבה'&&!(y.t==='r'&&y.lead))); (x.ch||[]).forEach(y=>{ if(y.t==='r') del(y); }); }; del(r.x); });
