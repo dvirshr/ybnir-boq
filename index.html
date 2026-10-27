@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='26.10.26-4'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='27.10.26-1'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -1160,7 +1160,7 @@ async function pullSecDlg(targets){
   const curUp=n=>{ const q=secQty(n); return q?total(n)/q:0; };
   let SELF=false; const tb=t=>{ const f=find(t.id); return f&&f.path[0]?f.path[0].code:''; };
   const rows=()=>targets.map(t=>{ let R=pullSecRank(t,SELF?C.filter(c=>c.id!==t.id):C); const best=R[0]; const has=hasPricedRes(t);
-    if(SELF){ const pick=best&&best.sc>1?best.c:null; const same=!!pick&&pick.sig===resSig(t.ch); return {t,R,pick,on:!!pick&&!same,has:false,same}; }
+    if(SELF){ let pick=best&&best.sc>1&&dupSim(best.c.name,t.name)>=0.6?best.c:null; if(!pick){ const byN=R.filter(x=>x.c.code!==t.code&&UNORM(x.c.unit)===UNORM(t.unit)&&dupSim(x.c.name,t.name)>=0.85)[0]; if(byN) pick=byN.c; } const same=!!pick&&pick.sig===resSig(t.ch); return {t,R,pick,on:!!pick&&!same,has:false,same}; }
     return {t,R,pick:best&&(one||best.sc>=0.75)?best.c:null,on:!!(best&&(one||best.sc>=0.75)&&!has),has}; });
   let RW=[];
   h.innerHTML=`<div class="pdlg" style="z-index:9999"><div class="box" style="width:min(1100px,100%);max-height:94vh;overflow:auto">
@@ -2704,8 +2704,12 @@ function syncPriceDlg(targets){
   const build=()=>{ CH=[]; const sb=state.tree.find(b=>b.code===SRC); const SM=new Map(); walk(sb?sb.ch:[],x=>{ if(x.t==='i'&&!isPct(x)){ const k=x.code||''; if(!SM.has(k)) SM.set(k,[]); SM.get(k).push(x); } });
     let id=0; const add=o=>CH.push(Object.assign({id:id++},o));
     for(const t of targets){ const L=SM.get(t.code||'')||[]; const tl=`${(bOf(t)||{}).code||''}·${t.code||''}`;
-      if(!L.length){ add({t,tl,kind:'info',lbl:'אין סעיף באותו קוד במבנה '+SRC,on:false,dis:true}); continue; }
-      const s=L[0]; if(L.length>1) add({t,tl,kind:'conf',lbl:`${L.length} סעיפים בקוד הזה במבנה ${SRC} – נלקח הראשון`,on:false,dis:true});
+      /* קוד זהה אבל תאור שונה = מספור שונה בין המבנים → לא לפי קוד. מחפשים לפי תאור (≥85%, אותה יחידה) */
+      let s=null; const Lc=L.filter(x=>dupSim(x.name,t.name)>=0.6);
+      if(Lc.length){ s=Lc[0]; if(Lc.length>1) add({t,tl,kind:'conf',lbl:`${Lc.length} סעיפים בקוד הזה במבנה ${SRC} – נלקח הראשון`,on:false,dis:true}); }
+      else { let best=null,bs=0; SM.forEach(arr=>arr.forEach(x=>{ if(UNORM(x.unit)!==UNORM(t.unit)) return; const v=dupSim(x.name,t.name); if(v>bs){ bs=v; best=x; } }));
+        if(best&&bs>=0.85){ s=best; add({t,tl,kind:'info',lbl:`הותאם לפי תאור (${Math.round(bs*100)}%) לסעיף ${best.code} במבנה ${SRC}${L.length?` – בקוד ${t.code} שם יש סעיף אחר: "${(L[0].name||'').slice(0,40)}"`:''}`,on:false,dis:true}); }
+        else { add({t,tl,kind:'conf',lbl:L.length?`⚠ קוד זהה, תאור שונה – במבנה ${SRC}: "${(L[0].name||'').slice(0,45)}". לא הושווה`:'אין סעיף באותו קוד או תאור במבנה '+SRC,on:false,dis:true}); continue; } }
       if(UNORM(s.unit)!==UNORM(t.unit)){ add({t,tl,kind:'conf',lbl:`יחידה שונה: ${t.unit||'—'} מול ${s.unit||'—'} – הסעיף לא הושווה`,on:false,dis:true}); continue; }
       // מחיר סעיף ידני
       const ts=spSet(t), ss=spSet(s), q=secQty(t)||0;
