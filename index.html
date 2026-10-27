@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='27.10.26-2'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='27.10.26-3'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2655,29 +2655,29 @@ function wTabBind(h){
    כל סעיף בטון מסווג אוטומטית לפי התאור: סוג אלמנט (דיפון / יסודות / אנכי / אופקי) ומפלס (מרתף ‎-2 ומטה / מרתף ‎-1 / קרקע ומעלה).
    טבלת כללים משותפת לכל הפרויקטים (SETTINGS.pumpRules) קובעת שיטה: שאיבה / יציקה עם מנוף. דריסה ידנית: x.pmp='p'|'c' בסעיף או בתת-פרק.
    סעיף שאיבה בתקורות (יח' מ"ק) עם byc.pmp=[מבנים] – כמותו = כל הבטון "בשאיבה" במבנים האלה (כולל פחת), חוץ מסעיפים שיש בהם משאב שאיבה. */
-const PEL={S:'דיפון',F:'יסודות / רפסודה',V:'אנכי – קירות / עמודים',H:'אופקי – תקרות / רצפות / מדרגות','?':'לא מזוהה'};
+const PEL={S:'דיפון',F:'יסודות / רפסודה',V:'אנכי – קירות / עמודים',H:'אופקי – תקרות / רצפות',ST:'מהלכי מדרגות / פודסטים',BL:'חגורות בטון','?':'לא מזוהה'};
 const PLV={'-2':'מרתף ‎-2 ומטה','-1':'מרתף ‎-1','0+':'קרקע ומעלה','*':'כל מפלס','?':'לא מזוהה'};
-const PM={p:'שאיבה',c:'יציקה עם מנוף'};
-const PUMP_DEF=[{el:'S',lv:'*',m:'p'},{el:'F',lv:'*',m:'p'},{el:'V',lv:'-2',m:'p'},{el:'V',lv:'-1',m:'c'},{el:'V',lv:'0+',m:'c'},{el:'H',lv:'*',m:'p'}];
+const PM={p:'שאיבה',c:'יציקה עם מנוף',m:'יציקה ידנית'};
+const PUMP_DEF=[{el:'ST',lv:'*',m:'c'},{el:'BL',lv:'*',m:'m'},{el:'S',lv:'*',m:'p'},{el:'F',lv:'*',m:'p'},{el:'V',lv:'-2',m:'p'},{el:'V',lv:'-1',m:'c'},{el:'V',lv:'0+',m:'c'},{el:'H',lv:'*',m:'p'}];
 function pumpRules(){ try{ return (typeof SETTINGS!=='undefined'&&SETTINGS&&Array.isArray(SETTINGS.pumpRules))?SETTINGS.pumpRules:PUMP_DEF; }catch(e){ return PUMP_DEF; } }
 function pumpCls(x){ const t=String(x.name||'').replace(/[‎‏]/g,'');
   const VW=/קיר|עמוד|גרעין|מעקה|פיר|חגור/, HW=/לוח|תקר|רצפ|מדרג|פודסט|בטון\s*רזה|שיפועים|בטון\s*הגנה|קורות|קורה/;
-  const el=/דיפון|כלונס|שוטקריט|סלארי/.test(t)?'S':/יסוד|רפסוד|ראשי\s*כלונס|קור(ות|ת)\s*(יסוד|קשר)|מרצפ/.test(t)?'F':(VW.test(t)&&!/לוח|תקר|רצפ|רפסוד|מהלכ|פודסט/.test(t))?'V':HW.test(t)?'H':VW.test(t)?'V':'?';
+  const el=/חגור/.test(t)?'BL':(/מהלכ|פודסט/.test(t)||(/מדרגות/.test(t)&&!/קיר|גרעין/.test(t)))?'ST':/דיפון|כלונס|שוטקריט|סלארי/.test(t)?'S':/יסוד|רפסוד|ראשי\s*כלונס|קור(ות|ת)\s*(יסוד|קשר)|מרצפ/.test(t)?'F':(VW.test(t)&&!/לוח|תקר|רצפ|רפסוד|מהלכ|פודסט/.test(t))?'V':HW.test(t)?'H':VW.test(t)?'V':'?';
   let lv=/(מרתף|מפלס|קומה)\s*-\s*[2-9]|מרתף\s*תחתון/.test(t)?'-2':/(מרתף|מפלס|קומה)\s*-\s*1(?!\d)|מרתף\s*עליון/.test(t)?'-1':/קרקע|קומה\s*\d|גג/.test(t)?'0+':'';
   if(!lv){ const f=find(x.id), b=f&&f.path[0]; const ro=b&&typeof pfRole==='function'?pfRole(b):''; lv=(ro==='base'||ro==='earth'||/מרתף/.test(t))?'?':'0+'; }
   return {el,lv}; }
-function pumpMeth(x){ if(x.pmp==='p'||x.pmp==='n') return {m:'p',src:'סעיף'}; if(x.pmp==='c') return {m:'c',src:'סעיף'};
-  const sb=parentOf(x.id); if(sb&&(sb.pmp==='c'||sb.pmp==='p')) return {m:sb.pmp,src:'תת-פרק'};
+function pumpMeth(x){ if(x.pmp==='p'||x.pmp==='n') return {m:'p',src:'סעיף'}; if(x.pmp==='c'||x.pmp==='m') return {m:x.pmp,src:'סעיף'};
+  const sb=parentOf(x.id); if(sb&&['c','p','m'].includes(sb.pmp)) return {m:sb.pmp,src:'תת-פרק'};
   const c=pumpCls(x); const r=pumpRules().find(r=>(r.el===c.el)&&(r.lv==='*'||r.lv===c.lv)); return r?{m:r.m,src:'כלל',c}:{m:'?',src:'',c}; }
 const hasPumpRes=x=>{ let f=false; walk(x.ch||[],y=>{ if(!f&&(y.t==='r'||y.t==='k')&&qcCat(y)==='שאיבה') f=true; }); return f; };
 function pumpSecs(){ const L=[]; walk(state.tree,(x,p)=>{ if(x.t==='i'&&UNORM(x.unit)==='מ"ק'&&(/משאב(ת|ות)?\s*בטון|שאיבת?\s*בטון/.test(x.name||'')||(isByc(x)&&x.byc.pmp))) L.push({x,b:(p[0]||{}).code||''}); }); return L; }
 function pumpRows(){ CONCC=null; const M=bycMap('pump'), R=[];
   for(const r of bycConcRows()){ const x=r.x, sb=parentOf(x.id); const hp=hasPumpRes(x); const L=M.get(x.id)||[]; const pm=pumpMeth(x); const c=pm.c||pumpCls(x);
-    const st=hp&&L.length?'dbl':hp?'sec':L.length>1?'dbl':L.length?'oh':pm.m==='c'?'crane':pm.m==='p'?'none':'unk';
+    const st=hp&&L.length?'dbl':hp?'sec':L.length>1?'dbl':L.length?'oh':pm.m==='c'?'crane':pm.m==='m'?'hand':pm.m==='p'?'none':'unk';
     R.push({x,b:r.b,sb,q:secQty(x)||0,st,L,hp,pm,c}); }
   return R; }
-const PSTAT={dbl:['⛔','כפל – שאיבה פעמיים','#d92d20'],none:['❌','בשאיבה – לא מכוסה בסעיף שאיבה','#d92d20'],unk:['❓','לא מסווג – לקבוע שיטה','#b54708'],sec:['✅','שאיבה בסעיף','#12b76a'],oh:['🔗','שאיבה בתקורות','#2e90fa'],crane:['⬜','יציקה עם מנוף','#667085']};
-function pumpTab(){ const R=pumpRows(), B={}; R.forEach(r=>{ const o=B[r.b]=B[r.b]||{sec:0,oh:0,crane:0,none:0,unk:0,dbl:0,t:0}; o[r.st]+=r.q; o.t+=r.q; });
+const PSTAT={dbl:['⛔','כפל – שאיבה פעמיים','#d92d20'],none:['❌','בשאיבה – לא מכוסה בסעיף שאיבה','#d92d20'],unk:['❓','לא מסווג – לקבוע שיטה','#b54708'],sec:['✅','שאיבה בסעיף','#12b76a'],oh:['🔗','שאיבה בתקורות','#2e90fa'],crane:['⬜','יציקה עם מנוף','#667085'],hand:['✋','יציקה ידנית','#667085']};
+function pumpTab(){ const R=pumpRows(), B={}; R.forEach(r=>{ const o=B[r.b]=B[r.b]||{sec:0,oh:0,crane:0,hand:0,none:0,unk:0,dbl:0,t:0}; o[r.st]+=r.q; o.t+=r.q; });
   const T=Object.values(B).reduce((a,o)=>{ for(const k in o) a[k]=(a[k]||0)+o[k]; return a; },{});
   const bad=R.filter(r=>['none','dbl','unk'].includes(r.st)), only=window.__pqo; const td=v=>`<td class="n">${v?fmtQ(Math.round(v*10)/10):''}</td>`;
   const PR=pumpRules(), PS=pumpSecs(); const opt=(o,v)=>Object.entries(o).map(([k,t])=>`<option value="${k}" ${k===v?'selected':''}>${t}</option>`).join('');
@@ -2688,10 +2688,10 @@ function pumpTab(){ const R=pumpRows(), B={}; R.forEach(r=>{ const o=B[r.b]=B[r.
    <div class="row" style="gap:6px;margin-top:4px"><button class="btn small" id="pq_ra">+ כלל</button><button class="btn small" id="pq_rr">ברירת מחדל</button><span class="hint" style="margin:0">הכלל הראשון שמתאים קובע. "לא מזוהה" = לקבוע ידנית.</span></div></details>
   <div style="margin:6px 0"><b>סעיפי שאיבה (מ"ק)</b> <span class="hint" style="margin:0">– מבנים שהבטון שלהם נספר בסעיף (למשל 01,05)</span>
    <table class="boq" style="min-width:0;table-layout:auto;margin-top:4px">${PS.map(s=>{ const v=(s.x.byc&&s.x.byc.pmp)||[]; const sug=(String(s.x.name||'').match(/\b\d{2}\b/g)||[]).filter(c=>state.tree.some(b=>b.code===c)); return `<tr><td class="mono">${esc(s.b)} · ${esc(s.x.code||'')}</td><td>${esc((s.x.name||'').slice(0,45))}</td><td><input class="mono" data-pqs="${s.x.id}" value="${esc(v.join(','))}" placeholder="${esc(sug.join(','))}" style="width:110px"></td><td class="n">${v.length?fmtQ(Math.round(secQtyNet(s.x)*10)/10)+' מ"ק':`<span class="hint" style="margin:0">${sug.length?'הצעה: '+esc(sug.join(','))+' – לחץ Enter בשדה':'לא מקושר'}</span>`}</td></tr>`; }).join('')||'<tr><td class="hint">אין סעיפי שאיבה (מ"ק עם "משאבות/שאיבת בטון" בשם)</td></tr>'}</table></div>
-  <div style="overflow:auto;margin:6px 0"><table class="boq" style="min-width:0;table-layout:auto"><thead><tr><th>מבנה</th><th>בטון מ"ק</th><th>✅ בסעיף</th><th>🔗 בתקורות</th><th>⬜ מנוף</th><th style="color:#d92d20">❌ לא מכוסה</th><th style="color:#b54708">❓ לא מסווג</th><th style="color:#d92d20">⛔ כפל</th></tr></thead><tbody>
-  ${Object.keys(B).sort().map(b=>{ const o=B[b]; return `<tr><td class="mono">${esc(b)}</td>${td(o.t)}${td(o.sec)}${td(o.oh)}${td(o.crane)}${td(o.none)}${td(o.unk)}${td(o.dbl)}</tr>`; }).join('')}
-  <tr style="font-weight:700"><td>סה"כ</td>${td(T.t)}${td(T.sec)}${td(T.oh)}${td(T.crane)}${td(T.none)}${td(T.unk)}${td(T.dbl)}</tr></tbody></table></div>
-  <details style="margin:4px 0"><summary style="cursor:pointer">שיטה לפי תת-פרק (דריסה לכל הסעיפים בו)</summary><div style="display:flex;flex-wrap:wrap;gap:4px 12px;margin:6px 0">${subs.map(r=>`<label style="font-size:12px">${esc(r.b)} · ${esc(r.sb.code||'')} ${esc((r.sb.name||'').slice(0,24))} <select data-psub="${r.sb.id}"><option value="">לפי כללים</option>${opt(PM,r.sb.pmp==='p'||r.sb.pmp==='c'?r.sb.pmp:'')}</select></label>`).join('')}</div></details>
+  <div style="overflow:auto;margin:6px 0"><table class="boq" style="min-width:0;table-layout:auto"><thead><tr><th>מבנה</th><th>בטון מ"ק</th><th>✅ בסעיף</th><th>🔗 בתקורות</th><th>⬜ מנוף</th><th>✋ ידני</th><th style="color:#d92d20">❌ לא מכוסה</th><th style="color:#b54708">❓ לא מסווג</th><th style="color:#d92d20">⛔ כפל</th></tr></thead><tbody>
+  ${Object.keys(B).sort().map(b=>{ const o=B[b]; return `<tr><td class="mono">${esc(b)}</td>${td(o.t)}${td(o.sec)}${td(o.oh)}${td(o.crane)}${td(o.hand)}${td(o.none)}${td(o.unk)}${td(o.dbl)}</tr>`; }).join('')}
+  <tr style="font-weight:700"><td>סה"כ</td>${td(T.t)}${td(T.sec)}${td(T.oh)}${td(T.crane)}${td(T.hand)}${td(T.none)}${td(T.unk)}${td(T.dbl)}</tr></tbody></table></div>
+  <details style="margin:4px 0"><summary style="cursor:pointer">שיטה לפי תת-פרק (דריסה לכל הסעיפים בו)</summary><div style="display:flex;flex-wrap:wrap;gap:4px 12px;margin:6px 0">${subs.map(r=>`<label style="font-size:12px">${esc(r.b)} · ${esc(r.sb.code||'')} ${esc((r.sb.name||'').slice(0,24))} <select data-psub="${r.sb.id}"><option value="">לפי כללים</option>${opt(PM,['p','c','m'].includes(r.sb.pmp)?r.sb.pmp:'')}</select></label>`).join('')}</div></details>
   <div class="row" style="gap:14px;margin:6px 0"><b style="color:${bad.length?'#d92d20':'#12b76a'}">${bad.length} סעיפים לטיפול</b><label><input type="checkbox" id="pq_o" ${only?'checked':''}> רק לטיפול</label></div>
   <div style="max-height:46vh;overflow:auto"><table class="boq" style="min-width:0;table-layout:auto"><thead><tr><th>מב</th><th>סעיף</th><th>תאור</th><th>מ"ק</th><th>סיווג</th><th>שיטה</th><th>סטטוס</th><th></th></tr></thead><tbody>
   ${R.filter(r=>!only||['none','dbl','unk'].includes(r.st)).sort((a,b)=>String(a.b).localeCompare(String(b.b))||String(a.x.code||'').localeCompare(String(b.x.code||''))).map(r=>{ const S=PSTAT[r.st]; const ov=r.x.pmp==='n'?'p':r.x.pmp||'';
