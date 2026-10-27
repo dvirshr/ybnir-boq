@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='27.10.26-8'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='27.10.26-9'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2219,7 +2219,7 @@ document.addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('#f
 function sumTopicSec(n,ch){ const nm=n.name||'', u=UNORM(n.unit);
   if(u==='מ"ק'&&(ch==='02'||/בטון/.test(nm))&&!/משאב(ת|ות)?\s*(בטון|סטטית)|שאיב|פחת|מבלוק|בלוקי\s*בטון|אדמת\s*גן/.test(nm)&&!(/חפיר|מילוי|מצע|עפר|סומסום/.test(nm)&&!/בטון|ב-?\s*\d{2}\b|מזוין|קיר|עמוד|תקר|יסוד|רפסוד/.test(nm))) return 'בטון'; // "על מצע" בסעיף בטון (ב-30) = בטון
   if((u==='טון'||/ק"?ג/.test(u))&&/זיון|ברזל|פלדה\s*מצולעת|רשת/.test(nm)) return 'ברזל';
-  const c=qcAutoCat(n.code,nm); return c==='בטון'?'אחר':c; }
+  const c=qcAutoCat(n.code,nm); if(c==='ברזל'&&(!/טון|ק"?ג/.test(u)||/הובל|כיפוף|חיתוך|קשירה/.test(nm))) return 'אחר'; /* הובלה מיוחדת לברזל וכו' – לא כמות ברזל */ return c==='בטון'?'אחר':c; }
 function sumCollect(){
   const S={}, R={};
   walk(state.tree,(x,p)=>{ const b=p[0]||{}, c=p[1]||{};
