@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-14'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-15'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -620,7 +620,8 @@ function wAuto(n){ if(!n||!state.wAuto||n.wOff) return 0; const T=wRules(); if(!
   if(!m) return 0;
   if(!m.code&&!rc.startsWith('5')) return 0; return m.w; }
 const wOwn=n=>{ const v=n&&n.w; return !(v===undefined||v===null||String(v).trim()===''); };
-const wVal=n=>{ if(!wOwn(n)) return wAuto(n); const x=+String(n.w).replace('%','').replace(/,/g,''); return Number.isFinite(x)?x:0; };
+let WNO=false; /* true = חישוב כמויות בלי פחת (נטו), לייצוא */
+const wVal=n=>{ if(WNO) return 0; if(!wOwn(n)) return wAuto(n); const x=+String(n.w).replace('%','').replace(/,/g,''); return Number.isFinite(x)?x:0; };
 const withW=(n,v)=>{ const w=wVal(n); return (!w||v===null||v===undefined||Number.isNaN(v))?v:v*(1+w/100); };
 function rQtyNet(n){
   if(n.calc && n.calc.length) return calcQty(n);
@@ -1782,10 +1783,12 @@ function effiDlg(){
       ${hasOH?`<label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="e_oh"> מחירים מועמסים בתקורות ורווח (בלי שורות מבנה התקורות)</label>`:''}
       <label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="e_notes"> להציג את הערות המערכת (מקור הכמות) – ברירת מחדל: עמודה מוסתרת</label>
       <label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="e_zero" checked> לכלול סעיפים בלי עלות</label>
+      <label>רמת פירוט <select id="e_lv" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px"><option value="">סעיף (כמו היום)</option><option value="res">שורה לכל משאב / מק"ט</option></select></label>
+      <p class="hint" style="margin:0">בפירוט למשאבים: קוד = קוד הסעיף + מספר שורה, הסעיף המקורי ב"הערות מערכת". קובץ כזה לסקירה בלבד – בטעינה חזרה שורות המשאבים מדולגות.</p>
     </div>
     <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="e_c">ביטול</button><button class="btn primary" id="e_go">ייצוא</button></div></div></div>`;
   document.getElementById('e_c').onclick=()=>h.innerHTML=''; document.getElementById('pdlg').onclick=e=>{ if(e.target.id==='pdlg') h.innerHTML=''; };
-  document.getElementById('e_go').onclick=()=>{ const o={sort:document.getElementById('e_sort').value,oh:!!document.getElementById('e_oh')?.checked,notes:document.getElementById('e_notes').checked,zero:document.getElementById('e_zero').checked}; h.innerHTML=''; effiExport(o); };
+  document.getElementById('e_go').onclick=()=>{ const o={sort:document.getElementById('e_sort').value,oh:!!document.getElementById('e_oh')?.checked,notes:document.getElementById('e_notes').checked,zero:document.getElementById('e_zero').checked,res:document.getElementById('e_lv').value==='res'}; h.innerHTML=''; effiExport(o); };
 }
 function effiExport(o){
   if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; }
@@ -1796,6 +1799,14 @@ function effiExport(o){
     if(OHC&&(OHC.OB.has(b.code)||OHC.OC.has(c.code))) return;
     const q=secQty(n), t=OHC?ohTot(n):total(n); if(!o.zero&&!t) return;
     const L=[]; if(wVal(n)) L.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) L.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); });
+    /* פירוט: שורה לכל משאב / מק"ט (סעיף עם מחיר ידני או בלי משאבים – נשאר שורת סעיף). כמות נטו = בלי שום פחת; פחת % = מצטבר עד השורה */
+    if(o.res&&!secPriced(n)){ const LV=[]; (n.ch||[]).forEach(r=>{ if(r.t!=='r') return; if(hasItems(r)) r.ch.forEach(k=>{ if(k.t==='k') LV.push(k); }); else LV.push(r); });
+      if(LV.length){ const fOH=OHC&&total(n)?ohTot(n)/total(n):1; const qG=x=>x.t==='k'?kQty(x):rQty(x);
+        WNO=true; CONCC=null; const NETS=LV.map(x=>{ try{ return qG(x); }catch(e){ return NaN; } }); WNO=false; CONCC=null;
+        LV.forEach((x,i)=>{ const g=qG(x), nt=NETS[i], tt=total(x)*fOH; if(!o.zero&&!tt) return; const gq=Number.isNaN(g)?0:(g||0), nq=Number.isNaN(nt)?0:(nt||0);
+          const rc=x.t==='k'?(parentOf(x.id)||{}).code||'':''; const src=[x.psrc||'',x.pdate?fmtDt(x.pdate):''].filter(Boolean).join(' · ')||pbText(n);
+          rows.push({ord:ord++,cn:'',sn:nodeName(s)||s.name||'',src,sw:nq&&gq&&Math.abs(gq/nq-1)>1e-9?R2((gq/nq-1)*100):0,qn:nq,id:x.id,b:b.code||'',bn:b.name||'',c:c.code||'',s:s.code||'',code:(n.code||'')+'.'+String(i+1).padStart(2,'0'),name:(x.code?x.code+' – ':'')+(nodeName(x)||''),unit:x.unit||'',q:gq,t:tt,w:'',note:`סעיף: ${n.code||''} – ${n.name||''}${rc?' · משאב '+rc:''}`,pb:''}); });
+        return; } }
     rows.push({ord:ord++,cn:'',sn:nodeName(s)||s.name||'',src:(()=>{ const F=liveFiles(n).length+filesUp(n).length; const t=pbText(n); return t+(F?(t?' · ':'')+'📎'+F:''); })(),sw:wVal(n),qn:(v=>Number.isNaN(v)?0:(v||0))(secQtyNet(n)),id:n.id,b:b.code||'',bn:b.name||'',c:c.code||'',s:s.code||'',code:n.code||'',name:n.name||'',unit:n.unit||'',q:Number.isNaN(q)?0:(q||0),t,w:L.join(' · '),note:n.note||'',pb:(()=>{ const b=pbOf(n); const F=liveFiles(n).length+filesUp(n).length; return (b?PB[b.k]:'')+(F?(b?' · ':'')+'📎'+F:''); })()}); });
   if(o.sort==='code') rows.sort((a,b)=>String(a.code).localeCompare(String(b.code),undefined,{numeric:true})||String(a.b).localeCompare(String(b.b),undefined,{numeric:true})||a.ord-b.ord);
   // פורמט אפי (כמו ייצוא הפריוריטי שהוא רגיל אליו): A מב · B תאור מבנה · C פרק · D תאור פרק · E תת-פרק · F תאור תת-פרק · G סעיף · H תאור סעיף · I יחידה
@@ -1889,7 +1900,7 @@ function effiExport(o){
   try{ buf=xlsxPatch(buf,{0:{freeze:true,boldRows:[1,TR].concat(FR.length?[GR]:[])},1:{freeze:true,boldRows:[1,STR].concat(FR.length?[S.length]:[])},2:{boldRows:bold3},3:{boldRows:bold4},...Object.fromEntries(boldX.map((B,i)=>[4+i,{freeze:true,boldRows:B}]))}); }catch(e){ console.warn('patch',e); }
   const d=new Date(); const stamp=`${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`;
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=`כתב כמויות ${state.project||''} - לאפי ${stamp}${OHC?' (מועמס)':''}.xlsx`.replace(/\s+/g,' '); document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+  a.download=`כתב כמויות ${state.project||''} - לאפי${o.res?' - משאבים':''} ${stamp}${OHC?' (מועמס)':''}.xlsx`.replace(/\s+/g,' '); document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
   toast(`יוצאו ${rows.length} סעיפים`);
   } finally { OHC=was; }
 }
