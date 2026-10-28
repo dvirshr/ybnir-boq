@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-15'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-16'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -1783,12 +1783,12 @@ function effiDlg(){
       ${hasOH?`<label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="e_oh"> מחירים מועמסים בתקורות ורווח (בלי שורות מבנה התקורות)</label>`:''}
       <label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="e_notes"> להציג את הערות המערכת (מקור הכמות) – ברירת מחדל: עמודה מוסתרת</label>
       <label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="e_zero" checked> לכלול סעיפים בלי עלות</label>
-      <label>רמת פירוט <select id="e_lv" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px"><option value="">סעיף (כמו היום)</option><option value="res">שורה לכל משאב / מק"ט</option></select></label>
-      <p class="hint" style="margin:0">בפירוט למשאבים: קוד = קוד הסעיף + מספר שורה, הסעיף המקורי ב"הערות מערכת". קובץ כזה לסקירה בלבד – בטעינה חזרה שורות המשאבים מדולגות.</p>
+      <label>פורמט <select id="e_lv" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px"><option value="">כתב כמויות ברמת סעיף (כמו היום)</option><option value="tbl">טבלת אפי – שורה לכל משאב / מק"ט, בטקסטים של אפי</option></select></label>
+      <p class="hint" style="margin:0">טבלת אפי: בעמודות של קובץ התקציב שאפי מכיר, מספור מבנה.פרק.תת-פרק.NNNN שנגזר מהסעיף, עלות מפוצלת לחומר/עבודה/תקורה. לפני הייצוא – מסך התאמת תאורים (מילון אפי) לבדיקה ואישור.</p>
     </div>
     <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="e_c">ביטול</button><button class="btn primary" id="e_go">ייצוא</button></div></div></div>`;
   document.getElementById('e_c').onclick=()=>h.innerHTML=''; document.getElementById('pdlg').onclick=e=>{ if(e.target.id==='pdlg') h.innerHTML=''; };
-  document.getElementById('e_go').onclick=()=>{ const o={sort:document.getElementById('e_sort').value,oh:!!document.getElementById('e_oh')?.checked,notes:document.getElementById('e_notes').checked,zero:document.getElementById('e_zero').checked,res:document.getElementById('e_lv').value==='res'}; h.innerHTML=''; effiExport(o); };
+  document.getElementById('e_go').onclick=()=>{ const o={sort:document.getElementById('e_sort').value,oh:!!document.getElementById('e_oh')?.checked,notes:document.getElementById('e_notes').checked,zero:document.getElementById('e_zero').checked}; const tbl=document.getElementById('e_lv').value==='tbl'; h.innerHTML=''; if(tbl) effiMapDlg(o); else effiExport(o); };
 }
 function effiExport(o){
   if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; }
@@ -1799,14 +1799,6 @@ function effiExport(o){
     if(OHC&&(OHC.OB.has(b.code)||OHC.OC.has(c.code))) return;
     const q=secQty(n), t=OHC?ohTot(n):total(n); if(!o.zero&&!t) return;
     const L=[]; if(wVal(n)) L.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) L.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); });
-    /* פירוט: שורה לכל משאב / מק"ט (סעיף עם מחיר ידני או בלי משאבים – נשאר שורת סעיף). כמות נטו = בלי שום פחת; פחת % = מצטבר עד השורה */
-    if(o.res&&!secPriced(n)){ const LV=[]; (n.ch||[]).forEach(r=>{ if(r.t!=='r') return; if(hasItems(r)) r.ch.forEach(k=>{ if(k.t==='k') LV.push(k); }); else LV.push(r); });
-      if(LV.length){ const fOH=OHC&&total(n)?ohTot(n)/total(n):1; const qG=x=>x.t==='k'?kQty(x):rQty(x);
-        WNO=true; CONCC=null; const NETS=LV.map(x=>{ try{ return qG(x); }catch(e){ return NaN; } }); WNO=false; CONCC=null;
-        LV.forEach((x,i)=>{ const g=qG(x), nt=NETS[i], tt=total(x)*fOH; if(!o.zero&&!tt) return; const gq=Number.isNaN(g)?0:(g||0), nq=Number.isNaN(nt)?0:(nt||0);
-          const rc=x.t==='k'?(parentOf(x.id)||{}).code||'':''; const src=[x.psrc||'',x.pdate?fmtDt(x.pdate):''].filter(Boolean).join(' · ')||pbText(n);
-          rows.push({ord:ord++,cn:'',sn:nodeName(s)||s.name||'',src,sw:nq&&gq&&Math.abs(gq/nq-1)>1e-9?R2((gq/nq-1)*100):0,qn:nq,id:x.id,b:b.code||'',bn:b.name||'',c:c.code||'',s:s.code||'',code:(n.code||'')+'.'+String(i+1).padStart(2,'0'),name:(x.code?x.code+' – ':'')+(nodeName(x)||''),unit:x.unit||'',q:gq,t:tt,w:'',note:`סעיף: ${n.code||''} – ${n.name||''}${rc?' · משאב '+rc:''}`,pb:''}); });
-        return; } }
     rows.push({ord:ord++,cn:'',sn:nodeName(s)||s.name||'',src:(()=>{ const F=liveFiles(n).length+filesUp(n).length; const t=pbText(n); return t+(F?(t?' · ':'')+'📎'+F:''); })(),sw:wVal(n),qn:(v=>Number.isNaN(v)?0:(v||0))(secQtyNet(n)),id:n.id,b:b.code||'',bn:b.name||'',c:c.code||'',s:s.code||'',code:n.code||'',name:n.name||'',unit:n.unit||'',q:Number.isNaN(q)?0:(q||0),t,w:L.join(' · '),note:n.note||'',pb:(()=>{ const b=pbOf(n); const F=liveFiles(n).length+filesUp(n).length; return (b?PB[b.k]:'')+(F?(b?' · ':'')+'📎'+F:''); })()}); });
   if(o.sort==='code') rows.sort((a,b)=>String(a.code).localeCompare(String(b.code),undefined,{numeric:true})||String(a.b).localeCompare(String(b.b),undefined,{numeric:true})||a.ord-b.ord);
   // פורמט אפי (כמו ייצוא הפריוריטי שהוא רגיל אליו): A מב · B תאור מבנה · C פרק · D תאור פרק · E תת-פרק · F תאור תת-פרק · G סעיף · H תאור סעיף · I יחידה
@@ -1900,9 +1892,162 @@ function effiExport(o){
   try{ buf=xlsxPatch(buf,{0:{freeze:true,boldRows:[1,TR].concat(FR.length?[GR]:[])},1:{freeze:true,boldRows:[1,STR].concat(FR.length?[S.length]:[])},2:{boldRows:bold3},3:{boldRows:bold4},...Object.fromEntries(boldX.map((B,i)=>[4+i,{freeze:true,boldRows:B}]))}); }catch(e){ console.warn('patch',e); }
   const d=new Date(); const stamp=`${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`;
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=`כתב כמויות ${state.project||''} - לאפי${o.res?' - משאבים':''} ${stamp}${OHC?' (מועמס)':''}.xlsx`.replace(/\s+/g,' '); document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+  a.download=`כתב כמויות ${state.project||''} - לאפי ${stamp}${OHC?' (מועמס)':''}.xlsx`.replace(/\s+/g,' '); document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
   toast(`יוצאו ${rows.length} סעיפים`);
   } finally { OHC=was; }
+}
+/* ---------- ייצוא לאפי – טבלת אפי (כמו ה-DataSheet של פריוריטי): שורה לכל משאב / מק"ט, בטקסטים של אפי ----------
+   מספור: מבנה.פרק.תת-פרק.NNNN – NNNN = מספר הסעיף ×10 + מספר השורה (סעיף 23.02.001 → 0011, 0012…). סעיף בלי משאבים / מחיר סעיף ידני → ×10 (0010).
+   תאור: דריסה בשורה (x.effiTxt, בפרויקט) › מילון אפי לפי מק"ט (SETTINGS.effiDict – משותף לכל הפרויקטים) › ברירת מחדל (תאור הסעיף – שם המשאב) ⚠.
+   כמות = כולל פחת; % הפחת בעמודת "הערות". סוג עלות לפי קידומת המק"ט (SETTINGS.effiCls); מבני תקורות → תקורה. */
+const EFFI_CLS_DEF={m:'1,5',l:'3,4',o:'7'}, EFFI_T={m:'חומר',l:'עבודה',o:'תקורה'};
+const effiCls=()=>Object.assign({},EFFI_CLS_DEF,SETTINGS.effiCls||{});
+const effiStrip=s=>String(s||'').replace(/^\s*(רכש|ק\.\s?מ\.?|תקורות|כלי צמ"ה)\s*[-–]\s*/,'').trim();
+function effiType(code,C){ const p=String(code||'').trim(); let best='',bl=0; if(!p) return '';
+  for(const k of ['m','l','o']) String(C[k]||'').split(/[,\s]+/).filter(Boolean).forEach(x=>{ if(p.startsWith(x)&&x.length>bl){ best=k; bl=x.length; } });
+  return best; }
+function effiRows(o,C){ C=C||effiCls(); const rows=[]; const OB=new Set(typeof ohBlds==='function'?ohBlds():[]); const cm=chMap(); const seq={};
+  const qG=x=>x.t==='k'?kQty(x):rQty(x), fin=v=>Number.isFinite(v)?v:0;
+  walk(state.tree,(n,p)=>{ if(n.t!=='i') return; const b=p[0]||{}, c=p[1]||{}, s=p[2]||{};
+    if(OHC&&(OHC.OB.has(b.code)||OHC.OC.has(c.code))) return;
+    const T=OHC?ohTot(n):total(n); if(!o.zero&&!T) return;
+    const pc=String(n.code||'').split('.'); const ch=pc.length>=3?pc[0]:(c.code||''), sb=pc.length>=3?pc[1]:(String(s.code||'').split('.').pop()||'00');
+    const okN=pc.length===3&&/^\d{1,3}$/.test(pc[2]), base=okN?+pc[2]*10:0, key=(b.code||'')+'|'+ch+'|'+sb;
+    const num=i=>{ if(okN&&i<=9) return [String(base+i).padStart(4,'0'),false]; seq[key]=(seq[key]||9000)+1; return [String(seq[key]),true]; };
+    const fOH=OHC&&total(n)?ohTot(n)/total(n):1;
+    const LV=[]; if(!secPriced(n)) (n.ch||[]).forEach(r=>{ if(r.t!=='r') return; if(hasItems(r)) r.ch.forEach(k=>{ if(k.t==='k') LV.push(k); }); else LV.push(r); });
+    const resT=[...new Set((n.ch||[]).filter(r=>r.t==='r').map(r=>effiType(r.code,C)))];
+    const mk=(x,i,q,qn,t,rc)=>{ const [nm,nbad]=num(i); const tc=x.t==='i'?(resT.length===1?resT[0]:''):effiType(x.t==='k'?(rc||x.code):x.code,C); const typ=OB.has(b.code)?'o':tc;
+      const kc=x.t==='i'?'':(x.code||''); const def=x.t==='i'||LV.length===1?(n.name||''):`${n.name||''} – ${effiStrip(nodeName(x))}`;
+      let q1=q, qn1=qn, z=false; if(!q1&&t){ q1=1; qn1=1; z=true; }
+      rows.push({id:x.id,x,n,b:b.code||'',bn:b.name||'',ch,chn:cm[ch]||cm[c.code]||'',sb,sbn:nodeName(s)||s.name||'',num:nm,nbad,unit:x.unit||n.unit||'',q:q1,qn:qn1,z,
+        w:qn1&&q1&&Math.abs(q1/qn1-1)>1e-9?(q1/qn1-1)*100:0,t,typ:typ||'l',tbad:!typ,kc,rc:rc||'',def}); };
+    if(!LV.length){ mk(n,0,fin(secQty(n)),fin(secQtyNet(n)),T,''); return; }
+    let NETS; WNO=true; CONCC=null; try{ NETS=LV.map(x=>{ try{ return qG(x); }catch(e){ return NaN; } }); } finally { WNO=false; CONCC=null; }
+    LV.forEach((x,i)=>{ const tt=total(x)*fOH; if(!o.zero&&!tt) return; mk(x,i+1,fin(qG(x)),fin(NETS[i]),tt,x.t==='k'?(parentOf(x.id)||{}).code||'':''); }); });
+  return rows; }
+/* הצעת תאור מתוך קובץ אפי: מילים של אפי שנמצאות אצלנו + דמיון, יחידה זהה, בונוס לאותו פרק */
+const effiU=u=>{ u=String(u||'').replace(/\s/g,''); return ({'יחי':'*','קמפ':'קומפ\'','קומפ':'קומפ\''})[u]||UNORM(u); };
+function effiBest(r,REF,cache){ const cand=`${r.n.name||''} ${r.x.t==='i'?'':effiStrip(nodeName(r.x))}`, rn=r.x.t==='i'?'':effiStrip(nodeName(r.x)); const k=cand+'|'+r.unit+'|'+r.ch; if(cache&&cache.has(k)) return cache.get(k);
+  const u=effiU(r.unit); const L=[];
+  for(const e of REF){ const eu=effiU(e.u), um=eu===u, wild=eu==='*'; let sc=Math.max(wordScore(e.d,cand)*0.95,dupSim(cand,e.d),rn?dupSim(rn,e.d):0);
+    if(!um&&!wild) sc*=0.6; if(e.c&&e.c===r.ch) sc=Math.min(1,sc+0.05); L.push({d:e.d,u:e.u,sc,um}); }
+  L.sort((a,b)=>b.sc-a.sc); const out=L.filter(x=>x.sc>=0.4).slice(0,3); if(cache) cache.set(k,out); return out; }
+function effiRefParse(buf){ const wb=XLSX.read(buf,{type:'array'}); const out=new Map();
+  for(const sn of wb.SheetNames){ const A=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''}); const hi=A.findIndex(r=>r.includes('תאור סעיף')&&r.includes('יחידה')); if(hi<0) continue;
+    const H=A[hi], iD=H.indexOf('תאור סעיף'), iU=H.indexOf('יחידה'), iC=H.indexOf('מספר פרק');
+    A.slice(hi+1).forEach(r=>{ const d=String(r[iD]||'').trim(); if(!d) return; const u=String(r[iU]||'').trim(), c=iC>=0?String(r[iC]||'').trim():''; const k=d+'|'+u; if(!out.has(k)) out.set(k,{d,u,c}); }); }
+  return [...out.values()]; }
+function effiMapDlg(o){
+  if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; }
+  const h=document.getElementById('printDlgHost'); let CL=effiCls();
+  const calc=()=>{ const was=OHC; OHC=o.oh?ohCalc():null; try{ return effiRows(o,CL); } finally { OHC=was; } };
+  let R=calc();
+  const ED0=Object.assign({},SETTINGS.effiDict||{}), ED=Object.assign({},ED0);           /* עותק עבודה של המילון */
+  const HO=new Map(); R.forEach(r=>{ if(r.x.effiTxt) HO.set(r.id,r.x.effiTxt); }); const HO0=new Map(HO);   /* דריסות בשורה */
+  let REF=Array.isArray(SETTINGS.effiRef)?SETTINGS.effiRef:[]; const SUG=new Map(), ON=new Map(), PREV=new Map(), cache=new Map();
+  let flt='def', q='', lim=300;
+  const eff=r=>HO.has(r.id)?HO.get(r.id):(r.kc&&ED[r.kc])?ED[r.kc]:r.def;
+  const src=r=>HO.has(r.id)?'h':(r.kc&&ED[r.kc])?'d':'def';
+  const SRC={h:['ידני – רק כאן','#2e90fa'],d:['מילון (לפי מק"ט)','#12b76a'],def:['⚠ ברירת מחדל','#b54708']};
+  const sugAll=()=>{ SUG.clear(); if(!REF.length) return; R.forEach(r=>{ if(src(r)!=='def') return; const L=effiBest(r,REF,cache); if(!L.length) return; SUG.set(r.id,L);
+      if(L[0].sc>=0.75&&L[0].um&&!ON.has(r.id)){ ON.set(r.id,true); PREV.set(r.id,HO.has(r.id)?HO.get(r.id):undefined); HO.set(r.id,L[0].d); } }); };
+  sugAll();
+  const vis=()=>R.filter(r=>{ const s=src(r); if(flt==='def'&&!(s==='def'||ON.get(r.id))) return false; if(flt==='d'&&s!=='d') return false; if(flt==='h'&&s!=='h') return false; if(flt==='sug'&&!SUG.has(r.id)) return false; if(flt==='flag'&&!(r.nbad||r.tbad||r.z)) return false;
+    if(q&&wordScore(q,`${r.n.code} ${r.n.name} ${r.x.code||''} ${nodeName(r.x)||''} ${eff(r)}`)<1) return false; return true; });
+  const changes=()=>{ const dA=Object.keys(ED).filter(k=>ED[k]!==ED0[k]), dD=Object.keys(ED0).filter(k=>!(k in ED)); let hA=0,hD=0; HO.forEach((v,k)=>{ if(HO0.get(k)!==v) hA++; }); HO0.forEach((v,k)=>{ if(!HO.has(k)) hD++; }); return {dA,dD,hA,hD}; };
+  const draw=()=>{ const V=vis(), cnt={def:0,d:0,h:0}; R.forEach(r=>cnt[src(r)]++); const ch=changes(); const fl=R.filter(r=>r.nbad||r.tbad||r.z).length;
+    const tot=R.reduce((a,r)=>a+r.t,0), byT={m:0,l:0,o:0}; R.forEach(r=>byT[r.typ]+=r.t);
+    h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="טבלת אפי" style="width:min(1250px,100%);max-height:94vh;display:flex;flex-direction:column">
+    <h2 style="margin:0 0 4px">ייצוא לאפי – טבלת אפי (שורה לכל משאב / מק"ט)</h2>
+    <p class="hint" style="margin:0 0 6px">מספור: מבנה.פרק.תת-פרק.<b>NNNN</b> = מספר הסעיף ×10 + שורה (23.02.<b>001</b> → <b>0011</b>, <b>0012</b>…). תאור: <b style="color:#2e90fa">ידני – רק כאן</b> › <b style="color:#12b76a">מילון לפי מק"ט</b> (משותף לכל הפרויקטים) › <b style="color:#b54708">ברירת מחדל</b> (תאור הסעיף – שם המשאב). כמות כולל פחת, % פחת בהערות. ✔ = הצעה מקובץ אפי (מסומנת מראש רק בהתאמה גבוהה ויחידה זהה). שום דבר לא נשמר עד "שמור".</p>
+    <div class="row" style="gap:10px;flex-wrap:wrap;margin:0 0 6px;font-size:12px">
+      <label class="btn small" style="cursor:pointer">📂 קובץ אפי להצעות${REF.length?` (${REF.length} תאורים)`:''}<input type="file" id="ef_ref" accept=".xlsx,.xls" hidden></label>
+      <span>סוג עלות לפי קידומת מק"ט: חומר <input id="ef_m" value="${esc(CL.m)}" style="width:52px"> עבודה <input id="ef_l" value="${esc(CL.l)}" style="width:52px"> תקורה <input id="ef_o" value="${esc(CL.o)}" style="width:52px"> <i class="hint" style="margin:0">(מבני תקורות → תקורה)</i></span>
+    </div>
+    <div class="row" style="gap:10px;flex-wrap:wrap;margin:0 0 6px">
+      <b>${R.length} שורות</b><span style="color:#12b76a">מילון ${cnt.d}</span><span style="color:#2e90fa">ידני ${cnt.h}</span><span style="color:#b54708">⚠ ברירת מחדל ${cnt.def}</span>${fl?`<span style="color:#d92d20">⚠ לבדיקה (מספור/סוג/כמות) ${fl}</span>`:''}
+      <span>סה"כ ${fmt(tot)} ₪ · חומר ${fmt(byT.m)} · עבודה ${fmt(byT.l)} · תקורה ${fmt(byT.o)}</span>
+      <select id="ef_f" style="border:1px solid var(--line);border-radius:6px;padding:2px 6px">${[['def','⚠ ברירת מחדל + הצעות מסומנות'],['all','הכל'],['sug','עם הצעה מאפי'],['d','מילון'],['h','ידני'],['flag','⚠ לבדיקה']].map(([k,t])=>`<option value="${k}" ${k===flt?'selected':''}>${t}</option>`).join('')}</select>
+      <input id="ef_q" placeholder="חיפוש…" value="${esc(q)}" style="width:150px">
+    </div>
+    <datalist id="ef_dl">${REF.map(e=>`<option value="${esc(e.d)}">${esc(e.u)}</option>`).join('')}</datalist>
+    <div style="overflow:auto;flex:1;min-height:200px"><table class="boq" style="min-width:0;table-layout:auto;font-size:12px"><thead><tr><th>✔</th><th>מספר אפי</th><th>סעיף אצלנו</th><th>משאב / מק"ט</th><th>יח'</th><th class="n">כמות</th><th class="n">₪</th><th>סוג</th><th>תאור לאפי</th><th>חל על</th><th>הצעה מקובץ אפי</th></tr></thead><tbody>
+    ${V.slice(0,lim).map(r=>{ const s=src(r), S=SUG.get(r.id)||[], on=!!ON.get(r.id), fl2=[r.nbad?'מספור':'',r.tbad?'סוג':'',r.z?'כמות 0→1':''].filter(Boolean);
+      return `<tr><td>${S.length?`<input type="checkbox" data-eon="${r.id}" ${on?'checked':''}>`:''}</td>
+      <td class="mono" style="white-space:nowrap">${esc(r.b)}.${esc(r.ch)}.${esc(r.sb)}.<b>${esc(r.num)}</b>${fl2.length?` <span style="color:#d92d20" title="${esc(fl2.join(', '))}">⚠</span>`:''}</td>
+      <td><span class="mono">${esc(r.n.code||'')}</span> ${esc((r.n.name||'').slice(0,38))}</td>
+      <td>${r.x.t==='i'?'<i class="hint" style="margin:0">(סעיף)</i>':`<span class="mono">${esc(r.x.code||'')}</span> ${esc((nodeName(r.x)||'').slice(0,26))}`}</td>
+      <td>${esc(r.unit)}</td><td class="n">${fmtQ(Math.round(r.q*100)/100)}${r.w?`<div class="hint" style="margin:0">פחת ${fmt(r.w,1)}%</div>`:''}</td><td class="n">${fmt(r.t)}</td><td style="${r.tbad?'color:#d92d20':''}">${EFFI_T[r.typ]}</td>
+      <td><input data-etx="${r.id}" value="${esc(eff(r))}" list="ef_dl" style="width:260px;border-color:${SRC[s][1]}"></td>
+      <td>${r.kc?`<select data-esc="${r.id}" style="font-size:11px"><option value="d" ${s!=='h'?'selected':''}>כל ${esc(r.kc)}</option><option value="h" ${s==='h'?'selected':''}>רק כאן</option></select>`:'<span class="hint" style="margin:0">רק כאן</span>'}<div style="font-size:10px;color:${SRC[s][1]}">${SRC[s][0]}</div></td>
+      <td style="font-size:11px">${S.map((x,j)=>`<div${j?' style="color:var(--muted)"':''}><a href="#" data-epk="${r.id}" data-j="${j}">${esc(x.d)}</a> · ${esc(x.u)} · ${Math.round(x.sc*100)}%${x.um?'':' ⚠יח\''}</div>`).join('')}</td></tr>`; }).join('')||'<tr><td colspan="11" class="hint">אין שורות בסינון זה</td></tr>'}
+    ${V.length>lim?`<tr><td colspan="11"><button class="btn small" id="ef_more">הצג עוד (${V.length-lim})</button></td></tr>`:''}
+    </tbody></table></div>
+    <div class="row" style="justify-content:space-between;margin-top:8px;gap:8px;flex-wrap:wrap"><span class="hint" style="margin:0">${ch.dA.length+ch.dD.length+ch.hA+ch.hD?`לשמירה: מילון – ${ch.dA.length} חדשים/שונו${ch.dD.length?`, ${ch.dD.length} נמחקו`:''} (משותף לכל הפרויקטים) · דריסות בפרויקט – ${ch.hA} חדשות/שונו${ch.hD?`, ${ch.hD} בוטלו`:''}`:'אין שינויים לשמירה'}</span>
+      <span class="row" style="gap:8px"><button class="btn" id="ef_c">ביטול</button><button class="btn" id="ef_x">ייצוא בלי לשמור</button><button class="btn primary" id="ef_s">שמור וייצא</button></span></div></div></div>`;
+    bind(); };
+  const keep=fn=>{ const sc=h.querySelector('.box>div[style*="overflow:auto"]'), y=sc?sc.scrollTop:0; fn(); draw(); const s2=h.querySelector('.box>div[style*="overflow:auto"]'); if(s2) s2.scrollTop=y; };
+  const byId=id=>R.find(r=>r.id===id);
+  const bind=()=>{
+    document.getElementById('ef_c').onclick=()=>h.innerHTML='';
+    document.getElementById('ef_f').onchange=e=>{ flt=e.target.value; lim=300; draw(); };
+    const qi=document.getElementById('ef_q'); qi.onchange=()=>{ q=qi.value.trim(); lim=300; draw(); };
+    const mo=document.getElementById('ef_more'); if(mo) mo.onclick=()=>keep(()=>{ lim+=300; });
+    ['m','l','o'].forEach(k=>{ const i=document.getElementById('ef_'+k); i.onchange=()=>keep(()=>{ CL=Object.assign({},CL,{[k]:i.value.trim()}); R=calc(); }); });
+    document.getElementById('ef_ref').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; try{ const L=effiRefParse(new Uint8Array(await f.arrayBuffer())); if(!L.length){ toast('לא נמצאה כותרת "תאור סעיף" / "יחידה" בקובץ'); return; }
+        REF=L; cache.clear(); keep(sugAll); SETTINGS=Object.assign({},SETTINGS,{effiRef:L}); try{ if(DB&&DB.saveSettings) await DB.saveSettings(SETTINGS); }catch(e2){} toast(`נטענו ${L.length} תאורים מקובץ אפי – ${SUG.size} שורות עם הצעה`); }catch(err){ toast('שגיאה בקריאת הקובץ: '+err.message); } };
+    h.querySelectorAll('[data-etx]').forEach(i=>i.onchange=()=>keep(()=>{ const r=byId(+i.dataset.etx); if(!r) return; const v=i.value.trim(); ON.delete(r.id);
+      const sc=h.querySelector(`[data-esc="${r.id}"]`); const here=!r.kc||(sc&&sc.value==='h');
+      if(here){ if(v&&v!==((r.kc&&ED[r.kc])||r.def)) HO.set(r.id,v); else HO.delete(r.id); }
+      else { HO.delete(r.id); if(v&&v!==r.def) ED[r.kc]=v; else delete ED[r.kc]; } }));
+    h.querySelectorAll('[data-esc]').forEach(s=>s.onchange=()=>keep(()=>{ const r=byId(+s.dataset.esc); if(!r) return; const cur=eff(r);
+      if(s.value==='h') HO.set(r.id,cur); else { HO.delete(r.id); if(cur!==r.def) ED[r.kc]=cur; } ON.delete(r.id); }));
+    h.querySelectorAll('[data-eon]').forEach(c=>c.onchange=()=>keep(()=>{ const r=byId(+c.dataset.eon), S=SUG.get(r.id); if(!r||!S) return;
+      if(c.checked){ PREV.set(r.id,HO.has(r.id)?HO.get(r.id):undefined); HO.set(r.id,S[0].d); ON.set(r.id,true); }
+      else { const p=PREV.get(r.id); if(p===undefined) HO.delete(r.id); else HO.set(r.id,p); ON.delete(r.id); } }));
+    h.querySelectorAll('[data-epk]').forEach(a=>a.onclick=e=>{ e.preventDefault(); keep(()=>{ const r=byId(+a.dataset.epk), S=SUG.get(r.id); if(!r||!S) return; if(!ON.get(r.id)) PREV.set(r.id,HO.has(r.id)?HO.get(r.id):undefined); HO.set(r.id,S[+a.dataset.j].d); ON.set(r.id,true); }); });
+    document.getElementById('ef_x').onclick=()=>{ h.innerHTML=''; effiTblExport(o,R,eff,src); };
+    document.getElementById('ef_s').onclick=async()=>{
+      /* דריסות זהות לכל השורות של אותו מק"ט בפרויקט (ואין ערך שונה במילון) → עוברות למילון */
+      const G=new Map(); R.forEach(r=>{ if(r.kc){ if(!G.has(r.kc)) G.set(r.kc,[]); G.get(r.kc).push(r); } });
+      G.forEach((L,kc)=>{ if(!L.every(r=>HO.has(r.id)&&HO0.get(r.id)!==HO.get(r.id))) return; const v=HO.get(L[0].id); if(!L.every(r=>HO.get(r.id)===v)) return; if(ED[kc]&&ED[kc]!==v) return; ED[kc]=v; L.forEach(r=>HO.delete(r.id)); });
+      R.forEach(r=>{ if(HO.has(r.id)) r.x.effiTxt=HO.get(r.id); else delete r.x.effiTxt; });
+      SETTINGS=Object.assign({},SETTINGS,{effiDict:ED,effiCls:CL}); save();
+      try{ if(DB&&DB.saveSettings) await DB.saveSettings(SETTINGS); toast('מילון אפי נשמר – משותף לכל הפרויקטים'); }catch(e){ toast('שגיאה בשמירה בענן: '+e.message); }
+      h.innerHTML=''; effiTblExport(o,R,eff,src); };
+    document.getElementById('pdlg').onclick=e=>{ if(e.target.id==='pdlg') h.innerHTML=''; };
+  };
+  draw();
+}
+function effiTblExport(o,R,eff,srcF){
+  const H=['מספר מבנה','תאור מבנה','מספר פרק','תאור פרק','תת-פרק','תאור תת-פרק','מספר סעיף כתב כמויות','תאור סעיף','יחידה','כמות','עלות חומר',"עלות ליח' מזמין",'סה"כ עלות','עלות תקורה','עלות עבודה','סיומת מספר סעיף','מספר תת-פרק מלא','הערות','סוג עלות','סעיף אצלנו','משאב / מק"ט','מקור תאור','מזהה'];
+  const MS={h:'ידני (רק כאן)',d:'מילון',def:'⚠ ברירת מחדל'};
+  const aoa=[H]; R.forEach(r=>{ const s=srcF(r);
+    const nt=[r.w?`פחת ${fmt(r.w,1)}% (כמות נטו ${fmtQ(Math.round(r.qn*100)/100)})`:'',r.z?'⚠ כמות 0 – הוצא כ-1 (פאושלי)':'',r.nbad?'⚠ מספור לא לפי הסעיף':'',r.tbad?'⚠ סוג עלות לא מזוהה – עבודה':''].filter(Boolean).join(' · ');
+    const uc=r.q?r.t/r.q:0, T=R2(r.t), typ=EFFI_T[r.typ];
+    aoa.push([r.b,r.bn,r.ch,r.chn,r.sb,r.sbn,`${r.b}.${r.ch}.${r.sb}.${r.num}`,eff(r),r.unit,Math.round(r.q*10000)/10000,r.typ==='m'?T:0,Math.round(uc*10000)/10000,T,r.typ==='o'?T:0,r.typ==='l'?T:0,r.num,`${r.b}.${r.ch}.${r.sb}`,nt,typ,`${r.n.code||''} – ${r.n.name||''}`,r.x.t==='i'?'':`${r.x.code||''} – ${nodeName(r.x)||''}`,MS[s],r.id]); });
+  const N=aoa.length; const tot=R.reduce((a,r)=>a+r.t,0);
+  const tr=new Array(H.length).fill(''); tr[7]='סה"כ'; aoa.push(tr);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  for(let i=2;i<=N;i++){ for(const c of ['A','C','E','G','P','Q']){ const x=ws[c+i]; if(x){ x.t='s'; x.v=String(x.v); } }
+    const q=ws['J'+i]; if(q) q.z='#,##0.##'; const u=ws['L'+i]; if(u) u.z='#,##0.00';
+    ws['M'+i]={t:'n',v:aoa[i-1][12],f:`J${i}*L${i}`,z:'#,##0'};
+    ws['K'+i]={t:'n',v:aoa[i-1][10],f:`IF(S${i}="חומר",M${i},0)`,z:'#,##0'}; ws['N'+i]={t:'n',v:aoa[i-1][13],f:`IF(S${i}="תקורה",M${i},0)`,z:'#,##0'}; ws['O'+i]={t:'n',v:aoa[i-1][14],f:`IF(S${i}="עבודה",M${i},0)`,z:'#,##0'}; }
+  const TR=N+1; for(const [c,k] of [['K','m'],['M',''],['N','o'],['O','l']]) ws[c+TR]={t:'n',v:R2(R.filter(r=>!k||r.typ===k).reduce((a,r)=>a+r.t,0)),f:`SUBTOTAL(9,${c}2:${c}${N})`,z:'#,##0'};
+  ws['!cols']=[{wch:5},{wch:14},{wch:5},{wch:22},{wch:5},{wch:18},{wch:15},{wch:45},{wch:6},{wch:10},{wch:12},{wch:11},{wch:13},{wch:12},{wch:12},{wch:6},{wch:10},{wch:30},{wch:7},{wch:40},{wch:30},{wch:12},{wch:7,hidden:true}];
+  ws['!autofilter']={ref:'A1:W'+N};
+  /* סיכום לפי מבנה וסוג עלות – לבקרה מול כתב הכמויות */
+  const S=[['מבנה','תאור מבנה','חומר','עבודה','תקורה','סה"כ']]; const B=new Map(); R.forEach(r=>{ if(!B.has(r.b)) B.set(r.b,{bn:r.bn,m:0,l:0,o:0}); B.get(r.b)[r.typ]+=r.t; });
+  [...B.entries()].sort((a,b)=>String(a[0]).localeCompare(String(b[0]),undefined,{numeric:true})).forEach(([b,x])=>S.push([b,x.bn,R2(x.m),R2(x.l),R2(x.o),R2(x.m+x.l+x.o)]));
+  const g={m:0,l:0,o:0}; R.forEach(r=>g[r.typ]+=r.t); S.push(['','סה"כ',R2(g.m),R2(g.l),R2(g.o),R2(tot)]);
+  const ws2=XLSX.utils.aoa_to_sheet(S); for(let i=2;i<=S.length;i++) for(const c of 'CDEF'){ const x=ws2[c+i]; if(x) x.z='#,##0'; } ws2['!cols']=[{wch:7},{wch:24},{wch:14},{wch:14},{wch:14},{wch:14}];
+  const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'DataSheet'); XLSX.utils.book_append_sheet(wb,ws2,'סיכום');
+  let buf=XLSX.write(wb,{type:'array',bookType:'xlsx'}); try{ buf=xlsxPatch(buf,{0:{freeze:true,boldRows:[1,TR]},1:{freeze:true,boldRows:[1,S.length]}}); }catch(e){ console.warn('patch',e); }
+  const d=new Date(); const stamp=`${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`;
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`טבלת אפי ${state.project||''} ${stamp}${o.oh?' (מועמס)':''}.xlsx`.replace(/\s+/g,' '); document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+  toast(`יוצאו ${R.length} שורות לטבלת אפי · סה"כ ${fmt(tot)} ₪`);
 }
 document.getElementById('btnEffi').onclick=effiDlg;
 /* ---------- הצעת מחיר ללקוח: רמת פירוט, שורות לקוח (קיבוץ / שינוי שם / הסתרה), התאמות, עיגול, תבניות ---------- */
