@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-12'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-13'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -1802,7 +1802,7 @@ function effiExport(o){
   // J כמות (ללא פחת) · K פחת % (סעיף) · L כמות כולל פחת = J×(1+K) · M מחיר יחידה · N סה"כ = L×M · O מקור מחיר · P הערות · Q הערות מערכת · R מזהה (מוסתר, לטעינה חזרה)
   const cmE=chMap(); rows.forEach(r=>{ r.cn=cmE[r.c]||''; });
   const H=['מב','תאור מבנה','פרק','תאור פרק','תת-פרק','תאור תת-פרק','סעיף','תאור סעיף','יחידה','כמות','פחת %','כמות כולל פחת','מחיר יחידה','סה"כ','מקור מחיר','הערות','הערות מערכת','מזהה'];
-  const aoa=[H]; rows.forEach(r=>aoa.push([r.b,r.bn,r.c,r.cn,String(r.s||'').split('.').pop(),r.sn,(r.b?r.b+'.':'')+r.code,r.name,r.unit,R2(r.qn),r.sw||null,R2(r.q),r.q?r.t/r.q:null,R2(r.t),r.src,'',r.note,r.id]));
+  const aoa=[H]; rows.forEach(r=>aoa.push([r.b,r.bn,r.c,r.cn,String(r.s||'').split('.').pop(),r.sn,(r.b?r.b+'.':'')+r.code,r.name,r.unit,R2(r.qn),r.sw||null,R2(r.q),r.q?r.t/r.q:null,R2(r.t),r.src,'',[r.note,(()=>{ const m=String(r.w||'').split(' · ').filter(x=>x&&!/^סעיף /.test(x)); return m.length?'פחת חומר (במחיר היחידה): '+m.join(' · '):''; })()].filter(Boolean).join(' | '),r.id]));
   const N=aoa.length; const G=rows.reduce((a,r)=>a+r.t,0);
   const FC=finCalc(); const FR=(OHC&&OHC.ff>1)?[]:FC.rows;
   const OB=new Set(typeof ohBlds==='function'?ohBlds():[]);
