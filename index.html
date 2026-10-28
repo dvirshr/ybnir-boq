@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='27.10.26-12'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-1'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2808,17 +2808,22 @@ function syncPriceDlg(targets){
     h.innerHTML=''; save(); render();
     toast(chg.length?`⚠ הוחלו ${S.length} שינויים, אבל כמות הסעיף השתנתה ב-${chg.length}: ${chg.slice(0,6).map(t=>t.code).join(', ')} – בדוק`:`הוחלו ${S.length} שינויים ממבנה ${SRC}. כמויות הסעיפים לא השתנו`); };
   build(); draw(); }
-function qcBadge(){ const b=document.getElementById('btnQC'); if(!b) return; try{ const F=qcRun().filter(x=>x.rule!==12); const e=F.filter(x=>x.sev==='err').length, w=F.filter(x=>x.sev==='warn').length; b.innerHTML='בקרה'+(e?` <span class="pill" style="background:#d92d20;color:#fff">${e}</span>`:'')+(w?` <span class="pill" style="background:#f79009;color:#fff">${w}</span>`:''); }catch(e){ b.textContent='בקרה'; } }
+function qcBadge(){ const b=document.getElementById('btnQC'); if(!b) return; try{ const F=qcRun().filter(x=>x.rule!==12&&!qcAcked(x)); const e=F.filter(x=>x.sev==='err').length, w=F.filter(x=>x.sev==='warn').length; b.innerHTML='בקרה'+(e?` <span class="pill" style="background:#d92d20;color:#fff">${e}</span>`:'')+(w?` <span class="pill" style="background:#f79009;color:#fff">${w}</span>`:''); }catch(e){ b.textContent='בקרה'; } }
 let qcT=null; function qcSoon(){ clearTimeout(qcT); qcT=setTimeout(qcBadge,900); }
+/* סימון ממצא כ"נבדק – תקין" (נשמר בפרויקט, state.qcAck). המפתח: כלל + מזהי השורות (או הטקסט בלי מספרים) */
+const qcKey=x=>x.rule+'|'+(((x.src||[]).filter(s=>s.id).map(s=>s.id).join(','))||String(x.msg||'').replace(/[\d.,₪%]+/g,'#'));
+const qcAcked=x=>!!(state.qcAck&&state.qcAck[qcKey(x)]);
+function qcAckSet(keys,on){ state.qcAck=state.qcAck||{}; const d=new Date().toISOString().slice(0,10); keys.forEach(k=>{ if(on) state.qcAck[k]=d; else delete state.qcAck[k]; }); if(!Object.keys(state.qcAck).length) delete state.qcAck; save(); }
 function qcDlg(tab){
   tab=tab||'f'; const h=document.getElementById('printDlgHost'); const S=qcSet();
   const SEV={err:['#d92d20','חריגה'],warn:['#f79009','לבדיקה'],info:['#667085','מידע'],ok:['#12b76a','תקין']};
   let body='';
-  if(tab==='f'){ const F=qcRun(); const by={}; F.forEach(x=>(by[x.rule]=by[x.rule]||[]).push(x));
-    body=Object.keys(QC_RULES).map(r=>{ const L=(by[r]||[]).sort((a,b)=>['err','warn','info','ok'].indexOf(a.sev)-['err','warn','info','ok'].indexOf(b.sev)); const e=L.filter(x=>x.sev==='err').length, w=L.filter(x=>x.sev==='warn').length;
-      return `<details ${e||(w&&r!=='12')?'open':''} style="margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:6px 10px"><summary style="cursor:pointer;font-weight:700">${r}. ${QC_RULES[r]} <span class="hint" style="margin:0">— ${e?`<b style="color:#d92d20">${e} חריגות</b> · `:''}${w?`<b style="color:#b54708">${w} לבדיקה</b> · `:''}${L.length?L.length+' שורות':'אין ממצאים ✓'}</span></summary>
-        ${L.map(x=>`<div style="padding:5px 0;border-top:1px solid var(--line)"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${SEV[x.sev][0]};margin-inline-end:6px" title="${SEV[x.sev][1]}"></span>${esc(x.msg)}
-          ${(x.src||[]).filter(s=>s.id).length?`<div style="margin:3px 18px 0;display:flex;flex-wrap:wrap;gap:4px">${x.src.filter(s=>s.id).map(s=>`<button class="ib" data-go="${s.id}" style="font-size:11px;border:1px solid var(--line);border-radius:6px;padding:1px 6px">${esc(s.t)}</button>`).join('')}</div>`:''}</div>`).join('')}</details>`; }).join('');
+  if(tab==='f'){ const F=qcRun(); const by={}; F.forEach(x=>(by[x.rule]=by[x.rule]||[]).push(x)); const showAck=!!window.__qcsa; const nAck=F.filter(qcAcked).length;
+    body=`<div class="row" style="gap:10px;align-items:center;margin-top:6px"><span class="hint" style="margin:0">סמן ✓ ליד ממצא שבדקת ומתאים לך – הוא יוסתר ולא ייספר בתג "בקרה".</span>${nAck?`<button class="btn small" id="qc_sa">${showAck?'הסתר':'הראה'} מסומנים כתקינים (${nAck})</button>`:''}</div>`+Object.keys(QC_RULES).map(r=>{ const LA=(by[r]||[]).sort((a,b)=>['err','warn','info','ok'].indexOf(a.sev)-['err','warn','info','ok'].indexOf(b.sev)); const na=LA.filter(qcAcked).length; const L=showAck?LA:LA.filter(x=>!qcAcked(x)); const LL=LA.filter(x=>!qcAcked(x)); const e=LL.filter(x=>x.sev==='err').length, w=LL.filter(x=>x.sev==='warn').length;
+      return `<details ${e||(w&&r!=='12')?'open':''} style="margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:6px 10px"><summary style="cursor:pointer;font-weight:700">${r}. ${QC_RULES[r]} <span class="hint" style="margin:0">— ${e?`<b style="color:#d92d20">${e} חריגות</b> · `:''}${w?`<b style="color:#b54708">${w} לבדיקה</b> · `:''}${LL.length?LL.length+' שורות':LA.length?'הכל סומן תקין ✓':'אין ממצאים ✓'}${na?` · ${na} סומנו תקין`:''}</span></summary>
+        ${LL.filter(x=>x.sev==='err'||x.sev==='warn').length>1?`<div style="padding:4px 0"><button class="btn small" data-qaall="${r}">✓ סמן את כל ${LL.filter(x=>x.sev==='err'||x.sev==='warn').length} הממצאים כאן כתקינים</button></div>`:''}
+        ${L.map(x=>{ const ak=qcAcked(x), k=qcKey(x); return `<div style="padding:5px 0;border-top:1px solid var(--line);${ak?'opacity:.55':''}">${x.sev==='err'||x.sev==='warn'||ak?`<label style="float:inline-end;font-size:11px;white-space:nowrap;margin-inline-start:8px" title="נבדק – מתאים לי"><input type="checkbox" data-qa="${esc(k)}" ${ak?'checked':''}> ✓ תקין</label>`:''}<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${ak?'#12b76a':SEV[x.sev][0]};margin-inline-end:6px" title="${ak?'סומן תקין '+esc(state.qcAck[k]||''):SEV[x.sev][1]}"></span>${esc(x.msg)}
+          ${(x.src||[]).filter(s=>s.id).length?`<div style="margin:3px 18px 0;display:flex;flex-wrap:wrap;gap:4px">${x.src.filter(s=>s.id).map(s=>`<button class="ib" data-go="${s.id}" style="font-size:11px;border:1px solid var(--line);border-radius:6px;padding:1px 6px">${esc(s.t)}</button>`).join('')}</div>`:''}</div>`; }).join('')}</details>`; }).join('');
     body+=`<div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px;align-items:center"><span class="label">ספים:</span>${[['pumpTol','שאיבה מעל בטון %'],['tileTol','ריצוף מעל שטח %'],['wConc','פחת בטון %'],['wTile','פחת ריצוף %'],['wSteel','פחת ברזל %'],['wDef','פחת אחר %'],['pctBaseTol','בסיס אחוז – פער %'],['pctMax','אחוז מקסימלי'],['priceX','מחיר חריג פי']].map(([k,l])=>`<label class="hint" style="margin:0;display:inline-flex;gap:4px;align-items:center">${l}<input data-qs="${k}" value="${S[k]}" style="width:46px;border:1px solid var(--line);border-radius:6px;padding:2px 4px" inputmode="decimal"></label>`).join('')}</div>
       <p class="hint" style="margin:6px 0 0">כלל 1 משווה לפי קבוצת מבנים: סעיף שאיבה משויך למבנים שבשדה "משרת מבנים" בטופס הסעיף, או לפי השם ("מבנים 01 + 05"), אחרת למבנה שלו. בטון = סעיפים ביחידת מ"ק (פרק 02 / "בטון" בשם). פחת בטון (סעיף מסומן "סעיף פחת" או שורה "פחת בטון") נוסף לסבולת.</p>`; }
   else if(tab==='w'){ body=wTab(); }
@@ -2835,13 +2840,16 @@ function qcDlg(tab){
   h.querySelectorAll('[data-qt]').forEach(b=>b.onclick=()=>qcDlg(b.dataset.qt));
   h.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>qcGo(b.dataset.go));
   if(tab==='w') wTabBind(h);
+  if(tab==='f'){ const sa=document.getElementById('qc_sa'); if(sa) sa.onclick=()=>{ window.__qcsa=!window.__qcsa; qcDlg('f'); };
+    h.querySelectorAll('[data-qa]').forEach(c=>c.onchange=()=>{ qcAckSet([c.dataset.qa],c.checked); qcDlg('f'); qcBadge(); });
+    h.querySelectorAll('[data-qaall]').forEach(b=>b.onclick=()=>{ const r=+b.dataset.qaall; const K=qcRun().filter(x=>x.rule===r&&(x.sev==='err'||x.sev==='warn')&&!qcAcked(x)).map(qcKey); if(!confirm(`לסמן ${K.length} ממצאים בכלל ${r} כתקינים? (אפשר לבטל אחד-אחד אחר כך)`)) return; qcAckSet(K,true); qcDlg('f'); qcBadge(); }); }
   if(tab==='p') pumpTabBind(h);
   h.querySelectorAll('[data-qs]').forEach(i=>i.onchange=()=>{ const v=+i.value; if(!Number.isFinite(v)) return; state.qc=Object.assign({},state.qc||{},{[i.dataset.qs]:v}); save(); qcDlg('f'); });
   h.querySelectorAll('[data-cat]').forEach(s=>s.onchange=()=>{ state.cats=state.cats||{}; if(s.value) state.cats[s.dataset.cat]=s.value; else delete state.cats[s.dataset.cat]; save(); });
   const ff=document.getElementById('qc_f'); if(ff) ff.oninput=()=>{ const v=ff.value.toLowerCase(); h.querySelectorAll('tr[data-f]').forEach(tr=>tr.hidden=!!v&&!tr.dataset.f.includes(v)); };
   const qx=document.getElementById('qc_x'); if(qx) qx.onclick=()=>{ if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; }
     const F=qcRun(); const SV={err:'חריגה',warn:'לבדיקה',info:'מידע',ok:'תקין'};
-    const ws=XLSX.utils.json_to_sheet(F.map(x=>({'כלל':x.rule+'. '+QC_RULES[x.rule],'חומרה':SV[x.sev],'ממצא':x.msg,'מקור':(x.src||[]).map(s=>s.t).join(' | ')}))); ws['!cols']=[{wch:24},{wch:8},{wch:100},{wch:80}];
+    const ws=XLSX.utils.json_to_sheet(F.map(x=>({'כלל':x.rule+'. '+QC_RULES[x.rule],'חומרה':SV[x.sev],'סומן תקין':qcAcked(x)?(state.qcAck[qcKey(x)]||'כן'):'','ממצא':x.msg,'מקור':(x.src||[]).map(s=>s.t).join(' | ')}))); ws['!cols']=[{wch:24},{wch:24},{wch:8},{wch:100},{wch:80}];
     const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'בקרה'); XLSX.writeFile(wb,`בקרת כמויות ${state.project||''} ${new Date().toLocaleDateString('he-IL').replace(/\./g,'-')}.xlsx`); };
 }
 document.getElementById('btnQC').onclick=()=>qcDlg('f');
