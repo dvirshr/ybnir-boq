@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-1'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-2'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -772,7 +772,7 @@ function codeCell(n){
   const leaf=n.t==='k'||(n.t==='r'&&!(n.ch&&n.ch.length));
   const closed=!!state.collapsed[n.id];
   const cnt=n.ch?n.ch.length:0;
-  const car=`<button class="caret ${leaf?'leaf':''} ${closed?'closed':''}" data-act="toggle" data-id="${n.id}" aria-label="${closed?'פתח':'סגור'}">${caretSvg}</button>`;
+  const car=`<button class="caret ${leaf?'leaf':''} ${closed?'closed':''}" data-act="toggle" data-id="${n.id}" aria-label="${closed?'פתח':'סגור'}" title="${closed?'פתח רמה אחת (Shift+לחיצה = כל הרמות)':'סגור'}">${caretSvg}</button>`;
   let code;
   if(n.t==='b') code=`<input class="cell-in mono" style="width:56px" data-f="code" data-id="${n.id}" value="${esc(n.code)}" aria-label="קוד מבנה">`;
   else if(n.t==='c') code=`<select class="cell-in mono" data-f="code" data-id="${n.id}" aria-label="פרק"><option value="">בחר</option>${state.lists.chapters.map(c=>`<option value="${c.c}" ${c.c===n.code?'selected':''}>${c.c}</option>`).join('')}<option value="__new">➕ חדש…</option></select>`;
@@ -939,7 +939,10 @@ const tb=document.getElementById('tb');
 tb.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]'); if(!b) return;
   const id=+b.dataset.id, act=b.dataset.act;
-  if(act==='toggle'){ state.collapsed[id]=!state.collapsed[id]; save(); render(); }
+  if(act==='toggle'){ const opening=!!state.collapsed[id]; state.collapsed[id]=!state.collapsed[id];
+    /* פתיחה = רמה אחת בלבד: הילדים נפתחים סגורים. Shift/Ctrl + לחיצה = פתיחת כל הרמות מתחת */
+    if(opening){ const f=find(id); if(f) (f.n.ch||[]).forEach(c=>walk([c],x=>{ if(x.ch&&x.ch.length&&x.t!=='k') state.collapsed[x.id]=!(e.shiftKey||e.ctrlKey||e.metaKey); })); }
+    save(); render(); }
   if(act==='add') addChild(id);
   if(act==='del'){ pendingDel=id; render(); }
   if(act==='delno'){ pendingDel=null; render(); }
