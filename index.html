@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-11'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-12'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -614,7 +614,10 @@ function wAuto(n){ if(!n||!state.wAuto||n.wOff) return 0; const T=wRules(); if(!
   const {s,sc,cc}=wCtx(n); if(s&&wVal(s)) return 0;
   const pr=n.t==='k'?parentOf(n.id):null; if(pr&&wOwn(pr)) return 0;
   const code=String(n.code||''), rc=n.t==='k'?String((pr||{}).code||''):code;
-  const m=wPick(T,'r',[code,rc],sc,cc,s?sumTopicSec(s,cc):''); if(!m) return 0;
+  /* נושא: קודם נושא הסעיף; אם אין כלל – נושא המשאב עצמו (למשל ברזל לכלונסאות בתוך סעיף כלונסאות) */
+  let m=wPick(T,'r',[code,rc],sc,cc,s?sumTopicSec(s,cc):'');
+  if(!m&&T.some(r=>r.k==='topic'&&(r.lv||'r')==='r')){ const rn=n.t==='k'?parentOf(n.id):n; const rt=rn&&typeof qcCat==='function'?qcCat(rn):''; if(rt&&rt!=='אחר') m=wPick(T.filter(r=>r.k==='topic'),'r',[],'','',rt); }
+  if(!m) return 0;
   if(!m.code&&!rc.startsWith('5')) return 0; return m.w; }
 const wOwn=n=>{ const v=n&&n.w; return !(v===undefined||v===null||String(v).trim()===''); };
 const wVal=n=>{ if(!wOwn(n)) return wAuto(n); const x=+String(n.w).replace('%','').replace(/,/g,''); return Number.isFinite(x)?x:0; };
