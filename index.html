@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-9'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-10'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -3560,16 +3560,16 @@ document.getElementById('listTables').addEventListener('click',e=>{
 /* ---------- round-trip Excel editing ---------- */
 const EX_H=['מזהה','רמה','מבנה','פרק','תת-פרק','קוד סעיף','תאור סעיף','מק"ט משאב','שם משאב (מהרשימה)','יח\'','כמות','מחיר יח\'','הערות','פעולה','סה"כ ₪ (מידע)'];   // רמה: סעיף / משאב / מק"ט (בשורת מק"ט – עמודת "מק"ט משאב" = מק"ט הפריט)
 $('btnEditX').onclick=()=>{
-  const H=EX_H.concat(['כמות מחושבת (נוסחה)','פחת %','פחת בסעיף (פירוט – מידע)']);
+  const H=EX_H.concat(['כמות מחושבת (נוסחה)','פחת %','פחת בסעיף (פירוט – מידע)','פחת כללי % (מידע)']);   /* פחת % = ידני בלבד (לטעינה); פחת כללי = מטבלת הפחתים, מידע – נכנס לחישוב בקובץ */
   const aoa=[H], meta=[];   // meta[i] = {n, sec, res} per data row (excel row = i+2)
   const V=v=>v===''||v==null?'':(Number.isFinite(+v)?+v:String(v));
   walk(state.tree,(n,p)=>{
     const [b,c,s]=p;
-    if(n.t==='i'){ const calc=n.calc&&n.calc.length; aoa.push([n.id,'סעיף',b?.code||'',c?.code||'',s?.code||'',n.code||'',n.name||'','','',n.unit||'',(leadOf(n)||isPct(n)||isByc(n))?R2(secQtyNet(n)):calc?R2(calcQty(n)):V(n.qty),secPriced(n)?V(n.sp):'',n.note||'','',R2(total(n)),'',V(n.w),(()=>{ const L=[]; if(wVal(n)) L.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) L.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); }); return L.join(' · '); })()]); meta.push({n}); }
+    if(n.t==='i'){ const calc=n.calc&&n.calc.length; aoa.push([n.id,'סעיף',b?.code||'',c?.code||'',s?.code||'',n.code||'',n.name||'','','',n.unit||'',(leadOf(n)||isPct(n)||isByc(n))?R2(secQtyNet(n)):calc?R2(calcQty(n)):V(n.qty),secPriced(n)?V(n.sp):'',n.note||'','',R2(total(n)),'',V(n.w),(()=>{ const L=[]; if(wVal(n)) L.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) L.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); }); return L.join(' · '); })(),wOwn(n)?'':(wAuto(n)||'')]); meta.push({n}); }
     if(n.t==='r'){ const i=p[p.length-1]; const qe=n.calc&&n.calc.length?R2(calcQty(n)):V(n.qexpr);
-      aoa.push([n.id,'משאב',b?.code||'',c?.code||'',s?.code||'',i?.code||'','',n.code||'',nodeName(n),n.unit||'',qe,hasItems(n)?'':V(n.price),'','',R2(total(n)),'',V(n.w)]); meta.push({n,sec:i}); }
+      aoa.push([n.id,'משאב',b?.code||'',c?.code||'',s?.code||'',i?.code||'','',n.code||'',nodeName(n),n.unit||'',qe,hasItems(n)?'':V(n.price),'','',R2(total(n)),'',V(n.w),'',wOwn(n)?'':(wAuto(n)||'')]); meta.push({n,sec:i}); }
     if(n.t==='k'){ const i=p[p.length-2], r=p[p.length-1]; const qe=n.calc&&n.calc.length?R2(calcQty(n)):V(n.qexpr);
-      aoa.push([n.id,'מק"ט',b?.code||'',c?.code||'',s?.code||'',i?.code||'','',n.code||'',nodeName(n),n.unit||'',qe,V(n.price),'',n.pdate||'',R2(total(n)),'',V(n.w)]); meta.push({n,sec:i,res:r}); }
+      aoa.push([n.id,'מק"ט',b?.code||'',c?.code||'',s?.code||'',i?.code||'','',n.code||'',nodeName(n),n.unit||'',qe,V(n.price),'',n.pdate||'',R2(total(n)),'',V(n.w),'',wOwn(n)?'':(wAuto(n)||'')]); meta.push({n,sec:i,res:r}); }
   });
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   // live Excel formulas: P = quantity used for the calc (Q→section qty, R→resource qty), O = total
@@ -3583,7 +3583,7 @@ $('btnEditX').onclick=()=>{
     const src=n.t==='i'?n.qty:n.qexpr; const sr=m.sec?rowOf.get(m.sec.id):null, rr=m.res?rowOf.get(m.res.id):null;
     let f=null; const ld=n.t==='i'?leadOf(n):null; if(ld&&rowOf.get(ld.id)) f='P'+rowOf.get(ld.id); else if(!calc&&src!==''&&src!=null){ f=Number.isFinite(+src)?'K'+r:fx(src,sr,rr); }
     if(!f&&calc) f=String(R2(calcQty(n)));
-    if(f) setF('P'+r,`(${f})*(1+N(Q${r})/100)`,q); else ws['P'+r]={t:'n',v:Number.isFinite(q)?R2(q):0};
+    if(f) setF('P'+r,`(${f})*(1+IF(Q${r}="",N(S${r}),N(Q${r}))/100)`,q); else ws['P'+r]={t:'n',v:Number.isFinite(q)?R2(q):0};
     let tf; const ks=kids.get(n.id)||[];
     if(n.t==='k') tf=`P${r}*N(L${r})`;
     else if(n.t==='r') tf=hasItems(n)?(ks.length?ks.map(x=>'O'+x).join('+'):'0'):`P${r}*N(L${r})`;
@@ -3596,8 +3596,8 @@ $('btnEditX').onclick=()=>{
     if(tf.length>8000) tf=`SUM(${ks.map(x=>'O'+x).join(',')})`;
     setF('O'+r,tf,total(n));
   });
-  ws['!ref']='A1:R'+aoa.length;
-  ws['!cols']=[{wch:7},{wch:7},{wch:6},{wch:5},{wch:7},{wch:14},{wch:55},{wch:10},{wch:34},{wch:7},{wch:10},{wch:10},{wch:40},{wch:7},{wch:12},{wch:12},{wch:7},{wch:34}];
+  ws['!ref']='A1:S'+aoa.length;
+  ws['!cols']=[{wch:7},{wch:7},{wch:6},{wch:5},{wch:7},{wch:14},{wch:55},{wch:10},{wch:34},{wch:7},{wch:10},{wch:10},{wch:40},{wch:7},{wch:12},{wch:12},{wch:7},{wch:34},{wch:10}];
   ws['!autofilter']={ref:'A1:R'+aoa.length};
   // summary sheet: building × chapter, live
   const N=aoa.length, keys=[]; const seenK=new Set();
