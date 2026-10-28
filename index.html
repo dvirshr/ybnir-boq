@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-10'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-11'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2230,7 +2230,10 @@ function sumTopicSec(n,ch){ const nm=n.name||'', u=UNORM(n.unit);
 function sumCollect(){
   const S={}, R={};
   walk(state.tree,(x,p)=>{ const b=p[0]||{}, c=p[1]||{};
-    if(x.t==='i'){ const tp=sumTopicSec(x,c.code||''); if(tp==='אחר') return; (S[tp]=S[tp]||[]).push({b,c,n:x,u:UNORM(x.unit),q:secQty(x)||0,net:secQtyNet(x)||0,w:wVal(x),t:total(x)}); }
+    if(x.t==='i'){ const tp=sumTopicSec(x,c.code||''); if(tp==='אחר') return;
+      /* כמות החומר (משאבי 5-xxxx באותה יחידה) כולל פחת החומר – למשל ברזל עם פחת פלדה, ריצוף עם פחת אריחים */
+      let mq=0, mn=0, has=false; walk(x.ch||[],y=>{ if(!((y.t==='r'&&!hasItems(y))||y.t==='k')) return; const rc=String((y.t==='k'?(parentOf(y.id)||{}).code:y.code)||''); if(!rc.startsWith('5')||UNORM(y.unit)!==UNORM(x.unit)) return; const q=y.t==='r'?rQty(y):kQty(y), n0=y.t==='r'?rQtyNet(y):kQtyNet(y); if(Number.isFinite(q)){ mq+=q; mn+=n0||0; has=true; } });
+      (S[tp]=S[tp]||[]).push({b,c,n:x,u:UNORM(x.unit),q:secQty(x)||0,net:secQtyNet(x)||0,w:wVal(x),t:total(x),mq:has?mq:null,mw:has&&mn?(mq/mn-1)*100:null}); }
     else if((x.t==='r'&&!hasItems(x))||x.t==='k'){ const tp=qcCat(x); if(tp==='אחר') return; if(!UNORM(x.unit)) return;
       if(/כיפוף|חיתוך|קשירה|הובלה|תוספת|בדיק|אחזק|תיקון|דוד|פחת|ק\.מ/.test(nodeName(x)||'')) return; /* שירותים / תוספות – לא כמות חומר */
       const sec=p.find(y=>y.t==='i')||{}; (R[tp]=R[tp]||[]).push({b,c,sec,n:x,u:UNORM(x.unit),q:qcQ(x)||0,w:wVal(x),t:total(x)}); } });
@@ -2255,20 +2258,20 @@ function sumDlg(){
   document.getElementById('s_x').onclick=()=>{ const o=opts(); if(!o.ts.length){ toast('בחר נושא'); return; } sumExcel(D,o); };
 }
 function sumGroups(L){ const g=new Map(); L.forEach(r=>{ const k=r.b.code||''; if(!g.has(k)) g.set(k,{b:r.b,rows:[]}); g.get(k).rows.push(r); }); return [...g.values()].sort((a,b)=>String(a.b.code).localeCompare(String(b.b.code),undefined,{numeric:true})); }
-function sumUnitTot(L){ const m={}; L.forEach(r=>{ const u=r.u||'—'; m[u]=m[u]||{q:0,net:0,t:0,n:0}; m[u].q+=r.q; m[u].net+=(r.net!=null?r.net:r.q); m[u].t+=r.t; m[u].n++; }); return m; }
+function sumUnitTot(L){ const m={}; L.forEach(r=>{ const u=r.u||'—'; m[u]=m[u]||{q:0,net:0,t:0,n:0,mq:0}; m[u].q+=r.q; m[u].net+=(r.net!=null?r.net:r.q); m[u].t+=r.t; m[u].n++; m[u].mq+=(r.mq!=null?r.mq:r.q); }); return m; }
 function sumPrint(D,o){
   const parts=[]; const d=new Date().toLocaleDateString('he-IL');
   o.ts.forEach((t,ti)=>{
     for(const kind of (o.src==='both'?['sec','res']:[o.src])){
       const L=(kind==='sec'?D.S[t]:D.R[t])||[]; if(!L.length) continue;
-      const cols=kind==='sec'?['קוד','תאור סעיף',"יח'",'כמות נטו','פחת %','כמות כולל פחת']:['סעיף','קוד','משאב / מק"ט',"יח'",'פחת שורה %','כמות כולל פחת'];
+      const cols=kind==='sec'?['קוד','תאור סעיף',"יח'",'כמות נטו','פחת %','כמות כולל פחת','חומר כולל פחת חומר']:['סעיף','קוד','משאב / מק"ט',"יח'",'פחת שורה %','כמות כולל פחת'];
       const rows=[];
-      const totRow=(cls,label,v)=>kind==='sec'?`<tr class="${cls}"><td colspan="3">${label}</td><td class="n">${fmtQ(v.net)}</td><td class="n">${v.net?fmt((v.q/v.net-1)*100,1)+'%':''}</td><td class="n">${fmtQ(v.q)}</td>${o.cost?`<td class="n">${fmt(v.t)}</td>`:''}</tr>`:`<tr class="${cls}"><td colspan="5">${label}</td><td class="n">${fmtQ(v.q)}</td>${o.cost?`<td class="n">${fmt(v.t)}</td>`:''}</tr>`;
+      const totRow=(cls,label,v)=>kind==='sec'?`<tr class="${cls}"><td colspan="3">${label}</td><td class="n">${fmtQ(v.net)}</td><td class="n">${v.net?fmt((v.q/v.net-1)*100,1)+'%':''}</td><td class="n">${fmtQ(v.q)}</td><td class="n">${v.mq?fmtQ(v.mq):''}</td>${o.cost?`<td class="n">${fmt(v.t)}</td>`:''}</tr>`:`<tr class="${cls}"><td colspan="5">${label}</td><td class="n">${fmtQ(v.q)}</td>${o.cost?`<td class="n">${fmt(v.t)}</td>`:''}</tr>`;
       for(const g of sumGroups(L)){
         rows.push(`<tr class="P1"><td colspan="${cols.length+(o.cost?1:0)}">מבנה ${esc(g.b.code||'')} ${esc(g.b.name||'')}</td></tr>`);
         g.rows.sort((a,b)=>String(kind==='sec'?a.n.code:a.sec.code).localeCompare(String(kind==='sec'?b.n.code:b.sec.code),undefined,{numeric:true}));
         for(const r of g.rows){ const cost=o.cost?`<td class="n">${fmt(r.t)}</td>`:'';
-          rows.push(kind==='sec'?`<tr><td class="code">${esc(r.n.code||'')}</td><td>${esc(r.n.name||'')}</td><td>${esc(r.u||'')}</td><td class="n">${fmtQ(r.net)}</td><td class="n">${r.w?fmt(r.w,1)+'%':''}</td><td class="n">${fmtQ(r.q)}</td>${cost}</tr>`
+          rows.push(kind==='sec'?`<tr><td class="code">${esc(r.n.code||'')}</td><td>${esc(r.n.name||'')}</td><td>${esc(r.u||'')}</td><td class="n">${fmtQ(r.net)}</td><td class="n">${r.w?fmt(r.w,1)+'%':''}</td><td class="n">${fmtQ(r.q)}</td><td class="n">${r.mq!=null&&r.mw?fmtQ(r.mq)+` <small>(+${fmt(r.mw,1)}%)</small>`:''}</td>${cost}</tr>`
             :`<tr><td class="code">${esc(r.sec.code||'')}</td><td class="code">${esc(r.n.code||'')}</td><td>${esc(nodeName(r.n)||'')}</td><td>${esc(r.u||'')}</td><td class="n">${r.w?fmt(r.w,1)+'%':''}</td><td class="n">${fmtQ(r.q)}</td>${cost}</tr>`); }
         const ut=sumUnitTot(g.rows); Object.entries(ut).forEach(([u,v])=>rows.push(totRow('P3',`סה"כ מבנה ${esc(g.b.code||'')} – ${esc(u)} (${v.n} שורות)`,v)));
       }
@@ -2281,13 +2284,13 @@ function sumPrint(D,o){
 }
 function sumExcel(D,o){
   if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; }
-  const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; const sum=[['נושא','מקור','מבנה',"יח'",'כמות נטו','כמות כולל פחת','שורות','₪']];
+  const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; const sum=[['נושא','מקור','מבנה',"יח'",'כמות נטו','כמות כולל פחת','שורות','₪','כמות חומר כולל פחת חומר']];
   o.ts.forEach(t=>{ for(const kind of (o.src==='both'?['sec','res']:[o.src])){ const L=(kind==='sec'?D.S[t]:D.R[t])||[]; if(!L.length) continue;
-    const A=[kind==='sec'?['מבנה','פרק','קוד סעיף','תאור',"יח'",'כמות (כולל פחת)','פחת %','כמות נטו','₪']:['מבנה','פרק','סעיף','קוד','משאב / מק"ט',"יח'",'כמות כולל פחת','פחת שורה %','₪']];
-    for(const g of sumGroups(L)){ g.rows.forEach(r=>A.push(kind==='sec'?[r.b.code,r.c.code,r.n.code,r.n.name,r.n.unit,R2(r.q),r.w||null,R2(r.net),R2(r.t)]:[r.b.code,r.c.code,r.sec.code,r.n.code,nodeName(r.n),r.n.unit,R2(r.q),r.w||null,R2(r.t)]));
-      Object.entries(sumUnitTot(g.rows)).forEach(([u,v])=>sum.push([t,kind==='sec'?'סעיפים':'משאבים',g.b.code+' '+(g.b.name||''),u,kind==='sec'?R2(v.net):null,R2(v.q),v.n,R2(v.t)])); }
-    Object.entries(sumUnitTot(L)).forEach(([u,v])=>sum.push([t,kind==='sec'?'סעיפים':'משאבים','סה"כ',u,kind==='sec'?R2(v.net):null,R2(v.q),v.n,R2(v.t)]));
-    const ws=XLSX.utils.aoa_to_sheet(A); ws['!cols']=kind==='sec'?[{wch:6},{wch:5},{wch:12},{wch:60},{wch:7},{wch:14},{wch:8},{wch:12},{wch:14}]:[{wch:6},{wch:5},{wch:12},{wch:12},{wch:44},{wch:7},{wch:14},{wch:8},{wch:14}];
+    const A=[kind==='sec'?['מבנה','פרק','קוד סעיף','תאור',"יח'",'כמות (כולל פחת)','פחת %','כמות נטו','₪','כמות חומר (כולל פחת חומר)','פחת חומר %']:['מבנה','פרק','סעיף','קוד','משאב / מק"ט',"יח'",'כמות כולל פחת','פחת שורה %','₪']];
+    for(const g of sumGroups(L)){ g.rows.forEach(r=>A.push(kind==='sec'?[r.b.code,r.c.code,r.n.code,r.n.name,r.n.unit,R2(r.q),r.w||null,R2(r.net),R2(r.t),r.mq!=null?R2(r.mq):null,r.mw?R2(r.mw):null]:[r.b.code,r.c.code,r.sec.code,r.n.code,nodeName(r.n),r.n.unit,R2(r.q),r.w||null,R2(r.t)]));
+      Object.entries(sumUnitTot(g.rows)).forEach(([u,v])=>sum.push([t,kind==='sec'?'סעיפים':'משאבים',g.b.code+' '+(g.b.name||''),u,kind==='sec'?R2(v.net):null,R2(v.q),v.n,R2(v.t),kind==='sec'?R2(v.mq):null])); }
+    Object.entries(sumUnitTot(L)).forEach(([u,v])=>sum.push([t,kind==='sec'?'סעיפים':'משאבים','סה"כ',u,kind==='sec'?R2(v.net):null,R2(v.q),v.n,R2(v.t),kind==='sec'?R2(v.mq):null]));
+    const ws=XLSX.utils.aoa_to_sheet(A); ws['!cols']=kind==='sec'?[{wch:6},{wch:5},{wch:12},{wch:60},{wch:7},{wch:14},{wch:8},{wch:12},{wch:14},{wch:16},{wch:10}]:[{wch:6},{wch:5},{wch:12},{wch:12},{wch:44},{wch:7},{wch:14},{wch:8},{wch:14}];
     ws['!autofilter']={ref:'A1:I'+A.length}; XLSX.utils.book_append_sheet(wb,ws,(t+' '+(kind==='sec'?'סעיפים':'משאבים')).slice(0,31)); } });
   const s=XLSX.utils.aoa_to_sheet(sum); s['!cols']=[{wch:10},{wch:9},{wch:24},{wch:7},{wch:14},{wch:14},{wch:7},{wch:14}]; XLSX.utils.book_append_sheet(wb,s,'סיכום'); wb.SheetNames.unshift(wb.SheetNames.pop());
   XLSX.writeFile(wb,`ריכוז כמויות ${o.ts.join(' ')} ${state.project||''}.xlsx`.replace(/\s+/g,' ')); toast('הקובץ יוצא');
