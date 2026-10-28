@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-4'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-5'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -1155,6 +1155,9 @@ function pullSecCatalog(st,pname,self){ return withSt(st,()=>{ const out=[];
     tpl.forEach((r,i)=>{ fix(r,res[i]); (r.ch||[]).forEach((k,j)=>fix(k,res[i].ch[j])); });
     const t=total(n); out.push({sig:resSig(n.ch),id:n.id,b:(p[0]||{}).code||'',bn:(p[0]||{}).name||'',code:n.code||'',name:n.name||'',unit:n.unit||'',q,up:q?t/q:0,sp:res.length?'':String(n.sp??''),tpl,nres:res.length,nk:res.reduce((a,r)=>a+((r.ch||[]).filter(k=>k.t==='k').length),0),conv}); });
   return out; }); }
+/* חיפוש לפי מילים: כל מילה בשאילתה (בלי תלות בסדר; גם בלי אות-יחס בתחילת מילה: ו/ה/ב/ל/מ/ש/כ) – ציון = מספר מילים שנמצאו */
+function wordScore(q,text){ const T=String(text||'').toLowerCase().replace(/["'״׳]/g,''); const W=String(q||'').toLowerCase().replace(/["'״׳]/g,'').split(/[\s,;/()\-–]+/).filter(w=>w.length>1);
+  if(!W.length) return 0; let n=0; for(const w of W){ if(T.includes(w)||(/^[והבלמשכ]/.test(w)&&w.length>2&&T.includes(w.slice(1)))) n++; } return n/W.length; }
 function pullSecRank(t,C){ const u=UNORM(t.unit); return C.map(c=>({c,sc:c.code&&c.code===t.code&&UNORM(c.unit)===u?1.01:(UNORM(c.unit)===u?dupSim(t.name,c.name):dupSim(t.name,c.name)*0.6)})).filter(x=>x.sc>=0.35).sort((a,b)=>b.sc-a.sc); }
 async function pullSecDlg(targets){
   if(typeof DB==='undefined'||!DB.listProjects){ toast('זמין בגרסת הענן'); return; }
@@ -1174,7 +1177,7 @@ async function pullSecDlg(targets){
       <label class="hint" style="margin:0"><input type="radio" name="ps_m" value="rep" checked> להחליף משאבים קיימים</label>
       <label class="hint" style="margin:0"><input type="radio" name="ps_m" value="add"> להוסיף לקיימים</label>
       <label class="hint" style="margin:0" title="משאב / מק&quot;ט עם מספר קבוע או פירוט כמויות בפרויקט המקור">כמות קבועה במשאב: <select id="ps_fx"><option value="keep">שמור כמות קיימת ביעד (לפי קוד משאב), חדש = ריק</option><option value="empty" selected>ריק – אחשב בעצמי</option><option value="same">כמו במקור</option><option value="ratio">יחס מכמות הסעיף (=Q×…)</option></select></label>
-      ${one?'<input id="ps_f" placeholder="חיפוש סעיף במקור (קוד / תאור)" style="flex:1;min-width:180px">':''}
+      ${one?'<input id="ps_f" placeholder="חיפוש סעיף במקור – מילים, קוד או חלק מתאור (בכל סדר)" style="flex:1;min-width:180px">':''}
       <b id="ps_n"></b></div>
     <div id="ps_body" style="margin-top:8px;max-height:58vh;overflow:auto;border:1px solid var(--line);border-radius:8px"><div class="hint" style="padding:10px">בחר פרויקט מקור</div></div>
     <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn" id="ps_c">ביטול</button><button class="btn primary" id="ps_go" disabled>העתק משאבים</button></div></div></div>`;
@@ -1183,7 +1186,7 @@ async function pullSecDlg(targets){
   const srcCell=c=>c?`<div><b class="mono">${esc((c.b?c.b+'.':'')+c.code)}</b> ${esc(c.name.slice(0,70))}</div><div class="hint" style="margin:0;font-size:11px">${esc(c.unit)} · ${c.nres} משאבים${c.nk?' · '+c.nk+' מק"טים':''}${c.sp?' · מחיר סעיף '+esc(c.sp):''}${c.conv?' · '+c.conv+' כמויות קבועות':''} · כמות במקור ${fmtQ(c.q)}</div>`:'<span class="hint">—</span>';
   const draw=()=>{ const B=$q('ps_body');
     if(!src||!RW.length){ B.innerHTML=`<div class="hint" style="padding:10px">${src&&!C.length?'אין בפרויקט המקור סעיפים עם משאבים':'בחר פרויקט מקור'}</div>`; cnt(); return; }
-    if(one){ const t=targets[0]; let L=flt?C.map(c=>({c,sc:0})).filter(x=>((x.c.b?x.c.b+'.':'')+x.c.code+' '+x.c.name).toLowerCase().includes(flt)).slice(0,60):RW[0].R.slice(0,25);
+    if(one){ const t=targets[0]; let L=flt?C.map(c=>({c,sc:0,ws:wordScore(flt,(c.b?c.b+'.':'')+c.code+' '+c.name)})).filter(x=>x.ws>0).sort((a,b)=>b.ws-a.ws).slice(0,60):RW[0].R.slice(0,25);
       B.innerHTML=`<div style="padding:6px 8px;background:var(--bg)"><b>יעד:</b> <span class="mono">${esc(t.code)}</span> ${esc(t.name)} · ${esc(t.unit)} · כמות ${fmtQ(secQty(t))} · מחיר יח' נוכחי ${fmt(curUp(t),2)}${RW[0].has?' · <span style="color:#b54708">יש כבר משאבים מתומחרים</span>':''}</div>
         <table class="boq" style="min-width:0;width:100%;table-layout:auto;font-size:12px"><thead><tr><th></th><th>סעיף במקור</th><th class="n">התאמה</th><th class="n">מחיר יח' במקור</th></tr></thead><tbody>${L.map((x,i)=>`<tr><td><input type="radio" name="ps_pick" value="${C.indexOf(x.c)}" ${RW[0].pick===x.c?'checked':''}></td><td>${srcCell(x.c)}</td><td class="n">${x.sc?(x.sc>1?'אותו קוד':Math.round(x.sc*100)+'%'):''}</td><td class="n num">${fmt(x.c.up,2)}</td></tr>`).join('')||'<tr><td colspan="4" class="hint">אין התאמות – חפש בשדה החיפוש</td></tr>'}</tbody></table>`;
       B.querySelectorAll('[name="ps_pick"]').forEach(r=>r.onchange=()=>{ RW[0].pick=C[+r.value]; RW[0].on=true; cnt(); }); }
@@ -2755,17 +2758,9 @@ function syncPriceDlg(targets){
   const meta=x=>[x.psrc||'',x.pdate?fmtDt(x.pdate):''].filter(Boolean).join(' · ');
   const copyP=(d,s)=>{ d.price=s.price; ['psrc','pdate'].forEach(k=>{ if(s[k]!==undefined) d[k]=s[k]; else delete d[k]; }); if(EXT&&evalExpr(s.price)&&!s.psrc) d.psrc='פרויקט '+SRCN; };
   const fixQ=x=>{ x=cloneNode(x); const st=y=>{ delete y.lead; const e=String(y.qexpr??'').trim(); if((y.calc&&y.calc.length)||(e&&!/[QR]/i.test(e))){ y.qexpr=''; y.calc=[]; y._fx=1; } (y.ch||[]).forEach(st); }; st(x); return x; };
-  let SRC=Bs.length?Bs[0].code:'*', CH=[], onlyC=false, SL='';
-  const build=()=>{ CH=[]; SL=EXT?(SRCN+(SRC!=='*'?' · מבנה '+SRC:'')):'מבנה '+SRC; const roots=SRC==='*'?srcBs():srcBs().filter(b=>b.code===SRC); const SM=new Map(); walk(roots.flatMap(b=>b.ch||[]),x=>{ if(x.t==='i'&&!isPct(x)){ const k=x.code||''; if(!SM.has(k)) SM.set(k,[]); SM.get(k).push(x); } });
-    let id=0; const add=o=>CH.push(Object.assign({id:id++},o));
-    for(const t of targets){ const L=SM.get(t.code||'')||[]; const tl=`${(bOf(t)||{}).code||''}·${t.code||''}`;
-      /* קוד זהה אבל תאור שונה = מספור שונה בין המבנים → לא לפי קוד. מחפשים לפי תאור (≥85%, אותה יחידה) */
-      let s=null; const Lc=L.filter(x=>dupSim(x.name,t.name)>=0.6);
-      if(Lc.length){ s=Lc[0]; if(Lc.length>1) add({t,tl,kind:'conf',lbl:`${Lc.length} סעיפים בקוד הזה ב-${SL} – נלקח הראשון`,on:false,dis:true}); }
-      else { let best=null,bs=0; SM.forEach(arr=>arr.forEach(x=>{ if(UNORM(x.unit)!==UNORM(t.unit)) return; const v=dupSim(x.name,t.name); if(v>bs){ bs=v; best=x; } }));
-        if(best&&bs>=0.85){ s=best; add({t,tl,kind:'info',lbl:`הותאם לפי תאור (${Math.round(bs*100)}%) לסעיף ${best.code} ב-${SL}${L.length?` – בקוד ${t.code} שם יש סעיף אחר: "${(L[0].name||'').slice(0,40)}"`:''}`,on:false,dis:true}); }
-        else { add({t,tl,kind:'conf',lbl:L.length?`⚠ קוד זהה, תאור שונה – ב-${SL}: "${(L[0].name||'').slice(0,45)}". לא הושווה`:'אין סעיף באותו קוד או תאור במבנה '+SRC,on:false,dis:true}); continue; } }
-      if(UNORM(s.unit)!==UNORM(t.unit)){ add({t,tl,kind:'conf',lbl:`יחידה שונה: ${t.unit||'—'} מול ${s.unit||'—'} – הסעיף לא הושווה`,on:false,dis:true}); continue; }
+  let SRC=Bs.length?Bs[0].code:'*', CH=[], onlyC=false, SL='', ALLS=[]; const OVR=new Map(); let PICK=null;
+  const cmpSec=(t,s,tl,add)=>{ (()=>{
+      if(UNORM(s.unit)!==UNORM(t.unit)){ add({t,tl,kind:'conf',lbl:`יחידה שונה: ${t.unit||'—'} מול ${s.unit||'—'} – הסעיף לא הושווה`,on:false,dis:true}); return; }
       // מחיר סעיף ידני
       const ts=spSet(t), ss=spSet(s), q=secQty(t)||0;
       if(ts&&ss&&String(t.sp)!==String(s.sp)) add({t,tl,kind:'price',lbl:'מחיר סעיף (ידני)',a:f2(P(t.sp)),b:f2(P(s.sp)),d:q*(P(s.sp)-P(t.sp)),on:true,ap:()=>{ t.sp=s.sp; }});
@@ -2782,13 +2777,35 @@ function syncPriceDlg(targets){
           else if(!(lvl==='r'&&hasItems(x))&&String(x.price??'')!==String(m.price??'')){ const qq=lvl==='r'?rQty(x):kQty(x); add({t,tl,kind:'price',lbl:'מחיר '+typ+(spSet(t)?' (לא משפיע כל עוד יש מחיר סעיף ידני)':''),it,a:f2(P(x.price))+(meta(x)?`<div class="hint" style="margin:0;font-size:10px">${esc(meta(x))}</div>`:''),b:f2(P(m.price))+(meta(m)?`<div class="hint" style="margin:0;font-size:10px">${esc(meta(m))}</div>`:''),d:spSet(t)?0:(qq||0)*(P(m.price)-P(x.price)),on:true,ap:()=>copyP(x,m)}); }
           if(lvl==='r') cmp(x,m,'k'); }
         for(const y of S) if(!used.has(y)){ const c=fixQ(y); add({t,tl,kind:'conf',lbl:`${typ} חסר ב-${(bOf(t)||{}).code} – להוסיף?${c._fx?' (כמות קבועה במקור – תיכנס ריקה)':''}`,it:`${y.code||''} ${nodeName(y)||''}`,a:'—',b:f2(P(y.price))+(c._fx?'':' · '+esc(y.qexpr||'')),on:false,ap:()=>{ const z=fixQ(y); const cl=x=>{ delete x._fx; (x.ch||[]).forEach(cl); }; cl(z); tp.ch=(tp.ch||[]).concat(z); }}); } };
-      cmp(t,s,'r'); } };
+      cmp(t,s,'r');
+ })(); };
+  const build=()=>{ CH=[]; SL=EXT?(SRCN+(SRC!=='*'?' · מבנה '+SRC:'')):'מבנה '+SRC; const roots=SRC==='*'?srcBs():srcBs().filter(b=>b.code===SRC); const SM=new Map(); walk(roots.flatMap(b=>b.ch||[]),x=>{ if(x.t==='i'&&!isPct(x)){ const k=x.code||''; if(!SM.has(k)) SM.set(k,[]); SM.get(k).push(x); } });
+    let id=0; const add=o=>CH.push(Object.assign({id:id++},o));
+    ALLS=[]; SM.forEach(arr=>arr.forEach(x=>ALLS.push(x)));
+    for(const t of targets){ const L=SM.get(t.code||'')||[]; const tl=`${(bOf(t)||{}).code||''}·${t.code||''}`;
+      if(OVR.has(t.id)&&ALLS.includes(OVR.get(t.id))){ const s=OVR.get(t.id); add({t,tl,kind:'info',lbl:`נבחר ידנית: ${s.code} "${(s.name||'').slice(0,45)}" ב-${SL}`,on:false,dis:true,man:true,ms:true}); cmpSec(t,s,tl,add); continue; }
+      /* קוד זהה אבל תאור שונה = מספור שונה בין המבנים → לא לפי קוד. מחפשים לפי תאור (≥85%, אותה יחידה) */
+      let s=null; const Lc=L.filter(x=>dupSim(x.name,t.name)>=0.6);
+      if(Lc.length){ s=Lc[0]; if(Lc.length>1) add({t,tl,kind:'conf',lbl:`${Lc.length} סעיפים בקוד הזה ב-${SL} – נלקח הראשון`,on:false,dis:true}); }
+      else { let best=null,bs=0; SM.forEach(arr=>arr.forEach(x=>{ if(UNORM(x.unit)!==UNORM(t.unit)) return; const v=dupSim(x.name,t.name); if(v>bs){ bs=v; best=x; } }));
+        if(best&&bs>=0.85){ s=best; add({t,tl,kind:'info',lbl:`הותאם לפי תאור (${Math.round(bs*100)}%) לסעיף ${best.code} ב-${SL}${L.length?` – בקוד ${t.code} שם יש סעיף אחר: "${(L[0].name||'').slice(0,40)}"`:''}`,on:false,dis:true,ms:true}); }
+        else { add({t,tl,kind:'conf',lbl:L.length?`⚠ קוד זהה, תאור שונה – ב-${SL}: "${(L[0].name||'').slice(0,45)}". לא הושווה`:'אין סעיף באותו קוד או תאור ב-'+SL+' – אפשר לבחור ידנית 🔍',on:false,dis:true,ms:true}); continue; } }
+      cmpSec(t,s,tl,add); } };
+  const drawPick=(q)=>{ const P=$('sp_pick'); if(!PICK){ P.innerHTML=''; return; } const t=PICK; q=q??(t.name||'');
+    const L=ALLS.map(x=>({x,ws:wordScore(q,(x.code||'')+' '+(x.name||'')),ds:dupSim(x.name,t.name)})).filter(r=>r.ws>0||r.ds>0.4).sort((a,b)=>(b.ws-a.ws)||(b.ds-a.ds)).slice(0,25);
+    P.innerHTML=`<div style="border:2px solid var(--accent);border-radius:8px;padding:8px;margin:6px 0"><b>בחירת סעיף מקביל ב-${esc(SL)} עבור</b> <span class="mono">${esc(t.code||'')}</span> ${esc((t.name||'').slice(0,70))} · ${esc(t.unit||'')}
+      <div class="row" style="gap:6px;margin:6px 0"><input id="sp_q" value="${esc(q)}" placeholder="מילים, קוד או חלק מתאור – בכל סדר" style="flex:1;min-width:200px"><button class="btn small" id="sp_pc">סגור</button>${OVR.has(t.id)?'<button class="btn small" id="sp_pu">בטל בחירה ידנית</button>':''}</div>
+      <div style="max-height:30vh;overflow:auto"><table class="boq" style="min-width:0;width:100%;table-layout:auto;font-size:12px">${L.map((r,i)=>`<tr><td><button class="btn small" data-pk="${i}">בחר</button></td><td class="mono">${esc(r.x.code||'')}</td><td>${esc((r.x.name||'').slice(0,90))}</td><td>${esc(r.x.unit||'')}${UNORM(r.x.unit)!==UNORM(t.unit)?' <span style="color:#b54708">≠ יח\'</span>':''}</td><td class="n">${Math.round(Math.max(r.ws,r.ds)*100)}%</td></tr>`).join('')||'<tr><td class="hint">לא נמצא – נסה מילים אחרות</td></tr>'}</table></div></div>`;
+    $('sp_q').oninput=e=>{ const v=e.target.value, pos=e.target.selectionStart; drawPick(v); const i=$('sp_q'); i.focus(); i.setSelectionRange(pos,pos); };
+    $('sp_pc').onclick=()=>{ PICK=null; drawPick(); }; const pu=$('sp_pu'); if(pu) pu.onclick=()=>{ OVR.delete(t.id); PICK=null; drawPick(); build(); draw(); };
+    P.querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>{ OVR.set(t.id,L[+b.dataset.pk].x); PICK=null; drawPick(); build(); draw(); toast('נבחר מקור ל-'+(t.code||'')+' – בדוק את השורות שנוספו'); }); };
   const draw=()=>{ const L=CH.filter(c=>!onlyC||c.kind!=='price'); const np=CH.filter(c=>c.kind==='price').length, nc=CH.filter(c=>c.kind==='conf').length, ni=CH.filter(c=>c.kind==='info').length;
     const dsum=CH.filter(c=>c.on&&c.d).reduce((a,c)=>a+c.d,0);
     $('sp_sum').innerHTML=`<b>${np}</b> עדכוני מחיר · <b style="color:#b54708">${nc}</b> התנגשויות לאישור · ${ni} סעיפים ללא מקביל · מסומנים: <b>${CH.filter(c=>c.on).length}</b> · השפעה: <b>${dsum>=0?'+':''}${fmt(dsum)} ₪</b>`;
     const K={price:['עדכון','#12b76a'],conf:['התנגשות','#b54708'],info:['מידע','#667085']};
-    $('sp_body').innerHTML=`<table class="boq" style="min-width:0;width:100%;table-layout:auto;font-size:12px"><thead><tr><th></th><th>סעיף</th><th>סוג</th><th>משאב / מק"ט</th><th class="n">נוכחי</th><th class="n">ממבנה ${esc(SRC)}</th><th class="n">השפעה ₪</th></tr></thead><tbody>${L.map(c=>`<tr style="${c.kind==='conf'?'background:#fffaeb':c.kind==='info'?'color:var(--muted)':''}"><td>${c.dis?'':`<input type="checkbox" data-sc="${c.id}" ${c.on?'checked':''}>`}</td><td class="mono"><button class="ib" data-go="${c.t.id}" style="font-size:11px">${esc(c.tl)}</button></td><td><span style="color:${K[c.kind][1]};font-weight:600">${K[c.kind][0]}</span> ${esc(c.lbl)}</td><td>${esc((c.it||'').slice(0,50))}</td><td class="n num">${c.a??''}</td><td class="n num">${c.b??''}</td><td class="n num">${c.d?fmt(c.d):''}</td></tr>`).join('')||'<tr><td colspan="7" class="hint">אין הבדלים</td></tr>'}</tbody></table>`;
+    $('sp_body').innerHTML=`<table class="boq" style="min-width:0;width:100%;table-layout:auto;font-size:12px"><thead><tr><th></th><th>סעיף</th><th>סוג</th><th>משאב / מק"ט</th><th class="n">נוכחי</th><th class="n">ממבנה ${esc(SRC)}</th><th class="n">השפעה ₪</th></tr></thead><tbody>${L.map(c=>`<tr style="${c.kind==='conf'?'background:#fffaeb':c.kind==='info'?'color:var(--muted)':''}"><td>${c.dis?'':`<input type="checkbox" data-sc="${c.id}" ${c.on?'checked':''}>`}</td><td class="mono"><button class="ib" data-go="${c.t.id}" style="font-size:11px">${esc(c.tl)}</button></td><td><span style="color:${K[c.kind][1]};font-weight:600">${K[c.kind][0]}</span> ${esc(c.lbl)}${c.ms?` <button class="btn small" data-pick="${c.t.id}" title="לבחור ידנית את הסעיף המקביל במקור – חיפוש לפי מילים">🔍 ${c.man?'שנה':'בחר'} מקור</button>`:''}</td><td>${esc((c.it||'').slice(0,50))}</td><td class="n num">${c.a??''}</td><td class="n num">${c.b??''}</td><td class="n num">${c.d?fmt(c.d):''}</td></tr>`).join('')||'<tr><td colspan="7" class="hint">אין הבדלים</td></tr>'}</tbody></table>`;
     $('sp_body').querySelectorAll('[data-sc]').forEach(x=>x.onchange=()=>{ CH[+x.dataset.sc].on=x.checked; draw(); });
+    $('sp_body').querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{ PICK=targets.find(t=>t.id===+b.dataset.pick)||null; drawPick(); });
     $('sp_body').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{ h.innerHTML=''; qcGo(b.dataset.go); }); };
   h.innerHTML=`<div class="pdlg" style="z-index:9999"><div class="box" style="width:min(1150px,100%);max-height:94vh;overflow:auto">
     <h2>💲 מחירים ממבנה / פרויקט אחר – בלי לשנות כמויות</h2>
@@ -2796,17 +2813,18 @@ function syncPriceDlg(targets){
     <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center"><label class="hint" style="margin:0">פרויקט מקור <select id="sp_prj"><option value="">פרויקט זה</option></select></label><label class="hint" style="margin:0">מבנה מקור <select id="sp_src"></select></label>
       <label class="hint" style="margin:0"><input type="checkbox" id="sp_oc"> רק התנגשויות</label>
       <button class="btn small" id="sp_ap">סמן כל עדכוני המחיר</button><button class="btn small" id="sp_cl">נקה הכל</button></div>
-    <div id="sp_sum" style="margin:6px 0"></div>
+    <div id="sp_sum" style="margin:6px 0"></div><div id="sp_pick"></div>
     <div id="sp_body" style="max-height:58vh;overflow:auto;border:1px solid var(--line);border-radius:8px"></div>
     <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn" id="sp_x">ייצוא לאקסל</button><button class="btn" id="sp_c">ביטול</button><button class="btn primary" id="sp_go">החל מסומנים</button></div></div></div>`;
   $('sp_c').onclick=()=>h.innerHTML='';
   const fillB=()=>{ Bs=srcBs(); const o=(EXT?'<option value="*">כל המבנים</option>':'')+Bs.map(b=>`<option value="${esc(b.code)}">${esc(b.code+' '+(b.name||''))}</option>`).join(''); $('sp_src').innerHTML=o||'<option value="">— אין —</option>';
     if(EXT){ const tb=[...tB][0]; SRC=Bs.some(b=>b.code===tb)&&tB.size===1?tb:'*'; } else SRC=Bs.length?Bs[0].code:''; $('sp_src').value=SRC; };
   fillB();
-  $('sp_src').onchange=e=>{ SRC=e.target.value; build(); draw(); };
+  $('sp_src').onchange=e=>{ SRC=e.target.value; OVR.clear(); PICK=null; drawPick(); build(); draw(); };
   if(typeof DB!=='undefined'&&DB.listProjects) DB.listProjects().then(L=>{ projs=L.filter(r=>!CUR||r.id!==CUR.id); $('sp_prj').innerHTML='<option value="">פרויקט זה</option>'+projs.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join(''); }).catch(()=>{});
-  $('sp_prj').onchange=async e=>{ const v=e.target.value; if(!v){ EXT=null; SRCT=state.tree; SRCN=''; fillB(); build(); draw(); return; }
+  $('sp_prj').onchange=async e=>{ const v=e.target.value; if(!v){ EXT=null; SRCT=state.tree; SRCN=''; OVR.clear(); PICK=null; drawPick(); fillB(); build(); draw(); return; }
     $('sp_body').innerHTML='<div class="hint" style="padding:10px">טוען…</div>';
+    OVR.clear(); PICK=null; drawPick();
     try{ const P0=await DB.getProject(v); EXT=v; SRCN=P0.name; SRCT=(P0.state&&P0.state.tree)||[]; fillB(); build(); draw(); toast('נטען: '+SRCN+' – בדוק כל שורה לפני החלה'); }catch(err){ toast('טעינה נכשלה: '+err.message); } };
   $('sp_oc').onchange=e=>{ onlyC=e.target.checked; draw(); };
   $('sp_ap').onclick=()=>{ CH.forEach(c=>{ if(c.kind==='price') c.on=true; }); draw(); };
