@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-27'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-28'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2318,10 +2318,45 @@ document.addEventListener('change',e=>{ const x=e.target; if(!x.dataset||!x.data
 document.addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('#fin_move')){ finMove(); if(typeof pfSoon==='function') pfSoon(); } });
 
 /* ---------- ריכוזי כמויות לפי נושא (בטון, ברזל, טפסנות...) – להדפסה ולאקסל ---------- */
-function sumTopicSec(n,ch){ const nm=n.name||'', u=UNORM(n.unit);
+function sumTopicSec(n,ch){ if(n.topic) return n.topic; if(state.topicLock) return 'אחר'; return sumTopicSecAuto(n,ch); }   /* נושא מאושר גובר; בנעילה – רק מאושר */
+function sumTopicSecAuto(n,ch){ const nm=n.name||'', u=UNORM(n.unit);
   if(u==='מ"ק'&&(ch==='02'||/בטון/.test(nm))&&!/משאב(ת|ות)?\s*(בטון|סטטית)|שאיב|פחת|מבלוק|בלוקי\s*בטון|אדמת\s*גן/.test(nm)&&!(/חפיר|מילוי|מצע|עפר|סומסום/.test(nm)&&!/בטון|ב-?\s*\d{2}\b|מזוין|קיר|עמוד|תקר|יסוד|רפסוד/.test(nm))) return 'בטון'; // "על מצע" בסעיף בטון (ב-30) = בטון
   if((u==='טון'||/ק"?ג/.test(u))&&/זיון|ברזל|פלדה\s*מצולעת|רשת/.test(nm)) return 'ברזל';
   const c=qcAutoCat(n.code,nm); if(c==='ברזל'&&(!/טון|ק"?ג/.test(u)||/הובל|כיפוף|חיתוך|קשירה/.test(nm))) return 'אחר'; /* הובלה מיוחדת לברזל וכו' – לא כמות ברזל */ return c==='בטון'?'אחר':c; }
+/* ---------- נושאי סעיפים: נושא גלוי ומאושר (n.topic). state.topicLock = פחת לפי נושא רק לסעיפים מאושרים ---------- */
+const TOPIC_U={'בטון':/^מ"ק$/,'שאיבה':/^מ"ק$/,'ברזל':/^(טון|ק"?ג)$/,'טפסנות':/^מ"ר$/,'בלוקים':/^מ"ר$/,'ריצוף':/^(מ"ר|מ"א)$/,'חיפוי':/^(מ"ר|מ"א)$/,'איטום':/^(מ"ר|מ"א)$/,'טיח':/^מ"ר$/,'צבע':/^(מ"ר|מ"א)$/};
+const TOPIC_L=()=>[...new Set(['בטון','ברזל','טפסנות','בלוקים','ריצוף','חיפוי','איטום','טיח','צבע','שאיבה',...wRules().filter(r=>r.k==='topic').map(r=>String(r.v||'').trim()).filter(Boolean)])];
+function topicTab(){ const R=[]; walk(state.tree,(n,p)=>{ if(n.t!=='i'||isPct(n)) return; const c=p[1]||{}; const au=sumTopicSecAuto(n,c.code||''); R.push({n,b:p[0]||{},au,cur:n.topic||'',ok:au!=='אחר'&&TOPIC_U[au]&&TOPIC_U[au].test(UNORM(n.unit))}); });
+  const f=window.__tpf||'todo', q=(window.__tpq||'').trim(); const L=TOPIC_L(), nAp=R.filter(r=>r.cur).length, guess=R.filter(r=>!r.cur&&r.au!=='אחר');
+  const V=R.filter(r=>(f==='all'||(f==='todo'&&!r.cur&&r.au!=='אחר')||(f==='ap'&&r.cur)||(f==='unk'&&!r.cur&&r.au!=='אחר'&&!r.ok))&&(!q||wordScore(q,`${r.n.code} ${r.n.name}`)>=1));
+  return `<p class="hint" style="margin:0">לכל סעיף – הנושא שלפיו נקבע הפחת הכללי וריכוזי הכמויות. <b>מוצע</b> = ניחוש לפי שם, יחידה ופרק. מסומן מראש רק כשהניחוש תואם ליחידה (בטון↔מ"ק, ברזל↔טון, ריצוף↔מ"ר…). "אשר מסומנים" קובע את הנושא בסעיף (נשמר וגובר על הניחוש). "אחר" = בלי פחת לפי נושא.</p>
+  <div class="row" style="gap:12px;flex-wrap:wrap;margin:6px 0;align-items:center"><b>${R.length} סעיפים</b><span style="color:#12b76a">${nAp} מאושרים</span><span style="color:#b54708">${guess.length} לפי ניחוש</span>
+    <select id="tp_f" style="border:1px solid var(--line);border-radius:6px;padding:2px 6px">${[['todo','לא מאושרים עם נושא מוצע'],['unk','ניחוש שלא תואם ליחידה'],['ap','מאושרים'],['all','הכל']].map(([k,t])=>`<option value="${k}" ${k===f?'selected':''}>${t}</option>`).join('')}</select>
+    <input id="tp_q" placeholder="חיפוש…" value="${esc(q)}" style="width:150px"></div>
+  <label style="display:flex;gap:6px;align-items:center;margin:4px 0 8px;padding:6px 8px;border:1px solid ${state.topicLock?'#12b76a':'#f5c48a'};border-radius:8px;background:${state.topicLock?'transparent':'#fff4e5'}"><input type="checkbox" id="tp_lock" ${state.topicLock?'checked':''}><b>נעילה: פחת לפי נושא רק לסעיפים מאושרים</b><span class="hint" style="margin:0">${state.topicLock?' · פעיל – סעיף בלי נושא מאושר לא מקבל פחת לפי נושא':` · כבוי – ${guess.length} סעיפים מקבלים נושא לפי ניחוש`}</span></label>
+  <div style="max-height:50vh;overflow:auto"><table class="boq" style="min-width:0;table-layout:auto"><thead><tr><th><input type="checkbox" id="tp_all" title="סמן הכל"></th><th>מב</th><th>סעיף</th><th>תאור</th><th>יח'</th><th>מוצע</th><th>נושא</th><th>פחת</th><th></th></tr></thead><tbody>
+  ${V.slice(0,600).map(r=>`<tr><td><input type="checkbox" data-tpc="${r.n.id}" ${!r.cur&&r.ok?'checked':''}></td><td class="mono">${esc(r.b.code||'')}</td><td class="mono">${esc(r.n.code||'')}</td><td>${esc((r.n.name||'').slice(0,60))}</td><td>${esc(r.n.unit||'')}</td>
+    <td style="${r.au!=='אחר'&&!r.ok?'color:#b54708':''}">${esc(r.au)}${r.au!=='אחר'&&!r.ok?' ⚠':''}</td>
+    <td><select data-tps="${r.n.id}">${[...L,'אחר'].map(t=>`<option ${t===(r.cur||r.au)?'selected':''}>${t}</option>`).join('')}</select>${r.cur?' <span style="color:#12b76a" title="מאושר">✓</span>':''}</td>
+    <td class="n">${wVal(r.n)?fmt(wVal(r.n),1)+'%':''}</td><td><button class="ib" data-go="${r.n.id}" style="font-size:11px">פתח</button></td></tr>`).join('')||'<tr><td colspan="9" class="hint">אין סעיפים בסינון זה</td></tr>'}
+  ${V.length>600?`<tr><td colspan="9" class="hint">מוצגים 600 מתוך ${V.length} – צמצם בחיפוש</td></tr>`:''}</tbody></table></div>
+  <div class="row" style="justify-content:flex-start;margin-top:8px;gap:8px"><button class="btn primary" id="tp_go">אשר מסומנים</button><button class="btn" id="tp_clr" title="מחזיר את הסעיפים המסומנים לניחוש">בטל אישור במסומנים</button></div>`; }
+function topicTabBind(h){
+  const G=()=>{ let t=0; walk(state.tree,n=>{ if(n.t==='i') t+=total(n); }); return t; };
+  const f=document.getElementById('tp_f'); if(f) f.onchange=()=>{ window.__tpf=f.value; qcDlg('t'); };
+  const q=document.getElementById('tp_q'); if(q) q.onchange=()=>{ window.__tpq=q.value; qcDlg('t'); };
+  const al=document.getElementById('tp_all'); if(al) al.onchange=()=>h.querySelectorAll('[data-tpc]').forEach(c=>c.checked=al.checked);
+  h.querySelectorAll('[data-tps]').forEach(s=>s.onchange=()=>{ const c=h.querySelector(`[data-tpc="${s.dataset.tps}"]`); if(c) c.checked=true; });
+  const run=(fn,msg)=>{ const ids=[...h.querySelectorAll('[data-tpc]:checked')].map(c=>+c.dataset.tpc); if(!ids.length){ toast('לא סומנו סעיפים'); return; }
+    const before=G(), U=[]; ids.forEach(id=>{ const x=find(id); if(!x) return; U.push({n:x.n,t:x.n.topic}); fn(x.n,h.querySelector(`[data-tps="${id}"]`)); });
+    PMAP=null; CONCC=null; save(); render(); const d=G()-before; qcDlg('t');
+    const th=document.getElementById('toastHost'); th.innerHTML=`<div class="toast" role="status">${msg} ב-${U.length} סעיפים · השפעה על הסה"כ: ${d>=0?'+':''}${fmt(d)} ₪ <button class="btn small" id="tp_un" style="margin-inline-start:8px">בטל</button></div>`;
+    document.getElementById('tp_un').onclick=()=>{ U.forEach(u=>{ if(u.t===undefined) delete u.n.topic; else u.n.topic=u.t; }); PMAP=null; CONCC=null; save(); render(); if(document.getElementById('tp_go')) qcDlg('t'); th.innerHTML=''; };
+    clearTimeout(toastT); toastT=setTimeout(()=>th.innerHTML='',10000); };
+  const g=document.getElementById('tp_go'); if(g) g.onclick=()=>run((n,s)=>{ if(s) n.topic=s.value; },'נושא אושר');
+  const c=document.getElementById('tp_clr'); if(c) c.onclick=()=>run(n=>{ delete n.topic; },'אישור בוטל');
+  const lk=document.getElementById('tp_lock'); if(lk) lk.onchange=()=>{ const before=G(); if(lk.checked) state.topicLock=true; else delete state.topicLock; PMAP=null; CONCC=null; save(); render(); const d=G()-before; qcDlg('t'); toast(`נעילה ${lk.checked?'הופעלה':'בוטלה'} · השפעה על הסה"כ: ${d>=0?'+':''}${fmt(d)} ₪`); };
+}
 function sumCollect(){
   const S={}, R={};
   walk(state.tree,(x,p)=>{ const b=p[0]||{}, c=p[1]||{};
@@ -2967,19 +3002,21 @@ function qcDlg(tab){
     body+=`<div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px;align-items:center"><span class="label">ספים:</span>${[['pumpTol','שאיבה מעל בטון %'],['tileTol','ריצוף מעל שטח %'],['wConc','פחת בטון %'],['wTile','פחת ריצוף %'],['wSteel','פחת ברזל %'],['wDef','פחת אחר %'],['pctBaseTol','בסיס אחוז – פער %'],['pctMax','אחוז מקסימלי'],['priceX','מחיר חריג פי']].map(([k,l])=>`<label class="hint" style="margin:0;display:inline-flex;gap:4px;align-items:center">${l}<input data-qs="${k}" value="${S[k]}" style="width:46px;border:1px solid var(--line);border-radius:6px;padding:2px 4px" inputmode="decimal"></label>`).join('')}</div>
       <p class="hint" style="margin:6px 0 0">כלל 1 משווה לפי קבוצת מבנים: סעיף שאיבה משויך למבנים שבשדה "משרת מבנים" בטופס הסעיף, או לפי השם ("מבנים 01 + 05"), אחרת למבנה שלו. בטון = סעיפים ביחידת מ"ק (פרק 02 / "בטון" בשם). פחת בטון (סעיף מסומן "סעיף פחת" או שורה "פחת בטון") נוסף לסבולת.</p>`; }
   else if(tab==='w'){ body=wTab(); }
+  else if(tab==='t'){ body=topicTab(); }
   else if(tab==='p'){ body=pumpTab(); }
   else { const M=new Map(); walk(state.tree,x=>{ if((x.t==='r'||x.t==='k')&&x.code&&!M.has(x.code)) M.set(x.code,nodeName(x)||''); });
     const rows=[...M.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
     body=`<p class="hint" style="margin:0">הסיווג האוטומטי לפי קוד ותאור. שינוי כאן חל על כל השורות עם אותו קוד בפרויקט.</p><input id="qc_f" placeholder="סינון" style="margin:6px 0;border:1px solid var(--line);border-radius:6px;padding:4px 8px;width:220px">
       <div style="max-height:55vh;overflow:auto"><table class="boq" style="min-width:0;table-layout:auto"><thead><tr><th>קוד</th><th>תאור</th><th>אוטומטי</th><th>סיווג</th></tr></thead><tbody>${rows.map(([c,nm])=>{ const a=qcAutoCat(c,nm), o=(state.cats||{})[c]||''; return `<tr data-f="${esc((c+' '+nm).toLowerCase())}"><td class="num">${esc(c)}</td><td>${esc(nm.slice(0,60))}</td><td>${a}</td><td><select data-cat="${esc(c)}"><option value="">(אוטומטי)</option>${QC_CATS.map(k=>`<option ${o===k?'selected':''}>${k}</option>`).join('')}</select></td></tr>`; }).join('')}</tbody></table></div>`; }
-  h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="בקרת כמויות" style="width:${tab==='p'||tab==='w'?'min(1500px,98vw)':'min(1000px,100%)'};max-height:94vh;overflow:auto">
-    <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">בקרת כמויות</h2><div class="seg"><button data-qt="f" ${tab==='f'?'class="on" style="font-weight:700"':''}>ממצאים</button><button data-qt="c" ${tab==='c'?'class="on" style="font-weight:700"':''}>סיווג משאבים</button><button data-qt="p" ${tab==='p'?'class="on" style="font-weight:700"':''}>שאיבה${(()=>{ const n=pumpRows().filter(r=>['none','dbl','unk','mis'].includes(r.st)).length; return n?` <span style="color:#d92d20">(${n})</span>`:''; })()}</button><button data-qt="w" ${tab==='w'?'class="on" style="font-weight:700"':''}>פחת${(()=>{ const n=wScan().filter(r=>r.dbl).length; return n?` <span style="color:#d92d20">(${n} מצטבר)</span>`:''; })()}</button></div></div>
+  h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="בקרת כמויות" style="width:${tab==='p'||tab==='w'||tab==='t'?'min(1500px,98vw)':'min(1000px,100%)'};max-height:94vh;overflow:auto">
+    <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">בקרת כמויות</h2><div class="seg"><button data-qt="f" ${tab==='f'?'class="on" style="font-weight:700"':''}>ממצאים</button><button data-qt="c" ${tab==='c'?'class="on" style="font-weight:700"':''}>סיווג משאבים</button><button data-qt="p" ${tab==='p'?'class="on" style="font-weight:700"':''}>שאיבה${(()=>{ const n=pumpRows().filter(r=>['none','dbl','unk','mis'].includes(r.st)).length; return n?` <span style="color:#d92d20">(${n})</span>`:''; })()}</button><button data-qt="t" ${tab==='t'?'class="on" style="font-weight:700"':''}>נושאי סעיפים</button><button data-qt="w" ${tab==='w'?'class="on" style="font-weight:700"':''}>פחת${(()=>{ const n=wScan().filter(r=>r.dbl).length; return n?` <span style="color:#d92d20">(${n} מצטבר)</span>`:''; })()}</button></div></div>
     ${body}
     <div class="row" style="justify-content:flex-end;margin-top:10px">${tab==='f'?'<button class="btn" id="qc_x">ייצוא לאקסל</button>':''}<button class="btn" id="qc_close">סגור</button></div></div></div>`;
   document.getElementById('qc_close').onclick=()=>{ h.innerHTML=''; qcBadge(); };
   h.querySelectorAll('[data-qt]').forEach(b=>b.onclick=()=>qcDlg(b.dataset.qt));
   h.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>qcGo(b.dataset.go));
   if(tab==='w') wTabBind(h);
+  if(tab==='t') topicTabBind(h);
   { const bx=h.querySelector('.box'); if(bx&&_st) bx.scrollTop=_st; }
   if(tab==='f'){ h.querySelectorAll('details[data-qr]').forEach(d=>d.ontoggle=()=>{ if(!window.__qcOpen) window.__qcOpen=new Set([...h.querySelectorAll('details[data-qr]')].filter(x=>x.open||x===d).map(x=>x.dataset.qr)); if(d.open) window.__qcOpen.add(d.dataset.qr); else window.__qcOpen.delete(d.dataset.qr); });
     const sa=document.getElementById('qc_sa'); if(sa) sa.onclick=()=>{ window.__qcsa=!window.__qcsa; qcDlg('f'); };
