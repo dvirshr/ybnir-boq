@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-18'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-19'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2011,7 +2011,7 @@ function effiMapDlg(o){
       if(here){ if(v&&v!==((r.kc&&ED[r.kc])||r.def)) HO.set(r.id,v); else HO.delete(r.id); }
       else { HO.delete(r.id); if(v&&v!==r.def) ED[r.kc]=v; else delete ED[r.kc]; } }));
     h.querySelectorAll('[data-esc]').forEach(s=>s.onchange=()=>keep(()=>{ const r=byId(+s.dataset.esc); if(!r) return; const cur=eff(r);
-      if(s.value==='h') HO.set(r.id,cur); else { HO.delete(r.id); if(cur!==r.def) ED[r.kc]=cur; } ON.delete(r.id); }));
+      if(s.value==='h'){ HO.set(r.id,cur); if(ED[r.kc]===cur&&ED0[r.kc]!==cur){ if(ED0[r.kc]) ED[r.kc]=ED0[r.kc]; else delete ED[r.kc]; } } else { HO.delete(r.id); if(cur!==r.def) ED[r.kc]=cur; } ON.delete(r.id); }));
     h.querySelectorAll('[data-eon]').forEach(c=>c.onchange=()=>keep(()=>{ const r=byId(+c.dataset.eon), S=SUG.get(r.id); if(!r||!S) return;
       if(c.checked){ PREV.set(r.id,HO.has(r.id)?HO.get(r.id):undefined); HO.set(r.id,S[0].d); ON.set(r.id,true); }
       else { const p=PREV.get(r.id); if(p===undefined) HO.delete(r.id); else HO.set(r.id,p); ON.delete(r.id); } }));
