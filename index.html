@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-37'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-38'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 document.addEventListener('DOMContentLoaded',()=>{ const v=document.getElementById('verTag'); if(v) v.textContent='גרסה '+APP_VER; }); { const v=document.getElementById('verTag'); if(v) v.textContent='גרסה '+APP_VER; }
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
@@ -1984,7 +1984,8 @@ function effiTblExport(o){
   /* כותרת: A1 שם הפרויקט, A2 תאריך, ואחריהם נתוני הפרויקט (ולכל מבנה מגורים) */
   S('A1',state.project||''); S('A2',d.toLocaleDateString('he-IL'));
   const MB=state.tree.filter(b=>b.t==='b'&&pfRole(b)==='res');
-  let hr=4; S('F'+hr,'נתוני פרויקט'); S('G'+hr,'פרויקט'); MB.forEach((b,i)=>S(XLSX.utils.encode_col(7+i)+hr,b.code+' '+(b.name||''))); FILL.D9D9D9.push(hr); blankRow(hr); hr++;
+  /* נתוני הפרויקט ולכל מבנה מגורים – בגיליון נפרד "נתוני פרויקט" (כדי שהכותרת בתמחור תהיה קצרה ומוקפאת) */
+  const PD=[['נתון','פרויקט',...MB.map(b=>b.code+' '+(b.name||'')),'הערה']];
   const bm=b=>hasFmix(b)?bFmixTot(b):(b.mix||{});
   const HD=[['יח"ד',U,b=>aptNum(b.units)],['קומות מגורים',pfV('fUp'),b=>bFloors(b)],
     ...PF_MIX.map(([k,l])=>['תמהיל '+l,pfNum(pfMix()[k]),b=>pfNum(bm(b)[k])]),
@@ -1992,10 +1993,8 @@ function effiTblExport(o){
     ['מרתפים מ"ר',pfV('base')],['מפלסי מרתף',pfV('fDown')],['ברוטו מ"ר',gross],['שווה-ערך מ"ר',R2(eq),null,`מקדמים: עיקרי ${pfC().main} · שירות ${pfC().serv} · מרפסות ${pfC().balc} · מרתף ${pfC().base}`],
     ['מגרש מ"ר',pfV('plot')],['פיתוח מ"ר',pfV('dev')],['גינון מ"ר',pfV('gardens')],['חניות תת-קרקעיות',pfV('parkU')],['חניות עיליות',pfV('parkA')],['מעליות',pfV('elev')],
     ['שיטת ביצוע',P.method||''],['משך ביצוע (חודשים)',pfV('months')]];
-  let eqCell='', uCell='', grossCell='';
-  HD.forEach(([l,v,fb,note])=>{ const bv=fb?MB.map(fb):[]; if(!(v||bv.some(Boolean))) return; S('F'+hr,l);
-    if(typeof v==='string') S('G'+hr,v); else if(v) Nm('G'+hr,v,'#,##0'); bv.forEach((x,i)=>{ if(x) Nm(XLSX.utils.encode_col(7+i)+hr,x,'#,##0'); }); if(note) S('M'+hr,note);
-    if(l==='שווה-ערך מ"ר') eqCell='G'+hr; if(l==='יח"ד') uCell='G'+hr; if(l==='ברוטו מ"ר') grossCell='G'+hr; hr++; });
+  HD.forEach(([l,v,fb,note])=>{ const bv=fb?MB.map(fb):[]; if(!(v||bv.some(Boolean))) return; PD.push([l,v||null,...MB.map((b,i)=>bv[i]||null),note||'']); });
+  let hr=4;
   const KR=hr; hr+=4;   /* 4 שורות מדדים – ממולאות בסוף (צריך את תא הסה"כ) */
   const HR=hr+1; H.forEach((h,i)=>S(XLSX.utils.encode_cell({r:HR-1,c:i}),h)); bold.push(HR);
   /* קיבוץ: מבנה ← פרק ← תת-פרק */
@@ -2022,9 +2021,9 @@ function effiTblExport(o){
     S('M'+i,'בסיס: '+FIN_BASE[x.base]); prev=`${prev}+L${i}`; fsum+=x.v; });
   let TF=T1; if(FR.length){ TF=r2++; FILL.BFBFBF.push(TF); S('F'+TF,'סה"כ כולל עלויות כלכליות'); Nm('L'+TF,R2(tot+fsum),'#,##0',`L${T1}+SUM(L${T1+1}:L${TF-1})`); blankRow(TF); }
   else { const i=r2++; S('F'+i,'מרווח'); Nm('K'+i,0,'0%'); Nm('L'+i,0,'#,##0',`L${T1}*K${i}`); TF=r2++; FILL.BFBFBF.push(TF); S('F'+TF,'סה"כ כולל מרווח'); Nm('L'+TF,R2(tot),'#,##0',`L${T1}+L${i}`); blankRow(TF); }
-  const T4=r2; if(U){ S('F'+T4,'₪ ליח"ד'); Nm('L'+T4,R2((tot+fsum)/U),'#,##0',`L${TF}/${uCell||U}`); }
+  const T4=r2; if(U){ S('F'+T4,'₪ ליח"ד'); Nm('L'+T4,R2((tot+fsum)/U),'#,##0',`L${TF}/${U}`); }
   /* מדדים בכותרת – נוסחאות מול הסה"כ */
-  const KP=[['עלות כתב כמויות',tot,`L${T1}`],['מחיר למזמין (כולל עלויות כלכליות)',tot+fsum,`L${TF}`],['₪ ליח"ד (מחיר למזמין)',U?(tot+fsum)/U:0,U?`L${TF}/${uCell||U}`:''],['₪ למ"ר שווה-ערך (מחיר למזמין)',eq?(tot+fsum)/eq:0,eq?`L${TF}/${eqCell||eq}`:'']];
+  const KP=[['עלות כתב כמויות',tot,`L${T1}`],['מחיר למזמין (כולל עלויות כלכליות)',tot+fsum,`L${TF}`],['₪ ליח"ד (מחיר למזמין)',U?(tot+fsum)/U:0,U?`L${TF}/${U}`:''],['₪ למ"ר שווה-ערך (מחיר למזמין)',eq?(tot+fsum)/eq:0,eq?`L${TF}/${R2(eq)}`:'']];
   KP.forEach(([l,v,f],i)=>{ if(!f) return; S('F'+(KR+i),l); Nm('G'+(KR+i),R2(v),'#,##0',f); bold.push(KR+i); });
   ws['!ref']=`A1:P${Math.max(maxR,T4)}`;
   ws['!cols']=[{wch:8},{wch:20},{wch:15},{wch:24},{wch:15},{wch:55},{wch:10},{wch:11},{wch:10},{wch:11},{wch:10},{wch:13},{wch:30},{wch:7},{wch:12},{wch:7,hidden:true}];
@@ -2034,10 +2033,11 @@ function effiTblExport(o){
   const gT={m:0,l:0,o:0}; LF.forEach(r=>gT[r.typ]+=r.t); SS.push(['','סה"כ',R2(gT.m),R2(gT.l),R2(gT.o),R2(tot)]);
   const ws2=XLSX.utils.aoa_to_sheet(SS); const N2=SS.length; for(let i=2;i<=N2;i++){ for(const c of 'CDEF'){ const x=ws2[c+i]; if(x) x.z='#,##0'; } if(i<N2) ws2['F'+i].f=`SUM(C${i}:E${i})`; }
   for(const c of 'CDEF') ws2[c+N2].f=`SUM(${c}2:${c}${N2-1})`; ws2['!cols']=[{wch:7},{wch:24},{wch:14},{wch:14},{wch:14},{wch:14}];
-  const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'תמחור עבודות'); XLSX.utils.book_append_sheet(wb,ws2,'סיכום לפי סוג');
-  const PT={_sz:11,0:{freezeRow:HR,boldRows:bold,fillRows:FILL},1:{freeze:true,boldRows:[1,N2]}};
+  const wsP=XLSX.utils.aoa_to_sheet(PD); wsP['!cols']=[{wch:22},{wch:14},...MB.map(()=>({wch:16})),{wch:50}];
+  const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'תמחור עבודות'); XLSX.utils.book_append_sheet(wb,wsP,'נתוני פרויקט'); XLSX.utils.book_append_sheet(wb,ws2,'סיכום לפי סוג');
+  const PT={_sz:11,0:{freezeRow:HR,boldRows:bold,fillRows:FILL},1:{freeze:true,boldRows:[1]},2:{freeze:true,boldRows:[1,N2]}};
   /* הגיליונות מהייצוא הרגיל: סיכום, עלויות לפי מבנה ופרק, דשבורד, ריכוז בטון / ברזל */
-  try{ const W=effiExport(Object.assign({},o,{wbOnly:true,sort:'tree',zero:true})); if(W&&W.wb) W.wb.SheetNames.forEach((n,k)=>{ if(!k) return; XLSX.utils.book_append_sheet(wb,W.wb.Sheets[n],n==='סיכום'?'סיכום לפי פרק':n); if(W.PT[k]) PT[k+1]=W.PT[k]; }); }catch(e){ console.warn('effi sheets',e); }
+  try{ const W=effiExport(Object.assign({},o,{wbOnly:true,sort:'tree',zero:true})); if(W&&W.wb) W.wb.SheetNames.forEach((n,k)=>{ if(!k) return; XLSX.utils.book_append_sheet(wb,W.wb.Sheets[n],n==='סיכום'?'סיכום לפי פרק':n); if(W.PT[k]) PT[k+2]=W.PT[k]; }); }catch(e){ console.warn('effi sheets',e); }
   /* מפריד אלפים בכל הגיליונות: מספר בלי פורמט / עם '#,##0.##' → '#,##0' (שבר קטן מ-10 → 2 ספרות) */
   wb.SheetNames.forEach(n=>{ const w=wb.Sheets[n]; Object.keys(w).forEach(k=>{ if(k[0]==='!') return; const c=w[k]; if(!c||c.t!=='n') return; if(!c.z||c.z==='General'||/#,##0\.##$/.test(c.z)||c.z==='0.0'&&n!=='ריכוז בטון'&&n!=='ריכוז ברזל') c.z=(Math.abs(c.v)<10&&!Number.isInteger(c.v))?'#,##0.00':'#,##0'; }); });
   let buf=XLSX.write(wb,{type:'array',bookType:'xlsx'}); try{ buf=xlsxPatch(buf,PT); }catch(e){ console.warn('patch',e); }
