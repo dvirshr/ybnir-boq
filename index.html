@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-23'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-24'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -1912,22 +1912,24 @@ function effiRowsH(o,C){ C=C||effiCls(); const rows=[]; const OB=new Set(typeof 
   walk(state.tree,(n,p)=>{ if(n.t!=='i') return; const b=p[0]||{}, c=p[1]||{}, s=p[2]||{};
     if(OHC&&(OHC.OB.has(b.code)||OHC.OC.has(c.code))) return;
     const T=OHC?ohTot(n):total(n); if(!o.zero&&!T) return;
-    const pc=String(n.code||'').split('.'); const ch=pc.length>=3?pc[0]:(c.code||''), sb=pc.length>=3?pc[1]:(String(s.code||'').split('.').pop()||'00');
+    const pc=String(n.code||'').split('.'); const ch=c.code||pc[0]||'', sb=String(s.code||'').split('.').pop()||(pc.length>=3?pc[1]:'00');   /* פרק ותת-פרק לפי העץ (קוד סעיף שלא תואם את תת-הפרק לא יוצר כפילות) */
     const okN=pc.length===3&&/^\d{1,3}$/.test(pc[2]), base=okN?+pc[2]*10:0, key=(b.code||'')+'|'+ch+'|'+sb;
     const num=i=>{ if(okN&&i<=9) return [String(base+i).padStart(4,'0'),false]; seq[key]=(seq[key]||9000)+1; return [String(seq[key]),true]; };
     const fOH=OHC&&total(n)?ohTot(n)/total(n):1;
-    const RS=secPriced(n)?[]:(n.ch||[]).filter(r=>r.t==='r');
-    const resT=[...new Set(RS.map(r=>effiType(r.code,C)))];
-    let i=0; const add=(x,lvl,hdr,q,qn,t,tc)=>{ const [nm,nbad]=num(i++); const typ=OB.has(b.code)?'o':tc;
+    const RA=(n.ch||[]).filter(r=>r.t==='r'), RS=secPriced(n)?[]:RA;
+    const resT=[...new Set(RA.map(r=>effiType(r.code,C)))];
+    let i=0; const add=(x,lvl,hdr,q,qn,t,tc,tc0)=>{ if(tc0===undefined) tc0='x'; const [nm,nbad]=num(i++); const typ=OB.has(b.code)?'o':tc;
       let q1=q, qn1=qn, z=false; if(!hdr&&!q1&&t){ q1=1; qn1=1; z=true; }
-      rows.push({id:x.id,x,n,lvl,hdr,b:b.code||'',bn:b.name||'',ch,chn:cm[ch]||cm[c.code]||'',sb,num:nm,nbad,unit:lvl==='i'?(n.unit||''):(x.unit||''),q:q1,qn:qn1||q1,z,t:hdr?0:t,typ:typ||'l',tbad:!hdr&&!typ,
-        txt:lvl==='i'?(n.name||''):(nodeName(x)||''),gor:lvl==='k'?effiStrip(nodeName(parentOf(x.id)||{})):lvl==='r'?effiStrip(nodeName(x)):''}); };
-    if(!RS.length){ add(n,'i',false,safe(()=>secQty(n)),net(()=>secQtyNet(n)),T,resT.length===1?resT[0]:''); return; }
+      rows.push({id:x.id,x,n,lvl,hdr,b:b.code||'',bn:b.name||'',ch,chn:cm[ch]||cm[c.code]||'',sb,num:nm,nbad,unit:lvl==='i'?(n.unit||''):(x.unit||''),q:q1,qn:qn1||q1,z,t:hdr?0:t,typ:typ||'l',tbad:!hdr&&!typ&&!!tc0,
+        txt:lvl==='i'?(n.name||''):(nodeName(x)||x.name||x.code||''),gor:lvl==='k'?effiStrip(nodeName(parentOf(x.id)||{})):lvl==='r'?effiStrip(nodeName(x)):''}); };
+    if(!RS.length){ add(n,'i',false,safe(()=>secQty(n)),net(()=>secQtyNet(n)),T,resT.length===1?resT[0]:'',!RA.length?'':'x'); return; }
     add(n,'i',true,safe(()=>secQty(n)),net(()=>secQtyNet(n)),0,'');
     RS.forEach(r=>{ const tc=effiType(r.code,C);
       if(hasItems(r)){ add(r,'r',true,safe(()=>rQty(r)),net(()=>rQty(r)),0,tc);
         r.ch.filter(k=>k.t==='k').forEach(k=>{ const tt=total(k)*fOH; if(!o.zero&&!tt) return; add(k,'k',false,safe(()=>kQty(k)),net(()=>kQty(k)),tt,tc); }); }
       else { const tt=total(r)*fOH; if(!o.zero&&!tt) return; add(r,'r',false,safe(()=>rQty(r)),net(()=>rQty(r)),tt,tc); } }); });
+  /* מספר כפול (שני סעיפים עם אותו מספר באותו תת-פרק) – מסומן */
+  const cnt=new Map(); rows.forEach(r=>{ const k=r.b+'.'+r.ch+'.'+r.sb+'.'+r.num; cnt.set(k,(cnt.get(k)||0)+1); }); rows.forEach(r=>{ r.dup=cnt.get(r.b+'.'+r.ch+'.'+r.sb+'.'+r.num)>1; });
   return rows; }
 function effiTblExport(o){
   const was=OHC; OHC=o.oh?ohCalc():null; let R; try{ R=effiRowsH(o); } finally { OHC=was; }
@@ -1946,7 +1948,7 @@ function effiTblExport(o){
     g.C.forEach((c,ch)=>{ const cRow=row++; bold.push(cRow); S('C'+cRow,`${b}.${ch}.00.0000`); S('D'+cRow,c.chn||''); const r0=row;
       c.L.forEach(r=>{ const i=row++; const fac=r.qn?r.q/r.qn:1, nq=r.qn||r.q;
         const pad=r.lvl==='r'?'   ':r.lvl==='k'?'      ':'';
-        const nt=[r.z?'⚠ כמות 0 – הוצא כ-1 (פאושלי)':'',r.nbad?'⚠ מספור לא לפי הסעיף':'',r.tbad?'⚠ סוג עלות לא מזוהה':'',r.hdr?(r.lvl==='i'?'כותרת סעיף – העלות בשורות שמתחת':'כותרת משאב – העלות במק"טים שמתחת'):''].filter(Boolean).join(' · ');
+        const nt=[r.z?'⚠ כמות 0 – הוצא כ-1 (פאושלי)':'',r.nbad?'⚠ מספור לא לפי הסעיף':'',r.dup?'⚠ מספר כפול – לבדוק את קוד הסעיף':'',r.tbad?'⚠ סוג עלות לא מזוהה':'',r.hdr?(r.lvl==='i'?'כותרת סעיף – העלות בשורות שמתחת':'כותרת משאב – העלות במק"טים שמתחת'):''].filter(Boolean).join(' · ');
         if(!r.hdr) S('A'+i,RK[r.typ]); S('B'+i,r.gor); S('C'+i,r.b); S('D'+i,r.ch); S('E'+i,`${r.b}.${r.ch}.${r.sb}.${r.num}`); S('F'+i,pad+r.txt); S('G'+i,r.unit);
         Nm('H'+i,Math.round(nq*10000)/10000,'#,##0.##'); Nm('I'+i,Math.round(fac*10000)/10000,'0.00##'); Nm('J'+i,Math.round(r.q*10000)/10000,'#,##0.##',`I${i}*H${i}`);
         if(!r.hdr){ Nm('K'+i,Math.round((r.q?r.t/r.q:0)*10000)/10000,'#,##0.##'); Nm('L'+i,R2(r.t),'#,##0',`K${i}*J${i}`); }
