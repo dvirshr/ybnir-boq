@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-30'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-31'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -3706,12 +3706,12 @@ document.getElementById('listTables').addEventListener('click',e=>{
 /* ---------- round-trip Excel editing ---------- */
 const EX_H=['מזהה','רמה','מבנה','פרק','תת-פרק','קוד סעיף','תאור סעיף','מק"ט משאב','שם משאב (מהרשימה)','יח\'','כמות','מחיר יח\'','הערות','פעולה','סה"כ ₪ (מידע)'];   // רמה: סעיף / משאב / מק"ט (בשורת מק"ט – עמודת "מק"ט משאב" = מק"ט הפריט)
 $('btnEditX').onclick=()=>{
-  const H=EX_H.concat(['כמות מחושבת (נוסחה)','פחת %','פחת בסעיף (פירוט – מידע)','פחת כללי % (מידע)']);   /* פחת % = ידני בלבד (לטעינה); פחת כללי = מטבלת הפחתים, מידע – נכנס לחישוב בקובץ */
+  const H=EX_H.concat(['כמות מחושבת (נוסחה)','פחת %','פחת בסעיף (פירוט – מידע)','פחת כללי % (מידע)','נושא (מידע)']);   /* פחת % = ידני בלבד (לטעינה); פחת כללי = מטבלת הפחתים, מידע – נכנס לחישוב בקובץ */
   const aoa=[H], meta=[];   // meta[i] = {n, sec, res} per data row (excel row = i+2)
   const V=v=>v===''||v==null?'':(Number.isFinite(+v)?+v:String(v));
   walk(state.tree,(n,p)=>{
     const [b,c,s]=p;
-    if(n.t==='i'){ const calc=n.calc&&n.calc.length; aoa.push([n.id,'סעיף',b?.code||'',c?.code||'',s?.code||'',n.code||'',n.name||'','','',n.unit||'',(leadOf(n)||isPct(n)||isByc(n))?R2(secQtyNet(n)):calc?R2(calcQty(n)):V(n.qty),secPriced(n)?V(n.sp):'',n.note||'','',R2(total(n)),'',V(n.w),(()=>{ const L=[]; if(wVal(n)) L.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) L.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); }); return L.join(' · '); })(),wOwn(n)?'':(wAuto(n)||'')]); meta.push({n}); }
+    if(n.t==='i'){ const calc=n.calc&&n.calc.length; aoa.push([n.id,'סעיף',b?.code||'',c?.code||'',s?.code||'',n.code||'',n.name||'','','',n.unit||'',(leadOf(n)||isPct(n)||isByc(n))?R2(secQtyNet(n)):calc?R2(calcQty(n)):V(n.qty),secPriced(n)?V(n.sp):'',n.note||'','',R2(total(n)),'',V(n.w),(()=>{ const L=[]; if(wVal(n)) L.push('סעיף '+fmt(wVal(n),1)+'%'); walk(n.ch,x=>{ if((x.t==='r'||x.t==='k')&&wVal(x)) L.push((x.code||nodeName(x)||'שורה')+' '+fmt(wVal(x),1)+'%'); }); return L.join(' · '); })(),wOwn(n)?'':(wAuto(n)||''),(n.topic?n.topic+' ✓':sumTopicSec(n,c?.code||''))]); meta.push({n}); }
     if(n.t==='r'){ const i=p[p.length-1]; const qe=n.calc&&n.calc.length?R2(calcQty(n)):V(n.qexpr);
       aoa.push([n.id,'משאב',b?.code||'',c?.code||'',s?.code||'',i?.code||'','',n.code||'',nodeName(n),n.unit||'',qe,hasItems(n)?'':V(n.price),'','',R2(total(n)),'',V(n.w),'',wOwn(n)?'':(wAuto(n)||'')]); meta.push({n,sec:i}); }
     if(n.t==='k'){ const i=p[p.length-2], r=p[p.length-1]; const qe=n.calc&&n.calc.length?R2(calcQty(n)):V(n.qexpr);
@@ -3742,9 +3742,9 @@ $('btnEditX').onclick=()=>{
     if(tf.length>8000) tf=`SUM(${ks.map(x=>'O'+x).join(',')})`;
     setF('O'+r,tf,total(n));
   });
-  ws['!ref']='A1:S'+aoa.length;
-  ws['!cols']=[{wch:7},{wch:7},{wch:6},{wch:5},{wch:7},{wch:14},{wch:55},{wch:10},{wch:34},{wch:7},{wch:10},{wch:10},{wch:40},{wch:7},{wch:12},{wch:12},{wch:7},{wch:34},{wch:10}];
-  ws['!autofilter']={ref:'A1:R'+aoa.length};
+  ws['!ref']='A1:T'+aoa.length;
+  ws['!cols']=[{wch:7},{wch:7},{wch:6},{wch:5},{wch:7},{wch:14},{wch:55},{wch:10},{wch:34},{wch:7},{wch:10},{wch:10},{wch:40},{wch:7},{wch:12},{wch:12},{wch:7},{wch:34},{wch:10},{wch:10}];
+  ws['!autofilter']={ref:'A1:T'+aoa.length};
   // summary sheet: building × chapter, live
   const N=aoa.length, keys=[]; const seenK=new Set();
   meta.forEach((m,i)=>{ if(m.n.t!=='i') return; const k=aoa[i+1][2]+'|'+aoa[i+1][3]; if(!seenK.has(k)){ seenK.add(k); keys.push([aoa[i+1][2],aoa[i+1][3]]); } });
