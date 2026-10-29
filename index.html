@@ -1912,7 +1912,7 @@ function effiRowsH(o,C){ C=C||effiCls(); const rows=[]; const OB=new Set(typeof 
   walk(state.tree,(n,p)=>{ if(n.t!=='i') return; const b=p[0]||{}, c=p[1]||{}, s=p[2]||{};
     if(OHC&&(OHC.OB.has(b.code)||OHC.OC.has(c.code))) return;
     const T=OHC?ohTot(n):total(n); if(!o.zero&&!T) return;
-    const pc=String(n.code||'').split('.'); const ch=c.code||pc[0]||'', sb=String(s.code||'').split('.').pop()||(pc.length>=3?pc[1]:'00');   /* פרק ותת-פרק לפי העץ (קוד סעיף שלא תואם את תת-הפרק לא יוצר כפילות) */
+    const pc=String(n.code||'').split('.'); const ch=pc.length>=3?pc[0]:(c.code||''), sb=pc.length>=3?pc[1]:(String(s.code||'').split('.').pop()||'00');   /* המספור שלנו – לפי קוד הסעיף; קוד כפול מסומן ⚠ */
     const okN=pc.length===3&&/^\d{1,3}$/.test(pc[2]), base=okN?+pc[2]*10:0, key=(b.code||'')+'|'+ch+'|'+sb;
     const num=i=>{ if(okN&&i<=9) return [String(base+i).padStart(4,'0'),false]; seq[key]=(seq[key]||9000)+1; return [String(seq[key]),true]; };
     const fOH=OHC&&total(n)?ohTot(n)/total(n):1;
