@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-21'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-22'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -1933,7 +1933,7 @@ const EFFI_STOP=new Set(['קבלן','שכע','עבודות','עבודה','כול
 function effiBest(r,REF,cache){ const cand=`${r.n.name||''} ${r.x.t==='i'?'':effiStrip(nodeName(r.x))}`, rn=r.x.t==='i'?'':effiStrip(nodeName(r.x)); const k=cand+'|'+r.unit+'|'+r.ch; if(cache&&cache.has(k)) return cache.get(k);
   const u=effiU(r.unit); const L=[];
   /* חובה מילה משותפת (3+ אותיות, בלי ו/ה/ב/ל/מ/ש/כ בתחילה) – בלי זה דמיון אותיות מקרי ("כריתת עצים" ↔ "שער חשמלי") */
-  const toks=t=>String(t||'').toLowerCase().replace(/["'״׳.]/g,'').split(/[\s,;/()\-–+]+/).filter(w=>w.length>=3&&!/^\d+$/.test(w)&&!EFFI_STOP.has(w));
+  const toks=t=>String(t||'').toLowerCase().replace(/["'״׳.]/g,'').split(/[\s,;/()\-–+]+/).filter(w=>w.length>=2&&!/^[\d.,x×]+$/.test(w)&&!EFFI_STOP.has(w));
   const key4=w=>w.length>=4?w.slice(0,4):w;   /* הריסת/הריסה, כלונסאות/כלונס */
   const keys=w=>{ const k=[key4(w)]; const b=w.replace(/^[והבלמשכ]/,''); if(b!==w&&b.length>=3) k.push(key4(b)); return k; };   /* עם ובלי אות שימוש: לכלונסאות/כלונסאות, הריסה */
   const set=t=>new Set(toks(t).flatMap(keys)); const CW=set(cand), RW=set(rn); const hit=(w,S)=>keys(w).some(k=>S.has(k));
@@ -1960,7 +1960,7 @@ function effiMapDlg(o){
   const src=r=>HO.has(r.id)?'h':(r.kc&&ED[r.kc])?'d':'def';
   const SRC={h:['ידני – רק כאן','#2e90fa'],d:['מילון (לפי מק"ט)','#12b76a'],def:['⚠ ברירת מחדל','#b54708']};
   const sugAll=()=>{ SUG.clear(); if(!REF.length) return; R.forEach(r=>{ if(src(r)!=='def') return; const L=effiBest(r,REF,cache); if(!L.length) return; SUG.set(r.id,L);
-      if(L[0].sc>=0.75&&L[0].um&&!ON.has(r.id)){ ON.set(r.id,true); PREV.set(r.id,HO.has(r.id)?HO.get(r.id):undefined); HO.set(r.id,L[0].d); } }); };
+    }); };   /* בלי סימון אוטומטי – ברירת המחדל היא התאור שלנו; הצעה נכנסת רק בלחיצה */
   sugAll();
   const vis=()=>R.filter(r=>{ const s=src(r); if(flt==='def'&&!(s==='def'||ON.get(r.id))) return false; if(flt==='d'&&s!=='d') return false; if(flt==='h'&&s!=='h') return false; if(flt==='sug'&&!SUG.has(r.id)) return false; if(flt==='flag'&&!(r.nbad||r.tbad||r.z)) return false;
     if(q&&wordScore(q,`${r.n.code} ${r.n.name} ${r.x.code||''} ${nodeName(r.x)||''} ${eff(r)}`)<1) return false; return true; });
@@ -1969,7 +1969,7 @@ function effiMapDlg(o){
     const tot=R.reduce((a,r)=>a+r.t,0), byT={m:0,l:0,o:0}; R.forEach(r=>byT[r.typ]+=r.t);
     h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="טבלת אפי" style="width:min(1250px,100%);max-height:94vh;display:flex;flex-direction:column">
     <h2 style="margin:0 0 4px">ייצוא לאפי – תמחור עבודות (שורה לכל משאב / מק"ט)</h2>
-    <p class="hint" style="margin:0 0 6px">מספור: מבנה.פרק.תת-פרק.<b>NNNN</b> = מספר הסעיף ×10 + שורה (23.02.<b>001</b> → <b>0011</b>, <b>0012</b>…). תאור: <b style="color:#2e90fa">ידני – רק כאן</b> › <b style="color:#12b76a">מילון לפי מק"ט</b> (משותף לכל הפרויקטים) › <b style="color:#b54708">ברירת מחדל</b> (תאור הסעיף – שם המשאב). כמות כולל פחת, % פחת בהערות. ✔ = הצעה מקובץ אפי (מסומנת מראש רק בהתאמה גבוהה ויחידה זהה). שום דבר לא נשמר עד "שמור".</p>
+    <p class="hint" style="margin:0 0 6px">מספור: מבנה.פרק.תת-פרק.<b>NNNN</b> = מספר הסעיף ×10 + שורה (23.02.<b>001</b> → <b>0011</b>, <b>0012</b>…). תאור: <b style="color:#2e90fa">ידני – רק כאן</b> › <b style="color:#12b76a">מילון לפי מק"ט</b> (משותף לכל הפרויקטים) › <b style="color:#b54708">ברירת מחדל</b> (תאור הסעיף – שם המשאב). כמות כולל פחת, % פחת בהערות. ✔ = נבחרה הצעה מקובץ אפי (רק בלחיצה – שום דבר לא נבחר אוטומטית). שום דבר לא נשמר עד "שמור".</p>
     <div class="row" style="gap:10px;flex-wrap:wrap;margin:0 0 6px;font-size:12px">
       <label class="btn small" style="cursor:pointer">📂 קובץ אפי להצעות${REF.length?` (${REF.length} תאורים)`:''}<input type="file" id="ef_ref" accept=".xlsx,.xls" hidden></label>
       <span>סוג עלות לפי קידומת מק"ט: חומר <input id="ef_m" value="${esc(CL.m)}" style="width:52px"> עבודה <input id="ef_l" value="${esc(CL.l)}" style="width:52px"> תקורה <input id="ef_o" value="${esc(CL.o)}" style="width:52px"> <i class="hint" style="margin:0">(מבני תקורות → תקורה)</i></span>
