@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-35'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-36'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 document.addEventListener('DOMContentLoaded',()=>{ const v=document.getElementById('verTag'); if(v) v.textContent='גרסה '+APP_VER; }); { const v=document.getElementById('verTag'); if(v) v.textContent='גרסה '+APP_VER; }
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
@@ -2173,7 +2173,7 @@ const pfServNet=()=>Math.max(0,pfV('serv')-(pfFlag('baseInServ')?pfV('base'):0))
 const pfAbove=()=>pfMainNet()+pfV('balc')+pfServNet();
 const pfGross=()=>pfAbove()+pfV('base');
 const pfEq=()=>{ const c=pfC(); return pfMainNet()*(+c.main||0)+pfServNet()*(+c.serv||0)+pfV('balc')*(+c.balc||0)+pfV('base')*(+c.base||0); };
-const FMK=[['r2','2'],['r3','3'],['r4','4'],['r5','5'],['r6','6+']];   /* תמהיל לפי קומה – מספר חדרים */
+const FMK=[['r2','2'],['r3','3'],['r4','4'],['r5','5'],['r6','6+'],['gd','גן']];   /* תמהיל לפי קומה – מספר חדרים */
 const bFloors=b=>pfNum(b.floors)||pfNum((state.pf||{}).fUp)||0;
 const bFmixTot=b=>{ const o={}; FMK.forEach(([k])=>o[k]=0); const F=b.fmix||{}; Object.keys(F).forEach(f=>{ if(+f>=bFloors(b)) return; FMK.forEach(([k])=>{ o[k]+=pfNum((F[f]||{})[k]); }); }); return o; };
 const hasFmix=b=>b.fmix&&Object.values(b.fmix).some(x=>x&&Object.keys(x).length);
@@ -2217,6 +2217,7 @@ function pfCharPanel(){ const P=pfP(), C=P.char||{}, S=P.scope||{}, T=P.tender||
     <table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px"><thead><tr><th>פרק</th><th class="n">עלות</th><th>היקף</th><th>הערה</th></tr></thead><tbody>
     ${codes.map(scRow).join('')}
     ${other.length?`<tr><td colspan="4" style="font-size:12px;font-weight:600;padding-top:8px">פרקים שאינם בכתב הכמויות</td></tr>`+other.map(scRow).join(''):''}</tbody></table></details></div>`; }
+document.addEventListener('click',e=>{ const w=e.target.closest&&e.target.closest('#pf_wgo,#pf_wx'); if(!w) return; delete state.welcome; save(); if(w.id==='pf_wgo'){ const t=document.querySelector('.tab[data-tab="boq"]'); if(t) t.click(); } else pfSoon(); });
 document.addEventListener('click',e=>{ if(!e.target.closest||!e.target.closest('#pf_sub')) return; const P=pfP(); P.tender=P.tender||{}; let G=0; try{ G=finCalc().grand; }catch(err){}
   const rev=(typeof CUR!=='undefined'&&CUR)?CUR.rev:null; (P.tender.subs=P.tender.subs||[]).push({d:new Date().toISOString(),price:Math.round(G),rev}); if(!P.tender.price) P.tender.price=String(Math.round(G)); if(!P.tender.date) P.tender.date=new Date().toISOString().slice(0,10); if(!P.tender.status||P.tender.status==='בהכנה') P.tender.status='הוגש';
   save(); pfSoon(); toast('ההגשה נרשמה'+(rev?' · גרסה '+rev:'')); });
@@ -2271,6 +2272,9 @@ function renderProj0(){
     ['other','אחר',[]]
   ].filter(x=>byRole[x[0]]);
   el.innerHTML=`<div class="dash">
+   ${state.welcome?`<div class="panel" style="grid-column:1/-1;border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 6%,transparent)"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+     <div><h3 style="margin:0 0 4px">👋 מתחילים מכאן</h3><div style="font-size:13px;line-height:1.6">פרויקט חדש – כדאי להתחיל בנתוני הגרמושקה: <b>שטחים</b> (עיקרי / שירות / מרפסות / מרתפים), <b>יח"ד וקומות</b>, <b>תמהיל דירות</b> ו<b>עלויות כלכליות</b>.<br>מהם מחושבים ₪ למ"ר, ₪ ליח"ד, השוואות הכמויות בדשבורד והבקרה. לא חובה – אפשר למלא גם אחר כך.</div></div>
+     <div class="row" style="gap:8px"><button class="btn primary" id="pf_wgo">לכתב הכמויות ←</button><button class="btn" id="pf_wx" title="לא להציג שוב בפרויקט הזה">✕ סגור</button></div></div></div>`:''}
    <div class="panel"><h3>נתוני פרויקט <small class="hint" style="font-weight:400">– לפי גרמושקה. ברמת הפרויקט, בלי חלוקה למבני כתב הכמויות</small></h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px">
      <div><b style="font-size:13px">שטחים בנויים (מ"ר)</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_A.map(([k,l])=>`<tr><td>${l}</td><td class="n">${inp(`data-pp="${k}"`,P[k])}</td></tr>`+(k==='base'?`<tr><td style="padding-inline-start:14px;font-size:12px">↳ מפלסי מרתף</td><td class="n">${inp('data-pp="fDown"',P.fDown,60)}</td></tr>`:'')).join('')}
@@ -3532,7 +3536,7 @@ $('p_file').onchange=async e=>{
 };
 $('p_new').onclick=async()=>{
   const name='פרויקט חדש '+new Date().toLocaleDateString('he-IL');
-  try{ const r=await DB.createProject(name,{project:name,nid:1,tree:[],collapsed:{},lists:LISTS,wAuto:true},'פרויקט חדש'); openProject(r.id); }catch(e){ toast(e.message); }
+  try{ const r=await DB.createProject(name,{project:name,nid:1,tree:[],collapsed:{},lists:LISTS,wAuto:true,welcome:true},'פרויקט חדש'); await openProject(r.id); const t=document.querySelector('.tab[data-tab="proj"]'); if(t&&state.welcome) t.click(); }catch(e){ toast(e.message); }
 };
 
 /* ---------- bulk add sections from pasted list (to several projects) ---------- */
