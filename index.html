@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-29'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-30'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2326,6 +2326,7 @@ function sumTopicSecAuto(n,ch){ const nm=n.name||'', u=UNORM(n.unit);
 /* ---------- נושאי סעיפים: נושא גלוי ומאושר (n.topic). state.topicLock = פחת לפי נושא רק לסעיפים מאושרים ---------- */
 const TOPIC_U={'בטון':/^מ"ק$/,'שאיבה':/^מ"ק$/,'ברזל':/^(טון|ק"?ג)$/,'טפסנות':/^מ"ר$/,'בלוקים':/^מ"ר$/,'ריצוף':/^(מ"ר|מ"א)$/,'חיפוי':/^(מ"ר|מ"א)$/,'איטום':/^(מ"ר|מ"א)$/,'טיח':/^מ"ר$/,'צבע':/^(מ"ר|מ"א)$/};
 const TOPIC_L=()=>[...new Set(['בטון','ברזל','טפסנות','בלוקים','ריצוף','חיפוי','איטום','טיח','צבע','שאיבה',...wRules().filter(r=>r.k==='topic').map(r=>String(r.v||'').trim()).filter(Boolean)])];
+const TPP=new Map();   /* שינויים שעוד לא אושרו – נשמרים במעבר בין סינונים */
 function topicTab(){ const R=[]; walk(state.tree,(n,p)=>{ if(n.t!=='i'||isPct(n)) return; const c=p[1]||{}; const au=sumTopicSecAuto(n,c.code||''); R.push({n,b:p[0]||{},au,cur:n.topic||'',ok:au!=='אחר'&&TOPIC_U[au]&&TOPIC_U[au].test(UNORM(n.unit))}); });
   const f=window.__tpf||'todo', q=(window.__tpq||'').trim(); const L=TOPIC_L(), nAp=R.filter(r=>r.cur).length, guess=R.filter(r=>!r.cur&&r.au!=='אחר');
   const V=R.filter(r=>(f==='all'||(f==='todo'&&!r.cur&&r.au!=='אחר')||(f==='ap'&&r.cur)||(f==='unk'&&!r.cur&&r.au!=='אחר'&&!r.ok))&&(!q||wordScore(q,`${r.n.code} ${r.n.name}`)>=1));
@@ -2335,20 +2336,25 @@ function topicTab(){ const R=[]; walk(state.tree,(n,p)=>{ if(n.t!=='i'||isPct(n)
     <input id="tp_q" placeholder="חיפוש…" value="${esc(q)}" style="width:150px"></div>
   <label style="display:flex;gap:6px;align-items:center;margin:4px 0 8px;padding:6px 8px;border:1px solid ${state.topicLock?'#12b76a':'#f5c48a'};border-radius:8px;background:${state.topicLock?'transparent':'#fff4e5'}"><input type="checkbox" id="tp_lock" ${state.topicLock?'checked':''}><b>נעילה: פחת לפי נושא רק לסעיפים מאושרים</b><span class="hint" style="margin:0">${state.topicLock?' · פעיל – סעיף בלי נושא מאושר לא מקבל פחת לפי נושא':` · כבוי – ${guess.length} סעיפים מקבלים נושא לפי ניחוש`}</span></label>
   <div style="max-height:50vh;overflow:auto"><table class="boq" style="min-width:0;table-layout:auto"><thead><tr><th><input type="checkbox" id="tp_all" title="סמן הכל"></th><th>מב</th><th>סעיף</th><th>תאור</th><th>יח'</th><th>מוצע</th><th>נושא</th><th>פחת % (ידני)</th><th></th></tr></thead><tbody>
-  ${V.slice(0,600).map(r=>`<tr><td><input type="checkbox" data-tpc="${r.n.id}" ${!r.cur&&r.ok?'checked':''}></td><td class="mono">${esc(r.b.code||'')}</td><td class="mono">${esc(r.n.code||'')}</td><td>${esc((r.n.name||'').slice(0,60))}</td><td>${esc(r.n.unit||'')}</td>
+  ${V.slice(0,600).map(r=>{ const pd=TPP.get(r.n.id); return `<tr${pd?' style="background:#eff8ff"':''}><td><input type="checkbox" data-tpc="${r.n.id}" ${pd?(pd.c?'checked':''):(!r.cur&&r.ok?'checked':'')}></td><td class="mono">${esc(r.b.code||'')}</td><td class="mono">${esc(r.n.code||'')}</td><td>${esc((r.n.name||'').slice(0,60))}</td><td>${esc(r.n.unit||'')}</td>
     <td style="${r.au!=='אחר'&&!r.ok?'color:#b54708':''}">${esc(r.au)}${r.au!=='אחר'&&!r.ok?' ⚠':''}</td>
-    <td><select data-tps="${r.n.id}">${[...L,'אחר'].map(t=>`<option ${t===(r.cur||r.au)?'selected':''}>${t}</option>`).join('')}</select>${r.cur?' <span style="color:#12b76a" title="מאושר">✓</span>':''}</td>
-    <td class="n" style="white-space:nowrap">${(()=>{ const ld=leadOf(r.n), t=ld||r.n, own=wOwn(t), v=wVal(t); return `${ld?'<span title="הפחת על המשאב המוביל ★ '+esc(ld.code||'')+'">★</span> ':''}<input data-tpw="${t.id}" value="${own?esc(String(t.w)):''}" placeholder="${!own&&v?fmt(v,1)+' כללי':''}" inputmode="decimal" style="width:62px" title="ריק = לפי טבלת הפחת הכללי; מספר = פחת ידני בשורה${ld?' (על המשאב המוביל)':''}">%`; })()}</td><td><button class="ib" data-go="${r.n.id}" style="font-size:11px">פתח</button></td></tr>`).join('')||'<tr><td colspan="9" class="hint">אין סעיפים בסינון זה</td></tr>'}
+    <td><select data-tps="${r.n.id}">${[...L,'אחר'].map(t=>`<option ${t===((pd&&pd.t)||r.cur||r.au)?'selected':''}>${t}</option>`).join('')}</select>${r.cur?' <span style="color:#12b76a" title="מאושר">✓</span>':''}</td>
+    <td class="n" style="white-space:nowrap">${(()=>{ const ld=leadOf(r.n), t=ld||r.n, own=wOwn(t), v=wVal(t); return `${ld?'<span title="הפחת על המשאב המוביל ★ '+esc(ld.code||'')+'">★</span> ':''}<input data-tpw="${t.id}" value="${own?esc(String(t.w)):''}" placeholder="${!own&&v?fmt(v,1)+' כללי':''}" inputmode="decimal" style="width:62px" title="ריק = לפי טבלת הפחת הכללי; מספר = פחת ידני בשורה${ld?' (על המשאב המוביל)':''}">%`; })()}</td><td><button class="ib" data-go="${r.n.id}" style="font-size:11px">פתח</button></td></tr>`; }).join('')||'<tr><td colspan="9" class="hint">אין סעיפים בסינון זה</td></tr>'}
   ${V.length>600?`<tr><td colspan="9" class="hint">מוצגים 600 מתוך ${V.length} – צמצם בחיפוש</td></tr>`:''}</tbody></table></div>
+  ${TPP.size?`<p style="margin:6px 0 0;color:#2e90fa">${TPP.size} שורות שינית ועוד לא אושרו (מסומנות בכחול) – נשמרות גם במעבר בין סינונים. "אשר מסומנים" מאשר את כל המסומנים, גם בסינונים אחרים.</p>`:''}
   <div class="row" style="justify-content:flex-start;margin-top:8px;gap:8px"><button class="btn primary" id="tp_go">אשר מסומנים</button><button class="btn" id="tp_clr" title="מחזיר את הסעיפים המסומנים לניחוש">בטל אישור במסומנים</button></div>`; }
 function topicTabBind(h){
   const G=()=>{ let t=0; walk(state.tree,n=>{ if(n.t==='i') t+=total(n); }); return t; };
   const f=document.getElementById('tp_f'); if(f) f.onchange=()=>{ window.__tpf=f.value; qcDlg('t'); };
   const q=document.getElementById('tp_q'); if(q) q.onchange=()=>{ window.__tpq=q.value; qcDlg('t'); };
-  const al=document.getElementById('tp_all'); if(al) al.onchange=()=>h.querySelectorAll('[data-tpc]').forEach(c=>c.checked=al.checked);
-  h.querySelectorAll('[data-tps]').forEach(s=>s.onchange=()=>{ const c=h.querySelector(`[data-tpc="${s.dataset.tps}"]`); if(c) c.checked=true; });
-  const run=(fn,msg)=>{ const ids=[...h.querySelectorAll('[data-tpc]:checked')].map(c=>+c.dataset.tpc); if(!ids.length){ toast('לא סומנו סעיפים'); return; }
-    const before=G(), U=[]; ids.forEach(id=>{ const x=find(id); if(!x) return; U.push({n:x.n,t:x.n.topic}); fn(x.n,h.querySelector(`[data-tps="${id}"]`)); });
+  const al=document.getElementById('tp_all'); if(al) al.onchange=()=>h.querySelectorAll('[data-tpc]').forEach(c=>{ c.checked=al.checked; const id=+c.dataset.tpc, s=h.querySelector(`[data-tps="${id}"]`); TPP.set(id,{t:s?s.value:'',c:al.checked}); });
+  h.querySelectorAll('[data-tps]').forEach(s=>s.onchange=()=>{ const id=+s.dataset.tps, c=h.querySelector(`[data-tpc="${id}"]`); if(c) c.checked=true; TPP.set(id,{t:s.value,c:true}); });
+  h.querySelectorAll('[data-tpc]').forEach(c=>c.addEventListener('change',()=>{ const id=+c.dataset.tpc, s=h.querySelector(`[data-tps="${id}"]`); TPP.set(id,{t:s?s.value:'',c:c.checked}); }));
+  const run=(fn,msg)=>{ const vis=new Set([...h.querySelectorAll('[data-tpc]')].map(c=>+c.dataset.tpc));
+    const M=new Map(); [...h.querySelectorAll('[data-tpc]:checked')].forEach(c=>{ const id=+c.dataset.tpc, s=h.querySelector(`[data-tps="${id}"]`); M.set(id,s?s.value:''); });
+    TPP.forEach((p,id)=>{ if(!vis.has(id)&&p.c) M.set(id,p.t); });   /* מסומנים בסינונים אחרים */
+    if(!M.size){ toast('לא סומנו סעיפים'); return; }
+    const before=G(), U=[]; M.forEach((t,id)=>{ const x=find(id); if(!x) return; U.push({n:x.n,t:x.n.topic}); fn(x.n,{value:t||sumTopicSecAuto(x.n,(x.path[1]||{}).code||'')}); }); TPP.clear();
     PMAP=null; CONCC=null; save(); render(); const d=G()-before; qcDlg('t');
     const th=document.getElementById('toastHost'); th.innerHTML=`<div class="toast" role="status">${msg} ב-${U.length} סעיפים · השפעה על הסה"כ: ${d>=0?'+':''}${fmt(d)} ₪ <button class="btn small" id="tp_un" style="margin-inline-start:8px">בטל</button></div>`;
     document.getElementById('tp_un').onclick=()=>{ U.forEach(u=>{ if(u.t===undefined) delete u.n.topic; else u.n.topic=u.t; }); PMAP=null; CONCC=null; save(); render(); if(document.getElementById('tp_go')) qcDlg('t'); th.innerHTML=''; };
