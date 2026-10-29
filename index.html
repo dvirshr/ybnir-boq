@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-24'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-25'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -1767,6 +1767,7 @@ function xlsxPatch(buf,patches){ // patches: {sheetIdx:{freeze:true,boldRows:[1,
   const fc=+(sx.match(/<fonts count="(\d+)"/)||[])[1]; sx=sx.replace(/<fonts count="\d+"([^>]*)>([\s\S]*?)<\/fonts>/,(m,a,b)=>`<fonts count="${fc+1}"${a}>${b}<font><b/><sz val="12"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts>`);
   const xc=+(sx.match(/<cellXfs count="(\d+)"/)||[])[1];
   sx=sx.replace(/<cellXfs count="\d+"([^>]*)>([\s\S]*?)<\/cellXfs>/,(m,a,b)=>`<cellXfs count="${xc+2}"${a}>${b}<xf numFmtId="0" fontId="${fc}" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="3" fontId="${fc}" fillId="0" borderId="0" xfId="0" applyFont="1" applyNumberFormat="1"/></cellXfs>`);
+  if(patches._sz) sx=sx.replace(/<sz val="\d+(\.\d+)?"\/>/g,`<sz val="${patches._sz}"/>`);   /* גודל גופן כללי */
   st.content=te.encode(sx);
   for(const [idx,o] of Object.entries(patches)){ const e=get(new RegExp('xl/worksheets/sheet'+(+idx+1)+'\\.xml$')); if(!e) continue; let x=td.decode(new Uint8Array(e.content));
     if(o.freeze) x=x.replace(/<sheetView([^>]*?)\/>/,'<sheetView$1><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView>');
@@ -1950,9 +1951,9 @@ function effiTblExport(o){
         const pad=r.lvl==='r'?'   ':r.lvl==='k'?'      ':'';
         const nt=[r.z?'⚠ כמות 0 – הוצא כ-1 (פאושלי)':'',r.nbad?'⚠ מספור לא לפי הסעיף':'',r.dup?'⚠ מספר כפול – לבדוק את קוד הסעיף':'',r.tbad?'⚠ סוג עלות לא מזוהה':'',r.hdr?(r.lvl==='i'?'כותרת סעיף – העלות בשורות שמתחת':'כותרת משאב – העלות במק"טים שמתחת'):''].filter(Boolean).join(' · ');
         if(!r.hdr) S('A'+i,RK[r.typ]); S('B'+i,r.gor); S('C'+i,r.b); S('D'+i,r.ch); S('E'+i,`${r.b}.${r.ch}.${r.sb}.${r.num}`); S('F'+i,pad+r.txt); S('G'+i,r.unit);
-        Nm('H'+i,Math.round(nq*10000)/10000,'#,##0.##'); Nm('I'+i,Math.round(fac*10000)/10000,'0.00##'); Nm('J'+i,Math.round(r.q*10000)/10000,'#,##0.##',`I${i}*H${i}`);
-        if(!r.hdr){ Nm('K'+i,Math.round((r.q?r.t/r.q:0)*10000)/10000,'#,##0.##'); Nm('L'+i,R2(r.t),'#,##0',`K${i}*J${i}`); }
-        S('M'+i,nt); S('N'+i,LV[r.lvl]); S('O'+i,r.lvl==='i'?r.n.code||'':r.x.code||''); Nm('P'+i,r.id); if(r.lvl==='i'&&r.hdr) bold.push(i); });
+        Nm('H'+i,Math.round(nq*10000)/10000,'#,##0'); Nm('I'+i,Math.round(fac*10000)/10000,'0.00'); Nm('J'+i,Math.round(r.q*10000)/10000,'#,##0',`I${i}*H${i}`);
+        if(!r.hdr){ Nm('K'+i,Math.round((r.q?r.t/r.q:0)*10000)/10000,'#,##0'); Nm('L'+i,R2(r.t),'#,##0',`K${i}*J${i}`); }
+        S('M'+i,nt); S('N'+i,LV[r.lvl]); S('O'+i,r.lvl==='i'?r.n.code||'':r.x.code||''); Nm('P'+i,r.id); });
       Nm('L'+cRow,R2(c.L.reduce((a,r)=>a+r.t,0)),'#,##0',`SUM(L${r0}:L${row-1})`); cCells.push('L'+cRow); });
     Nm('L'+bRow,R2([...g.C.values()].reduce((a,c)=>a+c.L.reduce((x,r)=>x+r.t,0),0)),'#,##0',cCells.join('+')); bCells.push('L'+bRow); });
   const T1=row, T2=row+1, T3=row+2, T4=row+3; bold.push(T1,T3);
@@ -1968,7 +1969,7 @@ function effiTblExport(o){
   const gT={m:0,l:0,o:0}; LF.forEach(r=>gT[r.typ]+=r.t); SS.push(['','סה"כ',R2(gT.m),R2(gT.l),R2(gT.o),R2(tot)]);
   const ws2=XLSX.utils.aoa_to_sheet(SS); for(let i=2;i<=SS.length;i++) for(const c of 'CDEF'){ const x=ws2[c+i]; if(x) x.z='#,##0'; } ws2['!cols']=[{wch:7},{wch:24},{wch:14},{wch:14},{wch:14},{wch:14}];
   const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'תמחור עבודות'); XLSX.utils.book_append_sheet(wb,ws2,'סיכום');
-  let buf=XLSX.write(wb,{type:'array',bookType:'xlsx'}); try{ buf=xlsxPatch(buf,{0:{boldRows:bold},1:{freeze:true,boldRows:[1,SS.length]}}); }catch(e){ console.warn('patch',e); }
+  let buf=XLSX.write(wb,{type:'array',bookType:'xlsx'}); try{ buf=xlsxPatch(buf,{_sz:11,0:{boldRows:bold},1:{freeze:true,boldRows:[1,SS.length]}}); }catch(e){ console.warn('patch',e); }
   const stamp=`${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`;
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download=`תמחור עבודות לאפי ${state.project||''} ${stamp}${o.oh?' (מועמס)':''}.xlsx`.replace(/\s+/g,' '); document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
