@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-28'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-29'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2334,11 +2334,11 @@ function topicTab(){ const R=[]; walk(state.tree,(n,p)=>{ if(n.t!=='i'||isPct(n)
     <select id="tp_f" style="border:1px solid var(--line);border-radius:6px;padding:2px 6px">${[['todo','לא מאושרים עם נושא מוצע'],['unk','ניחוש שלא תואם ליחידה'],['ap','מאושרים'],['all','הכל']].map(([k,t])=>`<option value="${k}" ${k===f?'selected':''}>${t}</option>`).join('')}</select>
     <input id="tp_q" placeholder="חיפוש…" value="${esc(q)}" style="width:150px"></div>
   <label style="display:flex;gap:6px;align-items:center;margin:4px 0 8px;padding:6px 8px;border:1px solid ${state.topicLock?'#12b76a':'#f5c48a'};border-radius:8px;background:${state.topicLock?'transparent':'#fff4e5'}"><input type="checkbox" id="tp_lock" ${state.topicLock?'checked':''}><b>נעילה: פחת לפי נושא רק לסעיפים מאושרים</b><span class="hint" style="margin:0">${state.topicLock?' · פעיל – סעיף בלי נושא מאושר לא מקבל פחת לפי נושא':` · כבוי – ${guess.length} סעיפים מקבלים נושא לפי ניחוש`}</span></label>
-  <div style="max-height:50vh;overflow:auto"><table class="boq" style="min-width:0;table-layout:auto"><thead><tr><th><input type="checkbox" id="tp_all" title="סמן הכל"></th><th>מב</th><th>סעיף</th><th>תאור</th><th>יח'</th><th>מוצע</th><th>נושא</th><th>פחת</th><th></th></tr></thead><tbody>
+  <div style="max-height:50vh;overflow:auto"><table class="boq" style="min-width:0;table-layout:auto"><thead><tr><th><input type="checkbox" id="tp_all" title="סמן הכל"></th><th>מב</th><th>סעיף</th><th>תאור</th><th>יח'</th><th>מוצע</th><th>נושא</th><th>פחת % (ידני)</th><th></th></tr></thead><tbody>
   ${V.slice(0,600).map(r=>`<tr><td><input type="checkbox" data-tpc="${r.n.id}" ${!r.cur&&r.ok?'checked':''}></td><td class="mono">${esc(r.b.code||'')}</td><td class="mono">${esc(r.n.code||'')}</td><td>${esc((r.n.name||'').slice(0,60))}</td><td>${esc(r.n.unit||'')}</td>
     <td style="${r.au!=='אחר'&&!r.ok?'color:#b54708':''}">${esc(r.au)}${r.au!=='אחר'&&!r.ok?' ⚠':''}</td>
     <td><select data-tps="${r.n.id}">${[...L,'אחר'].map(t=>`<option ${t===(r.cur||r.au)?'selected':''}>${t}</option>`).join('')}</select>${r.cur?' <span style="color:#12b76a" title="מאושר">✓</span>':''}</td>
-    <td class="n">${wVal(r.n)?fmt(wVal(r.n),1)+'%':''}</td><td><button class="ib" data-go="${r.n.id}" style="font-size:11px">פתח</button></td></tr>`).join('')||'<tr><td colspan="9" class="hint">אין סעיפים בסינון זה</td></tr>'}
+    <td class="n" style="white-space:nowrap">${(()=>{ const ld=leadOf(r.n), t=ld||r.n, own=wOwn(t), v=wVal(t); return `${ld?'<span title="הפחת על המשאב המוביל ★ '+esc(ld.code||'')+'">★</span> ':''}<input data-tpw="${t.id}" value="${own?esc(String(t.w)):''}" placeholder="${!own&&v?fmt(v,1)+' כללי':''}" inputmode="decimal" style="width:62px" title="ריק = לפי טבלת הפחת הכללי; מספר = פחת ידני בשורה${ld?' (על המשאב המוביל)':''}">%`; })()}</td><td><button class="ib" data-go="${r.n.id}" style="font-size:11px">פתח</button></td></tr>`).join('')||'<tr><td colspan="9" class="hint">אין סעיפים בסינון זה</td></tr>'}
   ${V.length>600?`<tr><td colspan="9" class="hint">מוצגים 600 מתוך ${V.length} – צמצם בחיפוש</td></tr>`:''}</tbody></table></div>
   <div class="row" style="justify-content:flex-start;margin-top:8px;gap:8px"><button class="btn primary" id="tp_go">אשר מסומנים</button><button class="btn" id="tp_clr" title="מחזיר את הסעיפים המסומנים לניחוש">בטל אישור במסומנים</button></div>`; }
 function topicTabBind(h){
@@ -2354,6 +2354,11 @@ function topicTabBind(h){
     document.getElementById('tp_un').onclick=()=>{ U.forEach(u=>{ if(u.t===undefined) delete u.n.topic; else u.n.topic=u.t; }); PMAP=null; CONCC=null; save(); render(); if(document.getElementById('tp_go')) qcDlg('t'); th.innerHTML=''; };
     clearTimeout(toastT); toastT=setTimeout(()=>th.innerHTML='',10000); };
   const g=document.getElementById('tp_go'); if(g) g.onclick=()=>run((n,s)=>{ if(s) n.topic=s.value; },'נושא אושר');
+  h.querySelectorAll('[data-tpw]').forEach(i=>i.onchange=()=>{ const x=find(+i.dataset.tpw); if(!x) return; let v=i.value.trim().replace('%','');
+    if(v!==''&&!Number.isFinite(+v)){ toast('פחת חייב להיות מספר'); return; } if(+v>50&&!confirm(`פחת ${v}% – בטוח? (כמות × ${(1+v/100).toFixed(2)})`)){ qcDlg('t'); return; }
+    const before=(()=>{ let t=0; walk(state.tree,n=>{ if(n.t==='i') t+=total(n); }); return t; })(); const old=x.n.w;
+    if(v==='') delete x.n.w; else x.n.w=v; PMAP=null; CONCC=null; save(); render(); qcDlg('t');
+    let t2=0; walk(state.tree,n=>{ if(n.t==='i') t2+=total(n); }); const d=t2-before; toast(`פחת ${v===''?'הוחזר לכללי':v+'%'} · השפעה על הסה"כ: ${d>=0?'+':''}${fmt(d)} ₪`); });
   const c=document.getElementById('tp_clr'); if(c) c.onclick=()=>run(n=>{ delete n.topic; },'אישור בוטל');
   const lk=document.getElementById('tp_lock'); if(lk) lk.onchange=()=>{ const before=G(); if(lk.checked) state.topicLock=true; else delete state.topicLock; PMAP=null; CONCC=null; save(); render(); const d=G()-before; qcDlg('t'); toast(`נעילה ${lk.checked?'הופעלה':'בוטלה'} · השפעה על הסה"כ: ${d>=0?'+':''}${fmt(d)} ₪`); };
 }
