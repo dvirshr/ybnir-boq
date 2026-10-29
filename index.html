@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-20'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-21'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -1977,6 +1977,7 @@ function effiMapDlg(o){
     <div class="row" style="gap:10px;flex-wrap:wrap;margin:0 0 6px">
       <b>${R.length} שורות</b><span style="color:#12b76a">מילון ${cnt.d}</span><span style="color:#2e90fa">ידני ${cnt.h}</span><span style="color:#b54708">⚠ ברירת מחדל ${cnt.def}</span>${fl?`<span style="color:#d92d20">⚠ לבדיקה (מספור/סוג/כמות) ${fl}</span>`:''}
       <span>סה"כ ${fmt(tot)} ₪ · חומר ${fmt(byT.m)} · עבודה ${fmt(byT.l)} · תקורה ${fmt(byT.o)}</span>
+      ${cnt.h?`<button class="btn small" id="ef_clr" title="מחזיר את כל השורות עם תאור 'ידני – רק כאן' לברירת המחדל (התאור שלנו). נשמר רק ב'שמור'">↺ נקה ${cnt.h} תאורים ידניים</button>`:''}
       <select id="ef_f" style="border:1px solid var(--line);border-radius:6px;padding:2px 6px">${[['def','⚠ ברירת מחדל + הצעות מסומנות'],['all','הכל'],['sug','עם הצעה מאפי'],['d','מילון'],['h','ידני'],['flag','⚠ לבדיקה']].map(([k,t])=>`<option value="${k}" ${k===flt?'selected':''}>${t}</option>`).join('')}</select>
       <input id="ef_q" placeholder="חיפוש…" value="${esc(q)}" style="width:150px">
     </div>
@@ -2001,6 +2002,7 @@ function effiMapDlg(o){
   const bind=()=>{
     document.getElementById('ef_c').onclick=()=>h.innerHTML='';
     document.getElementById('ef_f').onchange=e=>{ flt=e.target.value; lim=300; draw(); };
+    const clr=document.getElementById('ef_clr'); if(clr) clr.onclick=()=>keep(()=>{ HO.clear(); ON.clear(); PREV.clear(); sugAll(); });
     const qi=document.getElementById('ef_q'); qi.onchange=()=>{ q=qi.value.trim(); lim=300; draw(); };
     const mo=document.getElementById('ef_more'); if(mo) mo.onclick=()=>keep(()=>{ lim+=300; });
     ['m','l','o'].forEach(k=>{ const i=document.getElementById('ef_'+k); i.onchange=()=>keep(()=>{ CL=Object.assign({},CL,{[k]:i.value.trim()}); R=calc(); }); });
