@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-16'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-17'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -1928,11 +1928,20 @@ function effiRows(o,C){ C=C||effiCls(); const rows=[]; const OB=new Set(typeof o
   return rows; }
 /* הצעת תאור מתוך קובץ אפי: מילים של אפי שנמצאות אצלנו + דמיון, יחידה זהה, בונוס לאותו פרק */
 const effiU=u=>{ u=String(u||'').replace(/\s/g,''); return ({'יחי':'*','קמפ':'קומפ\'','קומפ':'קומפ\''})[u]||UNORM(u); };
+const n0=r=>r.n.name||'';
+const EFFI_STOP=new Set(['קבלן','שכע','עבודות','עבודה','כולל','לרבות','כללי','חומרים','רכש']);
 function effiBest(r,REF,cache){ const cand=`${r.n.name||''} ${r.x.t==='i'?'':effiStrip(nodeName(r.x))}`, rn=r.x.t==='i'?'':effiStrip(nodeName(r.x)); const k=cand+'|'+r.unit+'|'+r.ch; if(cache&&cache.has(k)) return cache.get(k);
   const u=effiU(r.unit); const L=[];
-  for(const e of REF){ const eu=effiU(e.u), um=eu===u, wild=eu==='*'; let sc=Math.max(wordScore(e.d,cand)*0.95,dupSim(cand,e.d),rn?dupSim(rn,e.d):0);
+  /* חובה מילה משותפת (3+ אותיות, בלי ו/ה/ב/ל/מ/ש/כ בתחילה) – בלי זה דמיון אותיות מקרי ("כריתת עצים" ↔ "שער חשמלי") */
+  const toks=t=>String(t||'').toLowerCase().replace(/["'״׳.]/g,'').split(/[\s,;/()\-–+]+/).filter(w=>w.length>=3&&!/^\d+$/.test(w)&&!EFFI_STOP.has(w));
+  const key4=w=>w.length>=4?w.slice(0,4):w;   /* הריסת/הריסה, כלונסאות/כלונס */
+  const keys=w=>{ const k=[key4(w)]; const b=w.replace(/^[והבלמשכ]/,''); if(b!==w&&b.length>=3) k.push(key4(b)); return k; };   /* עם ובלי אות שימוש: לכלונסאות/כלונסאות, הריסה */
+  const set=t=>new Set(toks(t).flatMap(keys)); const CW=set(cand), RW=set(rn); const hit=(w,S)=>keys(w).some(k=>S.has(k));
+  for(const e of REF){ const EW=toks(e.d); const sh=EW.filter(w=>hit(w,CW)).length; if(!sh) continue;
+    const eu=effiU(e.u), um=eu===u, wild=eu==='*'; let sc=Math.max(sh/EW.length*0.95,rn?dupSim(rn,e.d):0,dupSim(n0(r),e.d));
+    if(r.typ==='m'&&RW.size&&!EW.some(w=>hit(w,RW))) sc*=0.7; if(r.typ==='m'&&/^\s*(שכ"?ע|קבלן)/.test(e.d)) sc*=0.6;   /* חומר מול שורת שכר עבודה/קבלן אצל אפי */   /* חומר בלי מילה משותפת עם המשאב (בטון ↔ "קידוח כלונסאות") */
     if(!um&&!wild) sc*=0.6; if(e.c&&e.c===r.ch) sc=Math.min(1,sc+0.05); L.push({d:e.d,u:e.u,sc,um}); }
-  L.sort((a,b)=>b.sc-a.sc); const out=L.filter(x=>x.sc>=0.4).slice(0,3); if(cache) cache.set(k,out); return out; }
+  L.sort((a,b)=>b.sc-a.sc); const out=L.filter(x=>x.sc>=0.45).slice(0,3); if(cache) cache.set(k,out); return out; }
 function effiRefParse(buf){ const wb=XLSX.read(buf,{type:'array'}); const out=new Map();
   for(const sn of wb.SheetNames){ const A=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''}); const hi=A.findIndex(r=>r.includes('תאור סעיף')&&r.includes('יחידה')); if(hi<0) continue;
     const H=A[hi], iD=H.indexOf('תאור סעיף'), iU=H.indexOf('יחידה'), iC=H.indexOf('מספר פרק');
