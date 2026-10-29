@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-26'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-27'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -2472,7 +2472,7 @@ const QC_CATS=['בטון','שאיבה','ברזל','טפסנות','ריצוף','�
 const QC_DEF={pumpTol:3,tileTol:10,wConc:3,wTile:10,wSteel:5,wDef:15,pctBaseTol:5,pctMax:20,priceX:3};
 const qcSet=()=>Object.assign({},QC_DEF,state.qc||{});
 function qcAutoCat(code,name){
-  const s=String(name||'')+' '+String(code||'');
+  const s=(String(name||'')+' '+String(code||'')).replace(/בטיחות\S*|בטיחותי\S*/g,' ');   /* "בטיחות" מכיל "טיח" – לא לסווג כטיח */
   if(/משאב(ת|ות)\s*(חום|ביוב|ניקוז|ספרינקלר|מים|הגברת|ג'?וקי|כיבוי|טבולות|שקועות)|ספרינקלר|מתזים|ביוב|ניקוז/.test(s)) return 'אחר';
   if(/משאב(ת|ות)\s*בטון|שאיבת\s*בטון|שכירות\s*משאב|משאבה\s*סטטית|ק\.מ\s*-\s*משאבות/.test(s)) return 'שאיבה';
   if(/פלדת?\s*זיון|ברזל|פלדה\s*מצולעת|מצולע|רשת(ות)?\s*(פלדה|ברזל|מרותכ)|^5605/.test(s)) return 'ברזל';
