@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-19'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-20'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -1989,7 +1989,7 @@ function effiMapDlg(o){
       <td>${r.x.t==='i'?'<i class="hint" style="margin:0">(סעיף)</i>':`<span class="mono">${esc(r.x.code||'')}</span> ${esc((nodeName(r.x)||'').slice(0,26))}`}</td>
       <td>${esc(r.unit)}</td><td class="n">${fmtQ(Math.round(r.q*100)/100)}${r.w?`<div class="hint" style="margin:0">פחת ${fmt(r.w,1)}%</div>`:''}</td><td class="n">${fmt(r.t)}</td><td style="${r.tbad?'color:#d92d20':''}">${EFFI_T[r.typ]}</td>
       <td><input data-etx="${r.id}" value="${esc(eff(r))}" list="ef_dl" style="width:260px;border-color:${SRC[s][1]}"></td>
-      <td>${r.kc?`<select data-esc="${r.id}" style="font-size:11px"><option value="d" ${s!=='h'?'selected':''}>כל ${esc(r.kc)}</option><option value="h" ${s==='h'?'selected':''}>רק כאן</option></select>`:'<span class="hint" style="margin:0">רק כאן</span>'}<div style="font-size:10px;color:${SRC[s][1]}">${SRC[s][0]}</div></td>
+      <td>${r.kc?`<select data-esc="${r.id}" style="font-size:11px"><option value="h" ${s!=='d'?'selected':''}>רק כאן</option><option value="d" ${s==='d'?'selected':''}>כל ${esc(r.kc)}</option></select>`:'<span class="hint" style="margin:0">רק כאן</span>'}<div style="font-size:10px;color:${SRC[s][1]}">${SRC[s][0]}</div></td>
       <td style="font-size:11px">${S.map((x,j)=>`<div${j?' style="color:var(--muted)"':''}><a href="#" data-epk="${r.id}" data-j="${j}">${esc(x.d)}</a> · ${esc(x.u)} · ${Math.round(x.sc*100)}%${x.um?'':' ⚠יח\''}</div>`).join('')}</td></tr>`; }).join('')||'<tr><td colspan="11" class="hint">אין שורות בסינון זה</td></tr>'}
     ${V.length>lim?`<tr><td colspan="11"><button class="btn small" id="ef_more">הצג עוד (${V.length-lim})</button></td></tr>`:''}
     </tbody></table></div>
