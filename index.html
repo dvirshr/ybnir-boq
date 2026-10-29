@@ -1930,14 +1930,18 @@ function effiRows(o,C){ C=C||effiCls(); const rows=[]; const OB=new Set(typeof o
 const effiU=u=>{ u=String(u||'').replace(/\s/g,''); return ({'יחי':'*','קמפ':'קומפ\'','קומפ':'קומפ\''})[u]||UNORM(u); };
 const n0=r=>r.n.name||'';
 const EFFI_STOP=new Set(['קבלן','שכע','עבודות','עבודה','כולל','לרבות','כללי','חומרים','רכש']);
-function effiBest(r,REF,cache){ const cand=`${r.n.name||''} ${r.x.t==='i'?'':effiStrip(nodeName(r.x))}`, rn=r.x.t==='i'?'':effiStrip(nodeName(r.x)); const k=cand+'|'+r.unit+'|'+r.ch; if(cache&&cache.has(k)) return cache.get(k);
+function effiBest(r,REF,cache){ const cand=`${r.n.name||''} ${r.x.t==='i'?'':effiStrip(nodeName(r.x))}`, rn=r.x.t==='i'?'':effiStrip(nodeName(r.x)); const k=cand+'|'+r.unit+'|'+r.ch+'|'+(r.sbn||''); if(cache&&cache.has(k)) return cache.get(k);
   const u=effiU(r.unit); const L=[];
   /* חובה מילה משותפת (3+ אותיות, בלי ו/ה/ב/ל/מ/ש/כ בתחילה) – בלי זה דמיון אותיות מקרי ("כריתת עצים" ↔ "שער חשמלי") */
   const toks=t=>String(t||'').toLowerCase().replace(/["'״׳.]/g,'').split(/[\s,;/()\-–+]+/).filter(w=>w.length>=2&&!/^[\d.,x×]+$/.test(w)&&!EFFI_STOP.has(w));
   const key4=w=>w.length>=4?w.slice(0,4):w;   /* הריסת/הריסה, כלונסאות/כלונס */
   const keys=w=>{ const k=[key4(w)]; const b=w.replace(/^[והבלמשכ]/,''); if(b!==w&&b.length>=3) k.push(key4(b)); return k; };   /* עם ובלי אות שימוש: לכלונסאות/כלונסאות, הריסה */
   const set=t=>new Set(toks(t).flatMap(keys)); const CW=set(cand), RW=set(rn); const hit=(w,S)=>keys(w).some(k=>S.has(k));
+  /* משפחת חומר: עץ מול פח/פלדה/אלומיניום – לפי הסעיף, תת-הפרק והמשאב שלנו (מסגרות = דלתות פח/פלדה; נגרות = עץ) */
+  const ctx=`${cand} ${r.sbn||''}`, fam=t=>{ const W=/(^|[\s\-–/(])(ה|ל|ב|מ|ו)?(עץ|נגרות|נגר|mdf|פורמייקה|סנדוויץ'? עץ)([\s\-–/),.]|$)/i.test(t), M=/(פח|פלדה|מתכת|מסגרות|מסגר|נירוסטה|אלומיניום|אלומ'|רב.?בריח|ממ"?ד)/.test(t); return W&&!M?'w':M&&!W?'m':''; };
+  const myF=fam(ctx);
   for(const e of REF){ const EW=toks(e.d); const sh=EW.filter(w=>hit(w,CW)).length; if(!sh) continue;
+    const eF=myF?fam(e.d):''; if(eF&&eF!==myF) continue;   /* דלת עץ לא מוצעת לסעיף מסגרות, ולהפך */
     const eu=effiU(e.u), um=eu===u, wild=eu==='*'; let sc=Math.max(sh/EW.length*0.95,rn?dupSim(rn,e.d):0,dupSim(n0(r),e.d));
     if(r.typ==='m'&&RW.size&&!EW.some(w=>hit(w,RW))) sc*=0.7; if(r.typ==='m'&&/^\s*(שכ"?ע|קבלן)/.test(e.d)) sc*=0.6;   /* חומר מול שורת שכר עבודה/קבלן אצל אפי */   /* חומר בלי מילה משותפת עם המשאב (בטון ↔ "קידוח כלונסאות") */
     if(!um&&!wild) sc*=0.6; if(e.c&&e.c===r.ch) sc=Math.min(1,sc+0.05); L.push({d:e.d,u:e.u,sc,um}); }
