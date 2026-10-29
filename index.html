@@ -348,8 +348,8 @@ table.boq.plist{min-width:0!important;width:100%}
       <div class="panels"><div class="panel" id="areaPanel"></div><div class="panel" id="gapPanel"></div></div>
       <div class="panels"><div class="panel" id="pbPanel"></div></div>
       <div class="panels">
-        <div class="panel"><h3>לפי מבנה</h3><div class="bars" id="byB"></div></div>
-        <div class="panel"><h3>לפי פרק</h3><div class="bars" id="byC"></div></div>
+        <div class="panel"><h3>לפי מבנה <small class="hint" style="font-weight:400">– עלות ומחיר למזמין</small></h3><div class="bars" id="byB"></div></div>
+        <div class="panel"><h3>לפי פרק <small class="hint" style="font-weight:400">– עלות ומחיר למזמין</small></h3><div class="bars" id="byC"></div></div>
 
       </div>
     </div>
@@ -501,7 +501,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='28.10.26-31'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='28.10.26-32'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
 let pendingDel = null, dashB = 'all', query = '';
@@ -1597,16 +1597,25 @@ function pbPanel(){ const el=document.getElementById('pbPanel'); if(!el) return;
    <table class="boq" style="min-width:0;table-layout:auto;font-size:13px"><tbody>${Object.keys(PB).concat('-').filter(k=>acc[k]).map(k=>`<tr><td><span style="color:${PBC[k]||'var(--muted)'};font-weight:600">${PB[k]||'הערכה – לא סומן'}</span></td><td class="n num">${fmt(acc[k])}</td><td class="n num" style="width:70px">${fmt(acc[k]/T*100,1)}%</td><td style="width:40%"><div style="height:8px;border-radius:4px;background:${PBC[k]||'#98a2b3'};width:${Math.max(1,acc[k]/T*100)}%"></div></td></tr>`).join('')}</tbody></table>
    ${L.length?`<div style="margin-top:8px;font-size:13px;font-weight:600">הסעיפים היקרים שמבוססים על הערכה / לא סומנו</div><table class="boq" style="min-width:0;table-layout:auto;font-size:12px"><tbody>${L.slice(0,10).map(r=>`<tr><td class="mono">${esc((r.p[0]||{}).code||'')}</td><td class="mono"><button class="ib" data-act="att" data-id="${r.x.id}">${esc(r.x.code||'')}</button></td><td>${esc((r.x.name||'').slice(0,55))}</td><td class="n num">${fmt(r.t)}</td><td style="color:${PBC[r.k]||'var(--muted)'}">${PB[r.k]||'לא סומן'}${r.F?' · 📎'+r.F:''}</td></tr>`).join('')}</tbody></table>`:''}`;
   el.querySelectorAll('[data-act="att"]').forEach(b=>b.onclick=()=>attDlg(+b.dataset.id)); }
+/* מחיר למזמין לחלק מהפרויקט: עלות + חלק יחסי מהעלויות הכלכליות (ביטוח, בנ"מ, רווח, ערבויות, מימון).
+   שורה כלכלית על בסיס "עלות ישירה" מתחלקת רק על העלות הישירה (בלי מבני/פרקי תקורה); השאר – לפי חלק מהעלות הכוללת. */
+function finAlloc(){ let FC; try{ FC=finCalc(); }catch(e){ return {K:1,grand:0,price:(t)=>t}; } const G=FC.G||0, D=FC.D||0;
+  const vd=FC.rows.filter(r=>r.base==='d').reduce((a,r)=>a+r.v,0), vo=FC.rows.filter(r=>r.base!=='d').reduce((a,r)=>a+r.v,0);
+  return {K:G?FC.grand/G:1,grand:FC.grand,G,price:(t,td)=>t+(G?vo*t/G:0)+(D?vd*(td??t)/D:0)}; }
+function finSplit(keyOf){ const OB=new Set(typeof ohBlds==='function'?ohBlds():[]), OC=new Set(typeof ohChs==='function'?ohChs():[]); const M={};
+  for(const b of state.tree){ walk(b.ch||[],(x,p)=>{ if(x.t!=='i'||isPct(x)) return; const k=keyOf(b,p[0]||{}); if(k==null) return; const T=total(x); const o=M[k]=M[k]||{t:0,td:0}; o.t+=T; if(!OB.has(b.code)&&!OC.has((p[0]||{}).code)) o.td+=T; }); }
+  return M; }
 function renderDash(){
   const B=state.tree; const G=B.reduce((a,b)=>a+total(b),0);
   const C=pfC(), U=pfV('units')||projU(), main=pfMainNet(), serv=pfServNet(), balc=pfV('balc'), base=pfV('base'), gross=pfGross(), eq=pfEq();
   const r=(a,b,d=0)=>a&&b?fmt(a/b,d):'—';
   let nS=0, noPrice=0; walk(B,n=>{ if(n.t==='i') nS++; if((n.t==='r'&&!hasItems(n))||n.t==='k'){ if(!evalExpr(n.price)) noPrice++; } });
   const byRole={}; B.forEach(b=>{ const k=pfRole(b); byRole[k]=(byRole[k]||0)+total(b); });
-  const noForm=!gross&&!U;
+  const noForm=!gross&&!U; const FA=finAlloc();
   document.getElementById('dashFilter').innerHTML=noForm?`<div style="border:1px solid #fec84b;background:#fffaeb;border-radius:8px;padding:6px 10px;font-size:13px">⚠ טופס הפרויקט ריק – מחירים למ"ר והשוואות כמויות מחושבים מנתוני הטופס. <button class="ib" data-gotab="proj" style="color:var(--accent);font-weight:700">לטופס הפרויקט ←</button></div>`:'';
   document.getElementById('kpis').innerHTML=[
     ['עלות כוללת','₪ '+fmt(G)],['₪ ליח"ד',U?'₪ '+fmt(G/U)+`<small style="display:block;font-size:11px;font-weight:400">${fmt(U)} יח"ד</small>`:'—'],
+    ['מחיר למזמין',FA.grand?'₪ '+fmt(FA.grand)+`<small style="display:block;font-size:11px;font-weight:400">כולל עלויות כלכליות ${G?'+'+fmt((FA.K-1)*100,1)+'%':''}</small>`:'—'],['מחיר למזמין ליח"ד',FA.grand&&U?'₪ '+fmt(FA.grand/U):'—'],
     ['₪ למ"ר שווה-ערך',eq?'₪ '+fmt(G/eq)+`<small style="display:block;font-size:11px;font-weight:400">${fmt(eq)} מ"ר</small>`:'—'],['₪ למ"ר ברוטו',gross?'₪ '+fmt(G/gross)+`<small style="display:block;font-size:11px;font-weight:400">${fmt(gross)} מ"ר</small>`:'—'],
     ...(()=>{ const M=projMetrics(); return [['בטון מ"ק ליח"ד',M.conc&&U?fmt(M.conc/U,1)+`<small style="display:block;font-size:11px;font-weight:400">${fmt(M.conc)} מ"ק כולל פחת</small>`:'—'],['בטון מ"ק למ"ר שו"ע',M.conc&&eq?fmt(M.conc/eq,2):'—'],['פלדה ק"ג למ"ק בטון',M.conc&&M.steel?fmt(M.steel*1000/M.conc,0)+`<small style="display:block;font-size:11px;font-weight:400">${fmt(M.steel)} טון</small>`:'—']]; })(),
     ['סעיפים',fmt(nS)],['שורות ללא מחיר',fmt(noPrice)]
@@ -1624,11 +1633,12 @@ function renderDash(){
     ['פיתוח וגינון',devA,dev,devA?dev/devA:0]
   ];
   document.getElementById('areaPanel').innerHTML=`<h3>מחיר למ"ר לפי חלוקת שטחים <small class="hint" style="font-weight:400">– עלות המגורים מחולקת בין עיקרי / שירות / מרפסות לפי מקדמי השווה-ערך (${C.main} / ${C.serv} / ${C.balc})</small></h3>
-    <table class="boq plist" style="min-width:0;table-layout:auto"><thead><tr><th>שטח</th><th class="n">מ"ר</th><th class="n">עלות ישירה</th><th class="n">₪ למ"ר ישיר</th><th class="n">₪ למ"ר כולל תקורות</th></tr></thead><tbody>
-    ${rows.map(([l,a,c,p])=>`<tr><td>${l}</td><td class="n num">${a?fmt(a):'—'}</td><td class="n num">${c?fmt(c):'—'}</td><td class="n num">${a&&p?fmt(p):'—'}</td><td class="n num"><b>${a&&p?fmt(p*L):'—'}</b></td></tr>`).join('')}
-    <tr><td>תקורות + רווח</td><td></td><td class="n num">${fmt(oh)}</td><td colspan="2" class="hint" style="margin:0">מועמס על השורות למעלה: ${dirSum?fmt((L-1)*100,1)+'%':'—'}</td></tr>
-    ${oth?`<tr><td>אחר</td><td></td><td class="n num">${fmt(oth)}</td><td colspan="2"></td></tr>`:''}
-    <tr style="font-weight:700;border-top:2px solid var(--line)"><td>סה"כ</td><td class="n num">${gross?fmt(gross):'—'}</td><td class="n num">${fmt(G)}</td><td class="n num">${r(G,gross)}</td><td class="n num">${r(G,eq)} <small style="font-weight:400">לשווה-ערך</small></td></tr></tbody></table>`;
+    <table class="boq plist" style="min-width:0;table-layout:auto"><thead><tr><th>שטח</th><th class="n">מ"ר</th><th class="n">עלות ישירה</th><th class="n">₪ למ"ר ישיר</th><th class="n">₪ למ"ר כולל תקורות</th><th class="n">מחיר למזמין</th><th class="n">₪ למ"ר למזמין</th></tr></thead><tbody>
+    ${rows.map(([l,a,c,p])=>`<tr><td>${l}</td><td class="n num">${a?fmt(a):'—'}</td><td class="n num">${c?fmt(c):'—'}</td><td class="n num">${a&&p?fmt(p):'—'}</td><td class="n num"><b>${a&&p?fmt(p*L):'—'}</b></td><td class="n num">${c?fmt(c*L*FA.K):'—'}</td><td class="n num"><b>${a&&p?fmt(p*L*FA.K):'—'}</b></td></tr>`).join('')}
+    <tr><td>תקורות + רווח</td><td></td><td class="n num">${fmt(oh)}</td><td colspan="2" class="hint" style="margin:0">מועמס על השורות למעלה: ${dirSum?fmt((L-1)*100,1)+'%':'—'}</td><td colspan="2" class="hint" style="margin:0">+ עלויות כלכליות ${fmt((FA.K-1)*100,1)}%</td></tr>
+    ${oth?`<tr><td>אחר</td><td></td><td class="n num">${fmt(oth)}</td><td colspan="4"></td></tr>`:''}
+    <tr style="font-weight:700;border-top:2px solid var(--line)"><td>סה"כ</td><td class="n num">${gross?fmt(gross):'—'}</td><td class="n num">${fmt(G)}</td><td class="n num">${r(G,gross)}</td><td class="n num">${r(G,eq)} <small style="font-weight:400">לשווה-ערך</small></td><td class="n num">${fmt(FA.grand)}</td><td class="n num">${r(FA.grand,eq)} <small style="font-weight:400">לשווה-ערך</small></td></tr></tbody></table>
+    <p class="hint" style="margin:4px 0 0;font-size:11px">מחיר למזמין = כולל תקורות × (1 + עלויות כלכליות: ביטוח, בנ"מ, רווח, ערבויות, מימון – מטופס הפרויקט).</p>`;
   // ---- השוואת כמויות: כתב כמויות מול טופס הפרויקט / מול עצמו ----
   const Q={conc:0,steel:0,floor:0,plaster:0,paint:0,wp:0,elev:0,devPave:0,garden:0};
   walk(B,(n,p)=>{ if(n.t!=='i') return; const ch=(p[1]||{}).code||'', nm=n.name||'', u=UNORM(n.unit), q=secQty(n)||0; if(!q||Number.isNaN(q)) return;
@@ -1662,14 +1672,17 @@ function renderDash(){
     ${cmp.map(x=>`<tr><td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${SC[x.st]}"></span></td><td>${x.l}</td><td class="n num">${fmt(x.a)}</td><td class="n num">${x.b?fmt(x.b):'<span class="hint" style="margin:0">חסר בטופס</span>'}</td><td class="n num"><b>${x.v===null?'—':fmt(x.v,2)}</b></td><td class="n num hint" style="margin:0">${x.lo===x.hi?'שווה':'<span dir="ltr">'+fmt(x.lo,2)+' – '+fmt(x.hi,2)+'</span>'}</td></tr>`).join('')||'<tr><td colspan="6" class="none">מלא את טופס הפרויקט כדי לקבל השוואות</td></tr>'}
     </tbody></table>
     ${near.length?`<h3 style="margin-top:12px">סעיפים ביח' עם כמות קרובה ליח"ד (${fmt(U)}) – הקלדה?</h3>${near.slice(0,30).map(x=>`<div style="font-size:13px;padding:3px 0;border-top:1px solid var(--line)"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#f79009;margin-inline-end:6px"></span>${esc(x.b.code+' · '+x.n.code+' '+(x.n.name||'').slice(0,60))}: <b>${fmtQ(x.q)}</b> במקום ${fmt(x.t)}? <button class="ib" data-go="${x.n.id}" style="font-size:11px">לסעיף</button></div>`).join('')}`:''}`;
+  /* חלוקה לפי מבנה / פרק: עלות + מחיר למזמין (עלות + חלק יחסי מהעלויות הכלכליות) */
   const bars=(el,items,keepOrder)=>{
     items=items.filter(x=>x.v>0); if(!keepOrder) items.sort((a,b)=>b.v-a.v);
-    const max=Math.max(...items.map(x=>x.v),0);
-    document.getElementById(el).innerHTML= items.length? items.map(x=>`<div class="barrow" title="${esc(x.k)}: ₪ ${fmt(x.v)} (${G?fmt(x.v/G*100,1):0}%)"><span class="nm">${esc(x.k)}</span><span class="track"><span class="fill" style="width:${max?x.v/max*100:0}%"></span></span><span class="v">₪ ${fmt(x.v)} <small class="hint" style="margin:0">${G?fmt(x.v/G*100,1)+'%':''}</small></span></div>`).join('') : '<div class="none">אין עדיין סכומים.</div>';
+    const max=Math.max(...items.map(x=>x.pv||x.v),0);
+    const hd=`<div class="barrow" style="font-size:11px;color:var(--muted)"><span class="nm"></span><span class="track" style="background:none;display:flex;gap:10px;align-items:center"><span><span style="display:inline-block;width:10px;height:8px;background:var(--accent);border-radius:2px"></span> עלות</span><span><span style="display:inline-block;width:10px;height:8px;background:var(--accent);opacity:.3;border-radius:2px"></span> מחיר למזמין</span></span><span class="v">עלות · <b>למזמין</b></span></div>`;
+    document.getElementById(el).innerHTML= items.length? hd+items.map(x=>`<div class="barrow" title="${esc(x.k)}: עלות ₪ ${fmt(x.v)} (${G?fmt(x.v/G*100,1):0}%) · למזמין ₪ ${fmt(x.pv)}"><span class="nm">${esc(x.k)}</span><span class="track" style="position:relative"><span class="fill" style="position:absolute;inset-inline-start:0;top:0;bottom:0;width:${max?x.pv/max*100:0}%;opacity:.3"></span><span class="fill" style="position:relative;width:${max?x.v/max*100:0}%"></span></span><span class="v">₪ ${fmt(x.v)} · <b>₪ ${fmt(x.pv)}</b> <small class="hint" style="margin:0">${G?fmt(x.v/G*100,1)+'%':''}</small></span></div>`).join('') : '<div class="none">אין עדיין סכומים.</div>';
   };
-  bars('byB', B.slice().sort((a,b)=>(a.code||'').localeCompare(b.code||'',undefined,{numeric:true})).map(b=>({k:b.code+' '+(b.name||''),v:total(b)})),true);
+  const SB=finSplit(b=>b.code), SC2=finSplit((b,c)=>c.code);
+  bars('byB', B.slice().sort((a,b)=>(a.code||'').localeCompare(b.code||'',undefined,{numeric:true})).map(b=>{ const o=SB[b.code]||{t:0,td:0}; return {k:b.code+' '+(b.name||''),v:total(b),pv:FA.price(total(b),o.td*(o.t?total(b)/o.t:1))}; }),true);
   const byC={}; walk(B,n=>{ if(n.t==='c') byC[n.code]=(byC[n.code]||0)+total(n); }); const cm=chMap();
-  bars('byC', Object.entries(byC).map(([c,v])=>({k:c+' '+(cm[c]||''),v})));
+  bars('byC', Object.entries(byC).map(([c,v])=>{ const o=SC2[c]||{t:0,td:0}; return {k:c+' '+(cm[c]||''),v,pv:FA.price(v,o.td*(o.t?v/o.t:1))}; }));
 }
 document.getElementById('view-dash').addEventListener('click',e=>{ const g=e.target.closest('[data-gotab]'); if(g){ const t=document.querySelector(`.tab[data-tab="${g.dataset.gotab}"]`); if(t) t.click(); return; }
   if(e.target.closest('[data-openqc]')){ qcDlg('f'); return; } const go=e.target.closest('[data-go]'); if(go){ document.querySelector('.tab[data-tab="boq"]').click(); qcGo(go.dataset.go); } });
@@ -2141,7 +2154,7 @@ function projMetrics(){
 /* ---------- טופס פרויקט: נתוני גרמושקה ברמת פרויקט + ניתוח לפי תפקיד המבנה בכתב הכמויות ---------- */
 const PF_A=[['main','עיקרי'],['serv','שירות'],['balc','מרפסות'],['base','מרתפים']];
 const PF_X=[['plot','שטח מגרש'],['dev','פיתוח'],['gardens','גינון'],['roofs','גגות']];
-const PF_N=[['units','יח"ד'],['parkU','חניות תת-קרקעיות'],['parkA','חניות עיליות'],['fUp','קומות מעל הקרקע'],['fDown','מפלסי מרתף'],['elev','מעליות'],['stops','תחנות (סה"כ)'],['months','משך ביצוע (חודשים)']];
+const PF_N=[['units','יח"ד'],['parkU','חניות תת-קרקעיות'],['parkA','חניות עיליות'],['fUp','קומות מעל הקרקע'],['elev','מעליות'],['stops','תחנות (סה"כ)'],['months','משך ביצוע (חודשים)']];
 const PF_MIX=[['r2','2–2.5 חד\''],['r3','3 חד\''],['r4','4 חד\''],['r5','5 חד\''],['r6','6+ / פנטהאוז'],['gd','דירות גן']];
 const PF_COEF={main:1,serv:1,balc:0.4,base:0.6};
 const PF_ROLES={res:'מגורים (מעל הקרקע)',base:'מרתפים / חניה',earth:'עפר וביסוס',dev:'פיתוח וגינון',oh:'תקורות',other:'אחר'};
@@ -2156,6 +2169,7 @@ const pfServNet=()=>Math.max(0,pfV('serv')-(pfFlag('baseInServ')?pfV('base'):0))
 const pfAbove=()=>pfMainNet()+pfV('balc')+pfServNet();
 const pfGross=()=>pfAbove()+pfV('base');
 const pfEq=()=>{ const c=pfC(); return pfMainNet()*(+c.main||0)+pfServNet()*(+c.serv||0)+pfV('balc')*(+c.balc||0)+pfV('base')*(+c.base||0); };
+const pfMix=()=>{ const MB=state.tree.filter(b=>b.t==='b'&&pfRole(b)==='res'), P=state.pf||{}; if(MB.length>1&&MB.some(b=>b.mix&&Object.keys(b.mix).length)){ const o={}; PF_MIX.forEach(([k])=>{ o[k]=MB.reduce((a,b)=>a+pfNum((b.mix||{})[k]),0); }); return o; } return P.mix||{}; };   /* תמהיל הפרויקט = סכום המבנים, או התמהיל הישן ברמת פרויקט */
 const pfPark=()=>pfV('parkU')+pfV('parkA')||pfV('parking');
 function pfRole(b){ if(b.role) return b.role; const n=b.name||''; if(typeof ohBlds==='function'&&ohBlds().includes(b.code)) return 'oh';
   if(/עפר|ביסוס|חפיר|דיפון/.test(n)) return 'earth'; if(/מרתף|מרתפ/.test(n)) return 'base'; if(/פיתוח|גינון/.test(n)) return 'dev'; if(/תקור/.test(n)) return 'oh'; return 'res'; }
@@ -2205,7 +2219,8 @@ function renderProj0(){
   const r=(a,b,d=0)=>a&&b?fmt(a/b,d):'—';
   const byRole={}; B.forEach(b=>{ const k=pfRole(b); byRole[k]=(byRole[k]||0)+total(b); });
   let OHp=0, Dir=0; try{ const oc=ohCalc(); if(oc){ OHp=oc.pool; Dir=oc.base; } }catch(e){}
-  const mix=P.mix||{}; const ms=PF_MIX.reduce((a,[k])=>a+pfNum(mix[k]),0);
+  const MB=B.filter(b=>b.t==='b'&&pfRole(b)==='res');   /* תמהיל לכל מבנה מגורים; סה"כ הפרויקט = סכום המבנים (או התמהיל הישן ברמת פרויקט) */
+  const mixT=pfMix(), mix=MB.length>1?mixT:(P.mix||{}); const ms=PF_MIX.reduce((a,[k])=>a+pfNum(mix[k]),0);
   const W=[];
   if(pfV('parking')&&!pfV('parkU')&&!pfV('parkA')) W.push(`הוזנו ${fmt(pfV('parking'))} חניות כסה"כ – פצל לתת-קרקעיות ועיליות (החישוב למרתף מניח שכולן תת-קרקעיות)`);
   if(main&&U&&(main/U<45||main/U>200)) W.push(`עיקרי ממוצע לדירה ${fmt(main/U,1)} מ"ר – מחוץ לטווח 45–200`);
@@ -2227,17 +2242,20 @@ function renderProj0(){
   el.innerHTML=`<div class="dash">
    <div class="panel"><h3>נתוני פרויקט <small class="hint" style="font-weight:400">– לפי גרמושקה. ברמת הפרויקט, בלי חלוקה למבני כתב הכמויות</small></h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px">
-     <div><b style="font-size:13px">שטחים בנויים (מ"ר)</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_A.map(([k,l])=>`<tr><td>${l}</td><td class="n">${inp(`data-pp="${k}"`,P[k])}</td></tr>`).join('')}
+     <div><b style="font-size:13px">שטחים בנויים (מ"ר)</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_A.map(([k,l])=>`<tr><td>${l}</td><td class="n">${inp(`data-pp="${k}"`,P[k])}</td></tr>`+(k==='base'?`<tr><td style="padding-inline-start:14px;font-size:12px">↳ מפלסי מרתף</td><td class="n">${inp('data-pp="fDown"',P.fDown,60)}</td></tr>`:'')).join('')}
        <tr><td colspan="2"><label class="label" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-pf="balcInMain" ${pfFlag('balcInMain')?'checked':''}> המרפסות כלולות בעיקרי</label>
          <label class="label" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-pf="baseInServ" ${pfFlag('baseInServ')?'checked':''}> המרתפים כלולים בשירות</label></td></tr>
        <tr style="font-weight:700"><td>ברוטו</td><td class="n num">${gross?fmt(gross):'—'}</td></tr><tr style="font-weight:700"><td>שווה-ערך</td><td class="n num">${eq?fmt(eq):'—'}</td></tr>
-       <tr><td colspan="2" class="hint" style="margin:0;font-size:11px">ברוטו = עיקרי${pfFlag('balcInMain')?' ללא מרפסות':''} ${fmt(main)} + מרפסות ${fmt(balc)} + שירות${pfFlag('baseInServ')?' ללא מרתף':''} ${fmt(serv)} + מרתף ${fmt(base)}</td></tr></table></div>
+       <tr><td colspan="2" class="hint" style="margin:0;font-size:11px">ברוטו = עיקרי${pfFlag('balcInMain')?' ללא מרפסות':''} ${fmt(main)} + מרפסות ${fmt(balc)} + שירות${pfFlag('baseInServ')?' ללא מרתף':''} ${fmt(serv)} + מרתף ${fmt(base)}</td></tr>
+       <tr><td colspan="2" class="hint" style="margin:0;font-size:11px">שווה-ערך = כל שטח × המקדם שלו (טבלת "מקדמי שווה-ערך"): עיקרי ${fmt(main)}×${C.main} + שירות ${fmt(serv)}×${C.serv} + מרפסות ${fmt(balc)}×${C.balc} + מרתף ${fmt(base)}×${C.base} = ${eq?fmt(eq):'—'}</td></tr></table></div>
      <div><b style="font-size:13px">מגרש ופיתוח (מ"ר)</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_X.map(([k,l])=>`<tr><td>${l}</td><td class="n">${inp(`data-pp="${k}"`,P[k])}</td></tr>`).join('')}</table></div>
-     <div><b style="font-size:13px">כמויות ומשך</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_N.map(([k,l])=>`<tr><td>${l}</td><td class="n">${k==='units'?inp('data-pu="1"',state.units,90,projU()?fmt(projU()):''):inp(`data-pp="${k}"`,P[k])}</td></tr>`+(k==='units'&&state.tree.filter(b=>b.t==='b').length>1?(()=>{ const BB=state.tree.filter(b=>b.t==='b'), su=BB.reduce((a,b)=>a+(aptNum(b.units)||0),0), UU=aptNum(state.units)||projU();
+     <div><b style="font-size:13px">כמויות ומשך</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_N.map(([k,l])=>`<tr><td>${l}</td><td class="n">${k==='units'?inp('data-pu="1"',state.units,90,projU()?fmt(projU()):''):inp(`data-pp="${k}"`,P[k])}</td></tr>`+(k==='units'&&state.tree.filter(b=>b.t==='b'&&pfRole(b)==='res').length>1?(()=>{ const BB=state.tree.filter(b=>b.t==='b'&&(pfRole(b)==='res'||aptNum(b.units))), su=BB.reduce((a,b)=>a+(aptNum(b.units)||0),0), UU=aptNum(state.units)||projU();
          return BB.map(b=>`<tr><td style="padding-inline-start:14px;font-size:12px">↳ דירות במבנה ${esc(b.code||'')}</td><td class="n">${inp(`data-bu="${b.id}"`,b.units,70,'')}</td></tr>`).join('')+`<tr><td style="padding-inline-start:14px;font-size:11px" class="hint">סה"כ במבנים (לכמות "דירה" בכל מבנה)</td><td class="n num" style="font-size:12px;${su&&UU&&su!==UU?'color:#d92d20;font-weight:700':''}" title="${su&&UU&&su!==UU?'לא שווה ליח&quot;ד בפרויקט':''}">${su||'—'}</td></tr>`; })():'')).join('')}
        <tr><td>שיטת ביצוע</td><td class="n"><select data-pp="method" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px"><option></option>${['ברנוביץ','קונבנציונלי','משולב','טרומי'].map(x=>`<option ${P.method===x?'selected':''}>${x}</option>`).join('')}</select></td></tr></table></div>
-     <div><b style="font-size:13px">תמהיל דירות</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_MIX.map(([k,l])=>`<tr><td>${l}</td><td class="n">${inp(`data-mix="${k}"`,mix[k],70)}</td></tr>`).join('')}
-       <tr style="font-weight:700"><td>סה"כ</td><td class="n num" ${ms&&U&&ms!==U?'style="color:#d92d20"':''}>${ms||'—'}</td></tr></table></div>
+     <div style="grid-column:span 2"><b style="font-size:13px">תמהיל דירות${MB.length>1?' לפי מבנה':''}</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">
+       ${MB.length>1?`<tr><th></th>${MB.map(b=>`<th class="n" style="font-size:12px">${esc(b.code||'')}</th>`).join('')}<th class="n" style="font-size:12px">סה"כ</th></tr>`:''}
+       ${PF_MIX.map(([k,l])=>`<tr><td>${l}</td>${MB.length>1?MB.map(b=>`<td class="n">${inp(`data-bmix="${b.id}" data-mk="${k}"`,(b.mix||{})[k],55)}</td>`).join('')+`<td class="n num">${pfNum(mixT[k])||'—'}</td>`:`<td class="n">${inp(`data-mix="${k}"`,mix[k],70)}</td>`}</tr>`).join('')}
+       <tr style="font-weight:700"><td>סה"כ</td>${MB.length>1?MB.map(b=>{ const t=PF_MIX.reduce((a,[k])=>a+pfNum((b.mix||{})[k]),0), bu=aptNum(b.units); return `<td class="n num" ${t&&bu&&t!==bu?'style="color:#d92d20" title="≠ דירות במבנה ('+bu+')"':''}>${t||'—'}</td>`; }).join(''):''}<td class="n num" ${ms&&U&&ms!==U?'style="color:#d92d20"':''}>${ms||'—'}</td></tr></table></div>
      <div><b style="font-size:13px">מקדמי שווה-ערך</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_A.map(([k,l])=>`<tr><td>${l}</td><td class="n">${inp(`data-pc="${k}"`,(P.coef||{})[k],60,String(PF_COEF[k]))}</td></tr>`).join('')}</table></div>
     </div></div>
    ${pfCharPanel()}
@@ -2269,6 +2287,7 @@ document.addEventListener('change',e=>{ const x=e.target; if(pfRendering||!x.clo
   else if(x.dataset.pu){ if(raw==='') delete state.units; else state.units=raw; }
   else if(x.dataset.bu){ const b=state.tree.find(y=>String(y.id)===x.dataset.bu); if(!b) return; if(raw==='') delete b.units; else b.units=raw; }
   else if(x.dataset.mix){ P.mix=P.mix||{}; if(raw==='') delete P.mix[x.dataset.mix]; else P.mix[x.dataset.mix]=raw; }
+  else if(x.dataset.bmix){ const b=state.tree.find(y=>String(y.id)===x.dataset.bmix); if(!b) return; b.mix=b.mix||{}; if(raw==='') delete b.mix[x.dataset.mk]; else b.mix[x.dataset.mk]=raw; if(!Object.keys(b.mix).length) delete b.mix; }
   else if(x.dataset.role){ const b=state.tree.find(y=>String(y.id)===x.dataset.role); if(!b) return; b.role=x.value; }
   else if(x.dataset.pt){ P.char=P.char||{}; const v=String(x.value).trim(); if(v) P.char[x.dataset.pt]=v; else delete P.char[x.dataset.pt]; }
   else if(x.dataset.sc||x.dataset.scn!==undefined){ P.scope=P.scope||{}; const c=x.dataset.sc||x.dataset.scn; const o=P.scope[c]||{}; if(x.dataset.sc){ if(x.value) o.s=x.value; else delete o.s; } else { const v=String(x.value).trim(); if(v) o.n=v; else delete o.n; } if(o.s||o.n) P.scope[c]=o; else delete P.scope[c]; }
@@ -2277,7 +2296,7 @@ document.addEventListener('change',e=>{ const x=e.target; if(pfRendering||!x.clo
   save(); pfSoon(); });
 document.addEventListener('click',e=>{ if(!e.target.closest||!e.target.closest('#pf_x')) return; if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; }
   const C=pfC(), P=pfP(), B=state.tree; const G=B.reduce((a,b)=>a+total(b),0), eq=pfEq(), U=pfV('units')||projU();
-  const s0=[['פרויקט',state.project||''],['שיטת ביצוע',P.method||''],...PF_A.map(([k,l])=>[l+' מ"ר',pfV(k)||'']),['ברוטו',pfGross()||''],['שווה-ערך',R2(eq)||''],...PF_X.map(([k,l])=>[l+' מ"ר',pfV(k)||'']),...PF_N.map(([k,l])=>[l,k==='units'?U:(pfV(k)||'')]),...PF_MIX.map(([k,l])=>['תמהיל '+l,pfNum((P.mix||{})[k])||'']),...PF_A.map(([k,l])=>['מקדם '+l,C[k]]),['עלות',R2(G)],['₪ למ"ר שווה-ערך',eq?R2(G/eq):''],['₪ ליח"ד',U?R2(G/U):'']].map(([k,v])=>({'נתון':k,'ערך':v}));
+  const s0=[['פרויקט',state.project||''],['שיטת ביצוע',P.method||''],...PF_A.map(([k,l])=>[l+' מ"ר',pfV(k)||'']),['ברוטו',pfGross()||''],['שווה-ערך',R2(eq)||''],...PF_X.map(([k,l])=>[l+' מ"ר',pfV(k)||'']),...PF_N.map(([k,l])=>[l,k==='units'?U:(pfV(k)||'')]),...PF_MIX.map(([k,l])=>['תמהיל '+l,pfNum(pfMix()[k])||'']),...PF_A.map(([k,l])=>['מקדם '+l,C[k]]),['עלות',R2(G)],['₪ למ"ר שווה-ערך',eq?R2(G/eq):''],['₪ ליח"ד',U?R2(G/U):'']].map(([k,v])=>({'נתון':k,'ערך':v}));
   const s1=B.map(b=>({'מבנה':b.code+' '+(b.name||''),'תפקיד':PF_ROLES[pfRole(b)],'עלות':R2(total(b)),'% מהסה"כ':G?R2(total(b)/G*100):null}));
   const byC={}; walk(B,n=>{ if(n.t==='c') byC[n.code]=(byC[n.code]||0)+total(n); }); const cm=chMap();
   const s2=Object.entries(byC).filter(([,v])=>v).sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true})).map(([c,v])=>({'פרק':c,'שם':cm[c]||'','עלות':R2(v),'% מהסה"כ':G?R2(v/G*100):null,'₪ למ"ר שווה-ערך':eq?R2(v/eq):null,'₪ ליח"ד':U?R2(v/U):null}));
