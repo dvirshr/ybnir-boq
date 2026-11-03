@@ -295,7 +295,7 @@ table.boq.plist{min-width:0!important;width:100%}
     <button class="btn primary" id="btnPrio">ייצוא לפריוריטי</button>
     <button class="btn" id="btnExport">ייצוא לאקסל</button>
     <button class="btn" id="btnEditX" title="קובץ אקסל שאפשר לערוך ולטעון חזרה">אקסל לעריכה</button>
-    <button class="btn" id="btnEditImp">טעינת עריכה</button><button class="btn" id="btnPasteSec" title="הוספת סעיפים מטקסט מודבק (למשל רשימה שהוכנה בצ'אט) – עם מסך בחירה, בלי קובץ">📝 הדבקת סעיפים</button><input type="file" id="fileEditImp" accept=".xlsx,.xls" hidden>
+    <button class="btn" id="btnEditImp">טעינת עריכה</button><button class="btn" id="btnOhs" title="מבנה קבוע לתקורות והתארגנות אתר: שמירת המבנה מהפרויקט הזה כתבנית, והחלת התבנית על הפרויקט – עם מסך בחירה">🏗 מבנה תקורות</button><button class="btn" id="btnPasteSec" title="הוספת סעיפים מטקסט מודבק (למשל רשימה שהוכנה בצ'אט) – עם מסך בחירה, בלי קובץ">📝 הדבקת סעיפים</button><input type="file" id="fileEditImp" accept=".xlsx,.xls" hidden>
     <button class="btn" id="btnEffi" title="כתב כמויות נקי ברמת סעיף לסקירה">ייצוא לאפי</button>
     <button class="btn" id="btnOffer" title="הצעת מחיר ללקוח – ברמת סה&quot;כ / מבנה / פרק / תת-פרק / סעיף, עם קיבוץ, שינוי שמות, התאמות ועיגול">הצעת מחיר ללקוח</button>
     <button class="btn" id="btnPull" hidden title="ייבוא מחירים מהמחירון או מפרויקט אחר – עם השוואה, מיון ובחירה">ייבוא מחירים</button>
@@ -442,7 +442,6 @@ table.boq.plist{min-width:0!important;width:100%}
       <input type="file" id="p_file" accept=".json" hidden>
       <button class="btn" id="p_new">פרויקט חדש ריק</button>
       <button class="btn" id="p_bulk">הוספת סעיפים מרשימה</button>
-      <button class="btn" id="p_ohs" title="מבנה קבוע לתקורות והתארגנות אתר: שמירה מפרויקט כתבנית, והחלה על הפרויקט הפתוח – עם מסך בחירה">🏗 מבנה תקורות</button>
       <button class="btn" id="p_cmp">⚖ השוואת פרויקטים</button>
       <label class="hint" style="margin:0;display:flex;gap:4px;align-items:center"><input type="checkbox" id="p_arch"> הצג ארכיון <span id="p_arch_n"></span></label>
       <button class="btn" id="p_users" hidden>משתמשים <span class="pill" id="p_users_n" hidden></span></button>
@@ -506,7 +505,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='03.11.26-4';
+const APP_VER='03.11.26-5';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -3743,7 +3742,7 @@ async function bulkDlg(){
     h.innerHTML=''; $('p_msg').innerHTML=out.map(esc).join('<br>'); openProjects().then(()=>{ $('p_msg').innerHTML=out.map(esc).join('<br>'); });
   };
 }
-$('p_ohs').onclick=()=>ohsDlg();
+$('btnOhs').onclick=()=>ohsDlg();
 $('p_bulk').onclick=()=>{ bulkDlg().catch(e=>toast(e.message)); };
 
 /* ---------- global resource catalog (shared by all projects, saved in boq_settings) ---------- */
