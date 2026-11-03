@@ -505,7 +505,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='03.11.26-6';
+const APP_VER='03.11.26-7';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -1140,11 +1140,14 @@ function selBar(){ let b=document.getElementById('selBar'); if(!b){ b=document.c
   const T=selTop(); const cnt={b:0,c:0,s:0,i:0}; let secs=0, sum=0; T.forEach(f=>{ cnt[f.n.t]++; sum+=total(f.n); if(f.n.t==='i') secs++; else walk(f.n.ch,x=>{ if(x.t==='i') secs++; }); });
   b.innerHTML=T.length?`<b>נבחרו:</b> ${[cnt.b?cnt.b+' מבנים':'',cnt.c?cnt.c+' פרקים':'',cnt.s?cnt.s+' תתי-פרקים':'',cnt.i?cnt.i+' סעיפים':''].filter(Boolean).join(' · ')} <span class="hint" style="margin:0">(${secs} סעיפים · ${fmt(sum)} ₪)</span>
     <button class="btn small primary" id="sel_mv">העבר / העתק…</button><button class="btn small" id="sel_sp" title="מחירי סעיף, משאבים ומק&quot;טים ממבנה אחר או מפרויקט אחר לסעיפים שנבחרו – בלי לשנות כמויות, כל התנגשות באישור">💲 מחירים ממבנה / פרויקט אחר</button><button class="btn small" id="sel_pull" title="השלמת משאבים ומחירים לסעיפים שנבחרו מסעיפים מקבילים במבנה אחר בפרויקט או בפרויקט אחר – הכמויות נשארות">📥 משאבים ממבנה / פרויקט אחר</button><button class="btn small" id="sel_clip" title="העתקה ללוח – פותחים פרויקט אחר ולוחצים &quot;📋 הדבק&quot;">📋 לפרויקט אחר</button><button class="btn small" id="sel_clr">נקה בחירה</button><button class="btn small" id="sel_off">סגור</button>`
-    :`<b>בחירה מרובה:</b> <span class="hint" style="margin:0">סמן בתיבות שליד הקוד – מבנים, פרקים, תתי-פרקים וסעיפים, גם ממבנים שונים. בחירה של פרק / תת-פרק כוללת את כל מה שמתחתיו.</span><button class="btn small" id="sel_off">סגור</button>`;
+    :`<b>בחירה מרובה:</b> <span class="hint" style="margin:0">סמן בתיבות שליד הקוד – מבנים, פרקים, תתי-פרקים וסעיפים, גם ממבנים שונים. בחירה של פרק / תת-פרק כוללת את כל מה שמתחתיו.</span><button class="btn small" id="sel_empty" title="הסרת כל הפרקים ותתי-הפרקים שאין בהם סעיפים, בכל הפרויקט">🧹 הסר פרקים ריקים</button><button class="btn small" id="sel_off">סגור</button>`;
   const q=i=>document.getElementById(i);
   /* מבנה שלם: רק פעולות מחיר/משאבים. העברה / העתקה ללוח – לפרקים ומטה */
   if(cnt.b){ ['sel_mv','sel_clip'].forEach(i=>{ const x=q(i); if(x){ x.disabled=true; x.title='לא זמין כשנבחר מבנה שלם – בחר פרקים'; } }); }
   if(q('sel_mv')) q('sel_mv').onclick=()=>bulkMoveDlg();
+  if(q('sel_empty')) q('sel_empty').onclick=async()=>{ let e=0; for(const b of state.tree) for(const c of b.ch||[]){ if(c.t!=='c') continue; if(!c.ch.length) e++; else e+=c.ch.filter(x=>x.t==='s'&&!x.ch.length).length+(c.ch.every(x=>x.t==='s'&&!x.ch.length)?1:0); }
+    if(!e){ toast('אין פרקים או תתי-פרקים ריקים'); return; } if(!confirm(`להסיר ${e} פרקים / תתי-פרקים ריקים (בלי סעיפים)? אפשר לחזור דרך "גרסאות".`)) return;
+    try{ if(typeof pushCloud==='function'&&typeof DB!=='undefined'&&DB.save){ await flushCloud(); await pushCloud(false,'לפני הסרת פרקים ריקים'); } }catch(e){} const k=cleanEmpty(null); save(); render(); toast(k+' פרקים / תתי-פרקים ריקים הוסרו'); };
   if(q('sel_sp')) q('sel_sp').onclick=()=>{ const L=[]; selTop().forEach(f=>walk([f.n],x=>{ if(x.t==='i'&&!isPct(x)) L.push(x); })); if(L.length) syncPriceDlg(L); else toast('לא נבחרו סעיפים'); };
   if(q('sel_pull')) q('sel_pull').onclick=()=>{ const L=[]; selTop().forEach(f=>walk([f.n],x=>{ if(x.t==='i'&&!isPct(x)) L.push(x); })); if(L.length) pullSecDlg(L); };
   if(q('sel_clip')) q('sel_clip').onclick=()=>{ const T=selTop(); if(!T.length) return; clipSet(T); SELMODE=false; SEL.clear(); render(); toast(`הועתקו ללוח ${T.length} פריטים. פתח פרויקט אחר ולחץ "📋 הדבק"`); }; if(q('sel_clr')) q('sel_clr').onclick=()=>{ SEL.clear(); render(); };
@@ -4329,6 +4332,7 @@ function applyEditPlan(P,delGone){
   if(P.chapNames) for(const [c,n] of Object.entries(P.chapNames)) if(!state.lists.chapters.some(x=>x.c===c)){ state.lists.chapters.push({c,n}); state.lists.chapters.sort((a,b)=>a.c.localeCompare(b.c)); }
   if(P.subNames) for(const [c,n] of Object.entries(P.subNames)) if(!state.lists.subs.some(x=>x.c===c)){ state.lists.subs.push({ch:c.slice(0,2),c,n}); state.lists.subs.sort((a,b)=>a.c.localeCompare(b.c)); }
   const res={upd:0,addS:0,addR:0,del:0}; const secNode=new Map();
+  const touched=new Set(); for(const o of P.ops.concat(delGone?(P.gone||[]).map(x=>({k:'del',n:x.n})):[])) if((o.k==='del'||o.k==='move')&&o.n&&o.n.t==='i'){ const f=find(o.n.id); if(f) f.path.slice(1).forEach(x=>touched.add(x.id)); }
   const remove=n=>{ const f=find(n.id); if(!f) return; const p=f.path[f.path.length-1]; const arr=p?p.ch:state.tree; const i=arr.indexOf(n); if(i>=0){ trashNode(n,f.path); arr.splice(i,1); res.del++; } };
   for(const o of P.ops){
     if(o.k==='upd'&&(o.n.t==='r'||o.n.t==='k')&&('price' in o.ch||'qexpr' in o.ch||'calcAdd' in o.ch)){ let c=o.n; while(c&&c.t!=='i') c=parentOf(c.id); if(c&&!P.ops.some(x=>x.k==='upd'&&x.n===c&&'sp' in x.ch)) releaseSp(o.n); }
@@ -4350,8 +4354,16 @@ function applyEditPlan(P,delGone){
   for(const o of P.ops) if(o.k==='move'){ const B=o.bld?state.tree.find(b=>b.code===o.bld):null; if(moveSection(o.n,o.sub,B,o.keep)){ res.upd++; if(o.keep&&o.orig&&o.orig!==o.n.code&&!(o.n.note||'').includes('הועבר מ-'+o.orig)){ (o.n.oldCodes=o.n.oldCodes||[]).push(o.orig); o.n.note=((o.n.note?o.n.note+' | ':'')+'הועבר מ-'+o.orig).trim(); } } PMAP=null; }
   for(const o of P.ops) if(o.k==='del') remove(o.n);
   if(delGone){ PMAP=null; for(const x of P.gone){ PMAP=null; remove(x.n); } }
+  // תתי-פרקים / פרקים שהתרוקנו בגלל העברה או מחיקה – מוסרים (רק מה שהיה בו תוכן לפני הקליטה)
+  res.cleaned=cleanEmpty(touched); PMAP=null;
   return res;
 }
+/* הסרת תתי-פרקים ופרקים ריקים. only = Set של מזהי תתי-פרקים/פרקים לבדיקה (ריק = כל הפרויקט) */
+function cleanEmpty(only){ let k=0; const chk=x=>!only||only.has(x.id);
+  for(const b of state.tree){ if(b.t!=='b') continue;
+    for(const c of b.ch||[]){ if(c.t!=='c') continue; const n0=c.ch.length; c.ch=c.ch.filter(x=>!(x.t==='s'&&!(x.ch||[]).length&&chk(x))); k+=n0-c.ch.length; }
+    const n1=b.ch.length; b.ch=b.ch.filter(c=>!(c.t==='c'&&!(c.ch||[]).length&&(!only||only.has(c.id)))); k+=n1-b.ch.length; }
+  return k; }
 
 /* ---------- automatic updates shipped with the app ---------- */
 const AU_CHECKED=new Set();
