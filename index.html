@@ -243,6 +243,10 @@ table.boq.plist{min-width:0!important;width:100%}
 .pdlg{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(10,20,15,.35);padding:16px}
 .pdlg .box{background:var(--surface);border-radius:10px;box-shadow:var(--shadow);width:min(420px,100%);padding:18px;display:grid;gap:14px}
 .pdlg h2{font-size:17px}
+/* חלון תמיד בתוך המסך: גלילה פנימית, שורת הלחצנים התחתונה קבועה בתחתית, גרירה לפי הכותרת */
+.pdlg .box{max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain}
+.pdlg .box>.row:last-child:has(.btn){position:sticky;bottom:-18px;z-index:3;background:var(--surface);margin:0 -18px -18px;padding:10px 18px 14px;border-top:1px solid var(--line)}
+.pdlg .box>h2:first-child,.pdlg .box>h2:first-of-type{cursor:move;user-select:none}
 .pdlg .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .pdlg select{border:1px solid var(--line);border-radius:6px;padding:6px 10px;background:var(--surface)}
 #printArea{display:none}
@@ -501,7 +505,12 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='03.11.26-2'; /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
+const APP_VER='03.11.26-3';
+/* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
+document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
+  const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
+  const mv=ev=>{ box.style.transform=`translate(${ox+ev.clientX-sx}px,${oy+ev.clientY-sy}px)`; }; const up=()=>{ document.removeEventListener('pointermove',mv); document.removeEventListener('pointerup',up); };
+  document.addEventListener('pointermove',mv); document.addEventListener('pointerup',up); e.preventDefault(); }); /* לעדכן בכל דחיפה – מוצג בלשונית רשימות, לזיהוי גרסה ישנה במטמון */
 document.addEventListener('DOMContentLoaded',()=>{ const v=document.getElementById('verTag'); if(v) v.textContent='גרסה '+APP_VER; }); { const v=document.getElementById('verTag'); if(v) v.textContent='גרסה '+APP_VER; }
 let state = {project:'', nid:1, tree:[], collapsed:{}, lists:LISTS};
 if(!state.lists) state.lists = LISTS;
