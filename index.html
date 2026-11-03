@@ -505,7 +505,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='03.11.26-7';
+const APP_VER='03.11.26-9';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -1139,15 +1139,20 @@ function selBar(){ let b=document.getElementById('selBar'); if(!b){ b=document.c
   if(!SELMODE){ b.hidden=true; return; } b.hidden=false;
   const T=selTop(); const cnt={b:0,c:0,s:0,i:0}; let secs=0, sum=0; T.forEach(f=>{ cnt[f.n.t]++; sum+=total(f.n); if(f.n.t==='i') secs++; else walk(f.n.ch,x=>{ if(x.t==='i') secs++; }); });
   b.innerHTML=T.length?`<b>נבחרו:</b> ${[cnt.b?cnt.b+' מבנים':'',cnt.c?cnt.c+' פרקים':'',cnt.s?cnt.s+' תתי-פרקים':'',cnt.i?cnt.i+' סעיפים':''].filter(Boolean).join(' · ')} <span class="hint" style="margin:0">(${secs} סעיפים · ${fmt(sum)} ₪)</span>
-    <button class="btn small primary" id="sel_mv">העבר / העתק…</button><button class="btn small" id="sel_sp" title="מחירי סעיף, משאבים ומק&quot;טים ממבנה אחר או מפרויקט אחר לסעיפים שנבחרו – בלי לשנות כמויות, כל התנגשות באישור">💲 מחירים ממבנה / פרויקט אחר</button><button class="btn small" id="sel_pull" title="השלמת משאבים ומחירים לסעיפים שנבחרו מסעיפים מקבילים במבנה אחר בפרויקט או בפרויקט אחר – הכמויות נשארות">📥 משאבים ממבנה / פרויקט אחר</button><button class="btn small" id="sel_clip" title="העתקה ללוח – פותחים פרויקט אחר ולוחצים &quot;📋 הדבק&quot;">📋 לפרויקט אחר</button><button class="btn small" id="sel_clr">נקה בחירה</button><button class="btn small" id="sel_off">סגור</button>`
+    <button class="btn small primary" id="sel_mv">העבר / העתק…</button><button class="btn small" id="sel_sp" title="מחירי סעיף, משאבים ומק&quot;טים ממבנה אחר או מפרויקט אחר לסעיפים שנבחרו – בלי לשנות כמויות, כל התנגשות באישור">💲 מחירים ממבנה / פרויקט אחר</button><button class="btn small" id="sel_pull" title="השלמת משאבים ומחירים לסעיפים שנבחרו מסעיפים מקבילים במבנה אחר בפרויקט או בפרויקט אחר – הכמויות נשארות">📥 משאבים ממבנה / פרויקט אחר</button><button class="btn small" id="sel_clip" title="העתקה ללוח – פותחים פרויקט אחר ולוחצים &quot;📋 הדבק&quot;">📋 לפרויקט אחר</button><button class="btn small" id="sel_del" title="מחיקת הפרקים / תתי-הפרקים / הסעיפים שנבחרו – לסל המחזור, עם גרסה לפני" style="color:#b42318">🗑 מחק נבחרים</button><button class="btn small" id="sel_clr">נקה בחירה</button><button class="btn small" id="sel_off">סגור</button>`
     :`<b>בחירה מרובה:</b> <span class="hint" style="margin:0">סמן בתיבות שליד הקוד – מבנים, פרקים, תתי-פרקים וסעיפים, גם ממבנים שונים. בחירה של פרק / תת-פרק כוללת את כל מה שמתחתיו.</span><button class="btn small" id="sel_empty" title="הסרת כל הפרקים ותתי-הפרקים שאין בהם סעיפים, בכל הפרויקט">🧹 הסר פרקים ריקים</button><button class="btn small" id="sel_off">סגור</button>`;
   const q=i=>document.getElementById(i);
   /* מבנה שלם: רק פעולות מחיר/משאבים. העברה / העתקה ללוח – לפרקים ומטה */
   if(cnt.b){ ['sel_mv','sel_clip'].forEach(i=>{ const x=q(i); if(x){ x.disabled=true; x.title='לא זמין כשנבחר מבנה שלם – בחר פרקים'; } }); }
   if(q('sel_mv')) q('sel_mv').onclick=()=>bulkMoveDlg();
-  if(q('sel_empty')) q('sel_empty').onclick=async()=>{ let e=0; for(const b of state.tree) for(const c of b.ch||[]){ if(c.t!=='c') continue; if(!c.ch.length) e++; else e+=c.ch.filter(x=>x.t==='s'&&!x.ch.length).length+(c.ch.every(x=>x.t==='s'&&!x.ch.length)?1:0); }
-    if(!e){ toast('אין פרקים או תתי-פרקים ריקים'); return; } if(!confirm(`להסיר ${e} פרקים / תתי-פרקים ריקים (בלי סעיפים)? אפשר לחזור דרך "גרסאות".`)) return;
-    try{ if(typeof pushCloud==='function'&&typeof DB!=='undefined'&&DB.save){ await flushCloud(); await pushCloud(false,'לפני הסרת פרקים ריקים'); } }catch(e){} const k=cleanEmpty(null); save(); render(); toast(k+' פרקים / תתי-פרקים ריקים הוסרו'); };
+  if(q('sel_empty')) q('sel_empty').onclick=()=>emptyDlg();
+  if(cnt.b&&q('sel_del')){ q('sel_del').disabled=true; q('sel_del').title='מחיקת מבנה שלם – מהתפריט של המבנה'; }
+  if(q('sel_del')) q('sel_del').onclick=async()=>{ const T=selTop(); if(!T.length) return;
+    let secs=0, sum=0; T.forEach(f=>{ sum+=total(f.n); if(f.n.t==='i') secs++; else walk(f.n.ch||[],x=>{ if(x.t==='i') secs++; }); });
+    if(!confirm(`למחוק ${T.length} פריטים שנבחרו (${secs} סעיפים · ${fmt(sum)} ₪)? הם עוברים לסל המחזור, ונשמרת גרסה לפני.`)) return;
+    try{ if(typeof pushCloud==='function'&&typeof DB!=='undefined'&&DB.save){ await flushCloud(); await pushCloud(false,'לפני מחיקה מרובה'); } }catch(e){}
+    let k=0; for(const f of T){ const g=find(f.n.id); if(!g) continue; const par=g.path[g.path.length-1]; const arr=par?par.ch:state.tree; const i=arr.indexOf(f.n); if(i>=0){ trashNode(f.n,g.path); arr.splice(i,1); k++; } }
+    SEL.clear(); PMAP=null; save(); render(); toast(`${k} פריטים נמחקו (${secs} סעיפים) – בסל המחזור`); };
   if(q('sel_sp')) q('sel_sp').onclick=()=>{ const L=[]; selTop().forEach(f=>walk([f.n],x=>{ if(x.t==='i'&&!isPct(x)) L.push(x); })); if(L.length) syncPriceDlg(L); else toast('לא נבחרו סעיפים'); };
   if(q('sel_pull')) q('sel_pull').onclick=()=>{ const L=[]; selTop().forEach(f=>walk([f.n],x=>{ if(x.t==='i'&&!isPct(x)) L.push(x); })); if(L.length) pullSecDlg(L); };
   if(q('sel_clip')) q('sel_clip').onclick=()=>{ const T=selTop(); if(!T.length) return; clipSet(T); SELMODE=false; SEL.clear(); render(); toast(`הועתקו ללוח ${T.length} פריטים. פתח פרויקט אחר ולחץ "📋 הדבק"`); }; if(q('sel_clr')) q('sel_clr').onclick=()=>{ SEL.clear(); render(); };
@@ -4357,6 +4362,29 @@ function applyEditPlan(P,delGone){
   // תתי-פרקים / פרקים שהתרוקנו בגלל העברה או מחיקה – מוסרים (רק מה שהיה בו תוכן לפני הקליטה)
   res.cleaned=cleanEmpty(touched); PMAP=null;
   return res;
+}
+/* חלון בחירה: פרקים ותתי-פרקים ריקים לפי מבנה – הכל מסומן, אפשר לבטל / לסמן לפי מבנה */
+function emptyDlg(){
+  const L=[]; const cm=chMap();
+  for(const b of state.tree){ if(b.t!=='b') continue;
+    for(const c of b.ch||[]){ if(c.t!=='c') continue; const es=c.ch.filter(x=>x.t==='s'&&!(x.ch||[]).length); const all=!c.ch.length||es.length===c.ch.length;
+      if(all) L.push({b,n:c,lab:`פרק ${c.code} ${cm[c.code]||''}`+(c.ch.length?` (${c.ch.length} תתי-פרקים ריקים)`:'')});
+      else es.forEach(x=>L.push({b,n:x,lab:`תת-פרק ${x.code} ${nodeName(x)||x.name||''}`})); } }
+  if(!L.length){ toast('אין פרקים או תתי-פרקים ריקים'); return; }
+  const h=$('printDlgHost'); const B=[...new Set(L.map(x=>x.b))];
+  h.innerHTML=`<div class="pdlg" id="pdlg"><div class="box" role="dialog" aria-label="פרקים ריקים" style="width:min(560px,100%)"><h2>🧹 פרקים ותתי-פרקים ריקים</h2>
+    <p class="hint" style="margin:0">רק מה שאין בו אף סעיף. המסומנים יוסרו. נשמרת גרסה לפני.</p>
+    <div style="border:1px solid var(--line);border-radius:8px;padding:6px 10px">${B.map((b,bi)=>`<div style="margin:6px 0 2px;font-weight:600"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-eb="${bi}" checked> מבנה ${esc(b.code)} ${esc(b.name||'')} <span class="hint" style="margin:0">(${L.filter(x=>x.b===b).length})</span></label></div>`+L.map((x,i)=>x.b===b?`<label style="display:flex;gap:6px;align-items:center;margin-inline-start:22px;font-size:13px"><input type="checkbox" data-ei="${i}" data-ebi="${bi}" checked> ${esc(x.lab)}</label>`:'').join('')).join('')}</div>
+    <div class="row" style="justify-content:space-between"><b id="em_n"></b><span style="display:flex;gap:6px"><button class="btn" id="em_x">ביטול</button><button class="btn primary" id="em_go">הסר מסומנים</button></span></div></div></div>`;
+  const cnt=()=>{ $('em_n').textContent='נבחרו '+h.querySelectorAll('[data-ei]:checked').length+' מתוך '+L.length; }; cnt();
+  h.querySelectorAll('[data-eb]').forEach(x=>x.onchange=()=>{ h.querySelectorAll(`[data-ebi="${x.dataset.eb}"]`).forEach(y=>y.checked=x.checked); cnt(); });
+  h.querySelectorAll('[data-ei]').forEach(x=>x.onchange=cnt);
+  $('em_x').onclick=()=>h.innerHTML='';
+  $('em_go').onclick=async()=>{ const S=new Set([...h.querySelectorAll('[data-ei]:checked')].map(x=>L[+x.dataset.ei].n.id)); if(!S.size){ toast('לא נבחר דבר'); return; }
+    // פרק שנבחר כולו – גם תתי-הפרקים הריקים שבו
+    L.forEach(x=>{ if(S.has(x.n.id)&&x.n.t==='c') (x.n.ch||[]).forEach(y=>S.add(y.id)); });
+    try{ if(typeof pushCloud==='function'&&typeof DB!=='undefined'&&DB.save){ await flushCloud(); await pushCloud(false,'לפני הסרת פרקים ריקים'); } }catch(e){}
+    const k=cleanEmpty(S); h.innerHTML=''; save(); render(); toast(k+' פרקים / תתי-פרקים ריקים הוסרו'); };
 }
 /* הסרת תתי-פרקים ופרקים ריקים. only = Set של מזהי תתי-פרקים/פרקים לבדיקה (ריק = כל הפרויקט) */
 function cleanEmpty(only){ let k=0; const chk=x=>!only||only.has(x.id);
