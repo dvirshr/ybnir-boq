@@ -505,7 +505,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='04.11.26-1';
+const APP_VER='04.11.26-2';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -1823,11 +1823,12 @@ function effiDlg(){
       <label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="e_notes"> להציג את הערות המערכת (מקור הכמות) – ברירת מחדל: עמודה מוסתרת</label>
       <label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="e_zero" checked> לכלול סעיפים בלי עלות</label>
       <label>פורמט <select id="e_lv" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px"><option value="">כתב כמויות ברמת סעיף (כמו היום)</option><option value="tbl">תמחור עבודות (אפי) – סעיף, ומתחתיו שורה לכל משאב / מק"ט</option><option value="ds">כתב כמויות מלא – DataSheet פריוריטי (כמו הקובץ של מאור), עם נוסחאות</option></select></label>
+      <label title="ב-DataSheet: כמות הסעיף כוללת את הפחת (ברירת מחדל) או נטו. בכל מקרה נוסף גיליון 'פחת' לבדיקה">כמות ב-DataSheet <select id="e_wq" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px"><option value="">כולל פחת</option><option value="net">נטו (ללא פחת)</option></select></label>
       <p class="hint" style="margin:0">תמחור עבודות: בפורמט הגיליון של אפי (רכש/קבלן · גורם · מספר סעיף · תאור · כמות · פחת · מחיר · סה"כ, עם סיכומי מבנה ופרק). התאורים שלנו. סעיף בלי משאבים – שורה אחת; סעיף עם משאבים – שורת סעיף ומתחתיה שורה לכל משאב (ומק"ט). מספור: סעיף 0520, משאבים 0521, 0522…</p>
     </div>
     <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="e_c">ביטול</button><button class="btn primary" id="e_go">ייצוא</button></div></div></div>`;
   document.getElementById('e_c').onclick=()=>h.innerHTML=''; document.getElementById('pdlg').onclick=e=>{ if(e.target.id==='pdlg') h.innerHTML=''; };
-  document.getElementById('e_go').onclick=()=>{ const o={sort:document.getElementById('e_sort').value,oh:!!document.getElementById('e_oh')?.checked,notes:document.getElementById('e_notes').checked,zero:document.getElementById('e_zero').checked}; const lv=document.getElementById('e_lv').value, tbl=lv==='tbl'; h.innerHTML=''; if(lv==='ds') dsExport(o); else if(tbl) effiTblExport(o); else effiExport(o); };
+  document.getElementById('e_go').onclick=()=>{ const o={sort:document.getElementById('e_sort').value,oh:!!document.getElementById('e_oh')?.checked,notes:document.getElementById('e_notes').checked,zero:document.getElementById('e_zero').checked,wq:(document.getElementById('e_wq')||{}).value||''}; const lv=document.getElementById('e_lv').value, tbl=lv==='tbl'; h.innerHTML=''; if(lv==='ds') dsExport(o); else if(tbl) effiTblExport(o); else effiExport(o); };
 }
 /* כתב כמויות מלא בפורמט DataSheet של פריוריטי (58 עמודות, כמו הקובץ של מאור) – עם נוסחאות:
    O סה"כ עלות = J×M · L/P/Q (חומר/תקורה/עבודה) = O לפי סוג הסעיף · BE = M×J · שורת סה"כ = SUM · גיליון "סיכום" עם SUMIFS לפי מבנה ופרק.
@@ -1837,13 +1838,15 @@ const DS_U={"קומפ'":'קמפ','חודש':'חוד','%':'אחו'};
 function dsExport(o){
   if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; }
   const C=effiCls(), OB=new Set(typeof ohBlds==='function'?ohBlds():[]), cm=chMap(); const rows=[];
-  walk(state.tree,(n,p)=>{ if(n.t!=='i') return; const b=p[0]||{}, c=p[1]||{}, s=p[2]||{}; const T=total(n); if(!o.zero&&!T) return;
+  const netOf=f=>{ let v; WNO=true; CONCC=null; PMAP=null; try{ v=f(); }catch(e){ v=0; } finally { WNO=false; CONCC=null; PMAP=null; } return Number.isFinite(v)?v:0; };
+  walk(state.tree,(n,p)=>{ if(n.t!=='i') return; const b=p[0]||{}, c=p[1]||{}, s=p[2]||{}; const Tg=total(n), Tn=netOf(()=>total(n)), Jg=isPct(n)?0:secQty(n), Jn=isPct(n)?0:netOf(()=>secQty(n)); const T=o.wq==='net'?Tn:Tg; if(!o.zero&&!T) return;
     const pc=String(n.code||'').split('.'); const sc=String(s.code||''); const ch=(sc.split('.')[0]||c.code||'00').padStart(2,'0'), sb=(sc.split('.')[1]||'00').padStart(2,'0');
     const m=/^פריוריטי\s+(\d{2}\.\d{2}\.\d{2}\.\d{3,4})\s*(·\s*)?/.exec(n.note||''); const note=m?(n.note||'').slice(m[0].length):(n.note||'');
     let num=m?m[1]:''; if(!num){ const k=/^\d{1,3}$/.test(pc[pc.length-1]||'')?(+pc[pc.length-1])*10:0; num=[String(b.code||'').padStart(2,'0'),ch,sb,String(k).padStart(4,'0')].join('.'); }
-    let J,M; if(isPct(n)){ J=+n.pct/100; M=pctBase(n); } else { J=secQty(n); if(Number.isNaN(J)) J=0; M=J?T/J:(evalExpr(n.sp)||0); if(!J&&T){ J=1; M=T; } }
+    let J,M; if(isPct(n)){ J=+n.pct/100; M=pctBase(n); } else { J=o.wq==='net'?Jn:secQty(n); if(Number.isNaN(J)) J=0; M=J?T/J:(evalExpr(n.sp)||0); if(!J&&T){ J=1; M=T; } }
+    const mk=/[+＋]\s?(\d+(?:\.\d+)?)\s?%/.exec(String(n.note||'').split('| מחיר')[0]||''); const wq=Jn?Jg/Jn-1:0, wt=Tn?Tg/Tn-1:0; const own=wOwn(n)?wVal(n):null; const dup=!!mk&&(Math.abs(wq)>1e-6||Math.abs(wt)>1e-6)&&!(own!==null&&Math.abs(own-(+mk[1]))<0.01);
     let ct=n.ct; if(!ct){ if(OB.has(b.code)) ct='o'; else { const acc={}; walk(n.ch||[],x=>{ if(x.t==='r'){ const k=effiType(x.code,C)||'l'; acc[k]=(acc[k]||0)+total(x); } }); ct=Object.keys(acc).sort((a,b2)=>acc[b2]-acc[a])[0]||'l'; } }
-    rows.push({b:String(b.code||''),bn:b.name||'',ch,chn:cm[ch]||cm[c.code]||'',sb,sbn:nodeName(s)||s.name||sb,num,name:n.name||'',unit:DS_U[n.unit]||n.unit||'',J,M,T,ct,note}); });
+    rows.push({b:String(b.code||''),bn:b.name||'',ch,chn:cm[ch]||cm[c.code]||'',sb,sbn:nodeName(s)||s.name||sb,num,name:n.name||'',unit:DS_U[n.unit]||n.unit||'',J,M,T,ct,note,Jn,Jg,Tn,Tg,wq,wt,mk:mk?+mk[1]:0,own,dup}); });
   const ws={}; const put=(r,c,v,f,z)=>{ const ref=XLSX.utils.encode_cell({r,c}); const cell=f?{t:'n',f,v:v||0}:(typeof v==='number'?{t:'n',v}:{t:'s',v:String(v??'')}); if(z) cell.z=z; ws[ref]=cell; };
   const tot=rows.reduce((a,r)=>a+r.J*r.M,0);
   put(0,0,`${state.project||''} - כתב כמויות ותקציב בפורמט החברה`);
@@ -1873,9 +1876,15 @@ function dsExport(o){
   const TR=r2+1; p2(TR-1,1,'סה"כ'); p2(TR-1,4,tot,`SUM(${SO})`,'#,##0'); p2(TR-1,5,1,`IF(E${TR}=0,0,E${TR}/E${TR})`,'0.0%');
   Object.values(ws2).forEach(c=>{ if(c.f) c.f=c.f.replace(/\$E\$TOT/g,'$E$'+TR); });
   ws2['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:TR-1,c:5}}); ws2['!cols']=[{wch:5},{wch:24},{wch:5},{wch:30},{wch:16},{wch:9}];
-  const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'DataSheet'); XLSX.utils.book_append_sheet(wb,ws2,'סיכום');
+  /* גיליון פחת: כל סעיף עם פחת שלנו (כמות / חומר) או תוספת % בהערה (מאור) – לבדיקת כפילות */
+  const W=rows.filter(x=>Math.abs(x.wt)>1e-6||Math.abs(x.wq)>1e-6||x.mk); const ws3={}; const p3=(r,c,v,z)=>{ ws3[XLSX.utils.encode_cell({r,c})]=typeof v==='number'?{t:'n',v,z}:{t:'s',v:String(v??'')}; };
+  p3(0,0,`פחת בכתב הכמויות – ${o.wq==='net'?'ה-DataSheet יוצא נטו':'ה-DataSheet יוצא כולל פחת'}. "תוספת בהערה" = אחוז שמופיע בפירוט הכמות (למשל +10% של מאור); יחד עם פחת שלנו = חשד לכפילות`);
+  ['מב','מס\' סעיף','תיאור סעיף','יחידה','כמות נטו','פחת כמות %','כמות כולל פחת','עלות נטו','פחת עלות %','עלות כולל פחת','תוספת בהערה %','מקור הפחת','⚠ כפל'].forEach((h,i)=>p3(2,i,h));
+  W.forEach((x,i)=>{ const r=3+i; p3(r,0,x.b); p3(r,1,x.num); p3(r,2,x.name); p3(r,3,x.unit); p3(r,4,+(+x.Jn).toFixed(4),'#,##0.00'); p3(r,5,x.wq,'0.0%'); p3(r,6,+(+x.Jg).toFixed(4),'#,##0.00'); p3(r,7,Math.round(x.Tn),'#,##0'); p3(r,8,x.wt,'0.0%'); p3(r,9,Math.round(x.Tg),'#,##0'); p3(r,10,x.mk?x.mk/100:'', '0%'); p3(r,11,x.own!==null?'פחת בסעיף '+x.own+'%':(Math.abs(x.wq)>1e-6||Math.abs(x.wt)>1e-6)?'פחת כללי (טבלה)':''); p3(r,12,x.dup?'⚠ כפל':''); });
+  ws3['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(3,2+W.length),c:12}}); ws3['!cols']=[{wch:4},{wch:14},{wch:40},{wch:6},{wch:11},{wch:8},{wch:11},{wch:12},{wch:8},{wch:12},{wch:9},{wch:16},{wch:8}];
+  const wb=XLSX.utils.book_new(); wb.Workbook={Views:[{RTL:true}]}; XLSX.utils.book_append_sheet(wb,ws,'DataSheet'); XLSX.utils.book_append_sheet(wb,ws2,'סיכום'); XLSX.utils.book_append_sheet(wb,ws3,'פחת');
   const d=new Date(); const stamp=`${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`;
-  XLSX.writeFile(wb,`${state.project||''} - כתב כמויות בפורמט החברה ${stamp}.xlsx`.replace(/\s+/g,' ')); toast('הקובץ יוצא – '+rows.length+' סעיפים'); }
+  XLSX.writeFile(wb,`${state.project||''} - כתב כמויות בפורמט החברה ${stamp}.xlsx`.replace(/\s+/g,' ')); toast('הקובץ יוצא – '+rows.length+' סעיפים'+(o.wq==='net'?' (נטו)':'')+' · גיליון פחת: '+W.length+' סעיפים'+(W.filter(x=>x.dup).length?' · ⚠ '+W.filter(x=>x.dup).length+' חשד לכפל':'')); }
 function effiExport(o){
   if(typeof XLSX==='undefined'){ toast('ספריית האקסל לא נטענה'); return; }
   const was=OHC; OHC=o.oh?ohCalc():null;
