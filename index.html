@@ -129,6 +129,11 @@ tr.L3 td{background:var(--lv3);font-weight:600}
 tr.L4 td{font-weight:600}
 tr.L5 td{color:var(--ink2);font-size:14px}
 tr.L5 td.tot{color:var(--ink)}
+.done-b{min-width:20px;height:20px;padding:0 4px;margin-inline-start:6px;vertical-align:middle;border:1px solid var(--line);border-radius:99px;font-size:11px;line-height:18px;color:var(--muted,#888);background:transparent;flex:none}
+.done-b.on{background:#12b76a;border-color:#12b76a;color:#fff;font-weight:700}
+.done-b.part{border-color:#12b76a;color:#067647;font-weight:600}
+tr.is-done>td{opacity:.55}
+tr.is-done>td.code{opacity:1}
 .pill{display:inline-block;font:500 11px "Assistant",sans-serif;letter-spacing:.04em;padding:1px 7px;border-radius:99px;background:var(--accent-soft);color:var(--ink);margin-inline-start:6px;vertical-align:1px}
 .pill.demo{background:var(--warn-soft);color:var(--warn)}
 .pill.err{background:var(--bad-soft);color:var(--bad)}
@@ -321,7 +326,7 @@ table.boq.plist{min-width:0!important;width:100%}
       <label class="label" style="display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="showNotes"> הצג הערות</label>
       <button class="btn" id="btnAddB">+ מבנה</button>
       <button class="btn" id="btnPaste" hidden title="הדבקת חלקים שהועתקו מפרויקט אחר">📋 הדבק</button>
-      <button class="btn" id="btnSel" title="בחירת כמה סעיפים / תתי-פרקים / פרקים והעברה או העתקה שלהם יחד">☑ בחירה מרובה</button>
+      <button class="btn" id="btnSel" title="בחירת כמה סעיפים / תתי-פרקים / פרקים והעברה או העתקה שלהם יחד">☑ בחירה מרובה</button><button class="btn" id="btnDone" title="סעיפים שסומנו כסגורים (טופלו) – לחיצה: הסתרה / הצגה של הסגורים">✓ סגורים</button>
       <button class="btn" id="btnTrash" title="שחזור שורות שנמחקו">סל מחזור</button>
       <button class="btn" id="btnQchk" title="סעיפים בלי כמות / כמות סעיף שונה מהמשאב – בחירת משאב מוביל ★">כמות סעיף ★</button>
       <button class="btn" id="btnSum" title="ריכוז כמויות לפי נושא (בטון, ברזל, טפסנות...) להדפסה ולאקסל">ריכוזים</button>
@@ -505,7 +510,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='04.11.26-7';
+const APP_VER='04.11.26-8';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -763,6 +768,7 @@ function render(){
   const addRows=(list,parent,pm)=>{
     for(const n of list){
       if(!pm && !matches(n)) continue;
+      if(state.hideDone&&['c','s','i'].includes(n.t)){ const dc=doneCnt(n); if(dc.a&&dc.d===dc.a) continue; }
       rows.push(rowHtml(n,G,parent));
       if(n.t==='i' && n.note && state.showNotes) rows.push(`<tr class="noterow"><td></td><td colspan="8">${esc(n.note)}</td></tr>`);
       const act=query||qf; const open=!state.collapsed[n.id] || act;
@@ -773,10 +779,17 @@ function render(){
   addRows(state.tree,null);
   document.getElementById('tb').innerHTML = rows.join('') || '<tr><td colspan="9" class="empty">'+((query||qf)?'אין שורות שתואמות לחיפוש / לסינון.':'אין שורות. הוסף מבנה ראשון.')+'</td></tr>';
   if(typeof qcSoon==='function') qcSoon();
+  if(typeof updDoneBtn==='function') updDoneBtn();
   qfOptions();
   { const vp=document.getElementById('view-proj'); if(vp&&!vp.hidden&&!vp.contains(document.activeElement)) renderProj(); }
 }
 
+/* ---------- סטטוס "סגור" (טופל) לסעיף; פרק / תת-פרק / מבנה – לפי הסעיפים שמתחתיו ---------- */
+function doneCnt(n){ if(n.t==='i') return isPct(n)?{d:0,a:0}:{d:n.done?1:0,a:1}; let d=0,a=0; walk(n.ch||[],x=>{ if(x.t==='i'&&!isPct(x)){ a++; if(x.done) d++; } }); return {d,a}; }
+function doneBtn(n){ if(!['b','c','s','i'].includes(n.t)) return ''; const {d,a}=doneCnt(n); if(!a) return '';
+  const all=d===a, part=d&&!all;
+  const tip=n.t==='i'?(n.done?`סגור${n.doneAt?' ('+fmtDt(n.doneAt)+')':''} – לחיצה לפתיחה מחדש`:'סמן כסגור (טופל)'):(all?`כל ${a} הסעיפים סגורים – לחיצה לפתיחת כולם`:`${d} מתוך ${a} סעיפים סגורים – לחיצה לסגירת כולם`);
+  return `<button class="ib done-b${all?' on':''}${part?' part':''}" data-act="done" data-id="${n.id}" title="${tip}" aria-pressed="${all}">${all?'✓':part?`${d}/${a}`:'○'}</button>`; }
 function addRowHtml(n){
   const ct=CHILD[n.t]; const L=LV[n.t]+1;
   return `<tr class="addrow"><td colspan="9" style="padding-inline-start:${10+L*18}px;padding-block:2px"><button class="ib" data-act="add" data-id="${n.id}" style="color:var(--accent);font-weight:600">+ ${NAMES[ct]}</button></td></tr>`;
@@ -945,7 +958,7 @@ function rowHtml(n,G){
   const del = pendingDel===n.id
     ? `<span class="confirm">למחוק${n.ch&&n.ch.length?' כולל '+countDesc(n)+' שורות':''}? <button class="btn small" data-act="delyes" data-id="${n.id}">מחק</button><button class="btn small" data-act="delno">ביטול</button></span>`
     : `${(n.t==='r'&&(parentOf(n.id)||{}).t==='i')||n.t==='k'?(n.lead?`<button class="ib" data-act="qunlink" data-id="${n.id}" title="מוביל – כמות הסעיף נלקחת מכאן. לחיצה = ניתוק" style="color:var(--accent);font-weight:700">★ מוביל</button>`:(!canLead(n)?'':`<button class="ib" data-act="qlink" data-id="${n.id}" title="קבע את הכמות בשורה הזו ככמות הסעיף (מוביל)">☆ לסעיף</button>`)):''}${n.t==='r'&&!hasItems(n)?`<button class="ib" data-act="add" data-id="${n.id}" title="פירוק המשאב למק&quot;טים" style="color:var(--accent);font-weight:600">+ מק"ט</button>`:''}${(n.t==='i'||n.t==='r'||n.t==='k')?`<button class="ib" data-act="form" data-id="${n.id}">טופס</button>`:''}${n.t==='i'?`<button class="ib" data-act="addafter" data-id="${n.id}" title="הוסף סעיף חדש מיד אחרי הסעיף הזה" style="color:var(--accent);font-weight:600">+ אחרי</button><button class="ib" data-act="move" data-id="${n.id}" title="העבר סעיף לתת-פרק / פרק / מבנה אחר">העבר</button>`:''}${n.t==='c'&&n.ch.length?`<button class="ib" data-act="movec" data-id="${n.id}" title="העבר או העתק את הפרק למבנה אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length?`<button class="ib" data-act="move" data-id="${n.id}" title="העבר את כל הסעיפים של תת-הפרק לתת-פרק / פרק אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length>1?`<button class="ib" data-act="renum" data-id="${n.id}" title="מספור מחדש של הסעיפים בתת-פרק לפי הסדר המוצג">מספור</button>`:''}${['i','c','s'].includes(n.t)?`<button class="ib" data-act="att" data-id="${n.id}" title="מסמכים (הצעות מחיר) ובסיס מחיר">📎</button>`:''}${pasteBtns(n)}<button class="ib" data-act="copy" data-id="${n.id}" title="העתק ${NAMES[n.t]} (כולל כל מה שמתחת)">העתק</button><button class="ib" data-act="up" data-id="${n.id}" aria-label="הזז למעלה">▲</button><button class="ib" data-act="down" data-id="${n.id}" aria-label="הזז למטה">▼</button><button class="ib del" data-act="del" data-id="${n.id}" aria-label="מחק">✕</button>`;
-  return `<tr class="L${L}" data-id="${n.id}">${codeCell(n)}${nameCell(n).replace(/<\/td>$/,attPills(n)+'</td>')}${unit}${qty}${price}${OL?(inOH?`<td class="n num tot" title="מבנה תקורה – העלות מועמסת על הסעיפים הישירים" style="color:var(--muted)">${t?'<s>'+fmt(t)+'</s><div style="font-size:10px">מועמס</div>':''}</td>`:`<td class="n num tot" title="סה&quot;כ מועמס בתקורות ורווח. ישיר: ${fmt(t)}"><span style="${n.t==='b'?'':'color:#6941c6'}">${tl?fmt(tl):''}</span>${tl&&Math.abs(tl-t)>0.5?`<div style="font-size:10px;color:var(--muted);font-weight:400">ישיר ${fmt(t)}</div>`:''}</td>`):`<td class="n num tot">${t?fmt(t):''}</td>`}${mkCell(n)}${share}<td><div class="rowact">${del}</div></td></tr>`;
+  return `<tr class="L${L}${n.t==='i'&&n.done?' is-done':''}" data-id="${n.id}">${codeCell(n)}${nameCell(n).replace(/<\/td>$/,attPills(n)+doneBtn(n)+'</td>')}${unit}${qty}${price}${OL?(inOH?`<td class="n num tot" title="מבנה תקורה – העלות מועמסת על הסעיפים הישירים" style="color:var(--muted)">${t?'<s>'+fmt(t)+'</s><div style="font-size:10px">מועמס</div>':''}</td>`:`<td class="n num tot" title="סה&quot;כ מועמס בתקורות ורווח. ישיר: ${fmt(t)}"><span style="${n.t==='b'?'':'color:#6941c6'}">${tl?fmt(tl):''}</span>${tl&&Math.abs(tl-t)>0.5?`<div style="font-size:10px;color:var(--muted);font-weight:400">ישיר ${fmt(t)}</div>`:''}</td>`):`<td class="n num tot">${t?fmt(t):''}</td>`}${mkCell(n)}${share}<td><div class="rowact">${del}</div></td></tr>`;
 }
 function countDesc(n){ let c=0; walk(n.ch,()=>c++); return c; }
 
@@ -954,6 +967,10 @@ const tb=document.getElementById('tb');
 tb.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]'); if(!b) return;
   const id=+b.dataset.id, act=b.dataset.act;
+  if(act==='done'){ const f=find(id); if(!f) return; const n=f.n; const d=new Date().toISOString().slice(0,10);
+    if(n.t==='i'){ if(n.done){ delete n.done; delete n.doneAt; } else { n.done=true; n.doneAt=d; } }
+    else { const {d:dc,a}=doneCnt(n); const on=dc<a; walk(n.ch||[],x=>{ if(x.t==='i'&&!isPct(x)){ if(on){ if(!x.done){ x.done=true; x.doneAt=d; } } else { delete x.done; delete x.doneAt; } } }); toast(on?`${a} סעיפים סומנו כסגורים`:`${a} סעיפים נפתחו מחדש`); }
+    save(); render(); updDoneBtn(); return; }
   if(act==='toggle'){ const opening=!!state.collapsed[id]; state.collapsed[id]=!state.collapsed[id];
     /* פתיחה = רמה אחת בלבד: הילדים נפתחים סגורים. Shift/Ctrl + לחיצה = פתיחת כל הרמות מתחת */
     if(opening){ const f=find(id); if(f) (f.n.ch||[]).forEach(c=>walk([c],x=>{ if(x.ch&&x.ch.length&&x.t!=='k') state.collapsed[x.id]=!(e.shiftKey||e.ctrlKey||e.metaKey); })); }
@@ -1158,6 +1175,9 @@ function selBar(){ let b=document.getElementById('selBar'); if(!b){ b=document.c
   if(q('sel_pull')) q('sel_pull').onclick=()=>{ const L=[]; selTop().forEach(f=>walk([f.n],x=>{ if(x.t==='i'&&!isPct(x)) L.push(x); })); if(L.length) pullSecDlg(L); };
   if(q('sel_clip')) q('sel_clip').onclick=()=>{ const T=selTop(); if(!T.length) return; clipSet(T); SELMODE=false; SEL.clear(); render(); toast(`הועתקו ללוח ${T.length} פריטים. פתח פרויקט אחר ולחץ "📋 הדבק"`); }; if(q('sel_clr')) q('sel_clr').onclick=()=>{ SEL.clear(); render(); };
   q('sel_off').onclick=()=>{ SELMODE=false; SEL.clear(); render(); }; }
+function updDoneBtn(){ const b=document.getElementById('btnDone'); if(!b||!state||!state.tree) return; let d=0,a=0; state.tree.forEach(x=>{ const c=doneCnt(x); d+=c.d; a+=c.a; });
+  b.textContent=`✓ סגורים ${d}/${a}${state.hideDone?' · מוסתרים':''}`; b.classList.toggle('primary',!!state.hideDone); }
+document.getElementById('btnDone').onclick=()=>{ state.hideDone=!state.hideDone; if(!state.hideDone) delete state.hideDone; save(); render(); updDoneBtn(); toast(state.hideDone?'הסעיפים הסגורים מוסתרים':'כל הסעיפים מוצגים'); };
 document.getElementById('btnSel').onclick=()=>{ SELMODE=!SELMODE; if(!SELMODE) SEL.clear(); render(); };
 document.getElementById('tb').addEventListener('change',e=>{ const x=e.target; if(!x.dataset||!x.dataset.sel) return; const id=+x.dataset.sel;
   if(x.checked){ SEL.add(id); const f=find(id); walk(f.n.ch||[],y=>SEL.delete(y.id)); } else SEL.delete(id); render(); });
@@ -1253,6 +1273,7 @@ function clipSet(T){ const items=T.map(f=>{ const inh=[]; f.path.forEach(p=>live
 function clipBtn(){ const b=document.getElementById('btnPaste'); if(!b) return; const c=clipGet(); b.hidden=!c||!c.items||!c.items.length; if(c&&c.items) b.textContent=`📋 הדבק (${c.items.length})`; if(c) b.title=`הדבקה מ"${c.proj||''}" (${new Date(c.ts).toLocaleString('he-IL')})`; }
 /* סינון תוכן בהעתקה: o={res,price,qty,note} – false = לא להעביר */
 function stripCopy(n,o){ walk([n],x=>{
+  delete x.done; delete x.doneAt;   /* סטטוס 'סגור' לא עובר להעתקה */
   if(o.files===false||!x.files) delete x.files; else { x.files=liveFiles(x); if(!x.files.length) delete x.files; }
   if(!o.note) x.note='';
   if(x.t==='i'){ if(!o.res){ x.ch=(x.ch||[]).filter(c=>c.t!=='r'); } if(!o.price) delete x.sp; if(!o.qty){ x.qty=''; x.calc=[]; } }
