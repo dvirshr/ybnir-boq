@@ -505,7 +505,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='04.11.26-4';
+const APP_VER='04.11.26-5';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -1193,6 +1193,8 @@ async function pullSecDlg(targets){
     if(SELF){ let pick=best&&best.sc>1&&dupSim(best.c.name,t.name)>=0.6?best.c:null; if(!pick){ const byN=R.filter(x=>x.c.code!==t.code&&UNORM(x.c.unit)===UNORM(t.unit)&&dupSim(x.c.name,t.name)>=0.85)[0]; if(byN) pick=byN.c; } const same=!!pick&&pick.sig===resSig(t.ch); return {t,R,pick,on:!!pick&&!same,has:false,same}; }
     return {t,R,pick:best&&(one||best.sc>=0.75)?best.c:null,on:!!(best&&(one||best.sc>=0.75)&&!has),has}; });
   let RW=[];
+  /* חישוב התאמות בחלקים – החלון לא נתקע, ומוצגת התקדמות */
+  const rowsAsync=async()=>{ const all=targets, out=[]; const keep=targets; for(let i=0;i<all.length;i+=40){ targets=all.slice(i,i+40); out.push(...rows()); const b=$q('ps_body'); if(b) b.innerHTML=`<div class="hint" style="padding:10px">מחשב התאמות… ${Math.min(i+40,all.length)} מתוך ${all.length} סעיפים</div>`; await new Promise(r=>setTimeout(r,0)); } targets=keep; return out; };
   h.innerHTML=`<div class="pdlg" style="z-index:9999"><div class="box" style="width:min(1100px,100%);max-height:94vh;overflow:auto">
     <h2>📥 משאבים ומחירים ממבנה / פרויקט אחר</h2>
     <p class="hint" style="margin:0 0 6px">מעתיק לסעיף את המשאבים, המק"טים והמחירים מסעיף מקביל בפרויקט המקור. <b>הכמות של הסעיף נשארת.</b> נוסחאות (=Q, =R) עוברות כמו שהן. מקור המחיר נרשם ("אקוויוולנטי – שם הפרויקט").</p>
@@ -1222,7 +1224,7 @@ async function pullSecDlg(targets){
   const cnt=()=>{ const n=RW.filter(w=>w.on&&w.pick).length; $q('ps_n').textContent=src?`${n} מתוך ${targets.length} סעיפים`:''; $q('ps_go').disabled=!n; };
   $q('ps_src').onchange=async()=>{ src=$q('ps_src').value; C=[]; RW=[]; if(!src){ draw(); return; } $q('ps_body').innerHTML='<div class="hint" style="padding:10px">טוען…</div>';
     if(src.startsWith('self:')){ const b=src.slice(5); SELF=true; srcName='מבנה '+b; C=pullSecCatalog(state,srcName,true).filter(c=>c.b===b); $q('ps_fx').value='keep'; RW=rows(); draw(); return; }
-    SELF=false; try{ const P=await DB.getProject(src); srcName=P.name; C=pullSecCatalog(P.state,P.name); RW=rows(); draw(); }catch(e){ toast('טעינה נכשלה: '+e.message); } };
+    SELF=false; try{ $q('ps_body').innerHTML='<div class="hint" style="padding:10px">טוען את הפרויקט…</div>'; const P=await DB.getProject(src); srcName=P.name; C=pullSecCatalog(P.state,P.name); RW=await rowsAsync(); draw(); }catch(e){ toast('טעינה נכשלה: '+e.message); } };
   if(one) $q('ps_f').oninput=e=>{ flt=e.target.value.trim().toLowerCase(); if(C.length) draw(); };
   $q('ps_go').onclick=async()=>{ const rep=document.querySelector('[name="ps_m"]:checked').value==='rep'; const S=RW.filter(w=>w.on&&w.pick); if(!S.length) return;
     try{ if(typeof flushCloud==='function'){ await flushCloud(); await pushCloud(false,'לפני משיכת משאבים מ-'+srcName); } }catch(e){}
@@ -4132,7 +4134,8 @@ function maorFullRows(wb){
   return null; }
 /* כפילויות בשורות חדשות מאקסל: אותו קוד באותו מבנה, או תאור דומה (≥60%) באותו פרק ובאותה יחידה → לא מסומן מראש + הפניה לסעיף הקיים */
 const dupNorm=t=>String(t||'').replace(/["'׳״`.,;:()\[\]\-–\/\\]/g,' ').replace(/\s+/g,' ').trim();
-function dupSim(a,b){ a=dupNorm(a); b=dupNorm(b); if(!a||!b) return 0; if(a===b) return 1; const bg=t=>{ const m=new Map(); for(let i=0;i<t.length-1;i++){ const k=t.slice(i,i+2); m.set(k,(m.get(k)||0)+1); } return m; };
+const DSBG=new Map();   /* מטמון ביגרמים – השוואה מהירה של מאות סעיפים מול קטלוג */
+function dupSim(a,b){ a=dupNorm(a); b=dupNorm(b); if(!a||!b) return 0; if(a===b) return 1; const bg=t=>{ let m=DSBG.get(t); if(m) return m; m=new Map(); for(let i=0;i<t.length-1;i++){ const k=t.slice(i,i+2); m.set(k,(m.get(k)||0)+1); } if(DSBG.size>20000) DSBG.clear(); DSBG.set(t,m); return m; };
   const A=bg(a), B=bg(b); let x=0; for(const [k,v] of A) x+=Math.min(v,B.get(k)||0); return 2*x/Math.max(1,(a.length-1)+(b.length-1)); }
 function dupMark(ops){ const secs=[]; walk(state.tree,(n,p)=>{ if(n.t==='i') secs.push({n,b:(p[0]||{}).code||''}); });
   for(const o of ops){ if(o.k!=='addS') continue; const s=o.sec, ch=String(s.sub||s.code||'').slice(0,2), u=UNORM(s.unit);
