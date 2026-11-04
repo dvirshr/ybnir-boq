@@ -505,7 +505,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='04.11.26-3';
+const APP_VER='04.11.26-4';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -4383,7 +4383,9 @@ function applyEditPlan(P,delGone){
       let sb=c.ch.find(n=>n.t==='s'&&n.code===s.sub); if(!sb){ sb=mk('s',Object.assign({code:s.sub},s.subName&&!(state.lists.subs||[]).some(x=>x.c===s.sub)?{name:s.subName}:{})); c.ch.push(sb); c.ch.sort((x,y)=>(x.code||'').localeCompare(y.code||'')); }
       const node=mk('i',{code:s.code||nextSecCode(sb),name:s.name,unit:s.unit,qty:s.qty,note:s.note,calc:[]}); if(s.sp) node.sp=s.sp; if(s.pb) node.pb=s.pb; if(s.pbRef) node.pbRef=s.pbRef; if(s.pct!==undefined) node.pct=s.pct; if(s.ct) node.ct=s.ct; sb.ch.push(node); secNode.set(s,node); res.addS++;
     }
-    else if(o.k==='addR'){ const sec=secNode.get(o.sec)||o.sec; if(!sec||!sec.ch) continue; const node=mk('r',Object.assign({calc:[]},o.r)); sec.ch.push(node); secNode.set(o.r,node); res.addR++; }
+    else if(o.k==='addR'){ const sec=secNode.get(o.sec)||o.sec; if(!sec||!sec.ch) continue; const node=mk('r',Object.assign({calc:[]},o.r)); sec.ch.push(node); secNode.set(o.r,node); res.addR++;
+      /* משאב חדש עם מחיר בסעיף שמתומחר ידנית – מחיר הסעיף עובר למשאבים (אלא אם הקובץ קובע מחיר סעיף) */
+      if(String(o.r.price??'').trim()!==''&&spSet(sec)&&!isPct(sec)&&!P.ops.some(x=>x.k==='upd'&&x.n===sec&&'sp' in x.ch)){ delete sec.sp; res.spRel=(res.spRel||0)+1; } }
     else if(o.k==='fin'){ state.fin=finRows(); const r=state.fin.find(x=>x.k===o.fk); if(r){ r.pct=String(o.v); res.upd++; } }
     else if(o.k==='addK'){ const rn=secNode.get(o.res)||o.res; if(!rn||!rn.ch) continue; rn.ch.push(mk('k',Object.assign({calc:[]},o.r))); res.addR++; }
   }
