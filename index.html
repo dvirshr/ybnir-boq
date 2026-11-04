@@ -505,7 +505,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='04.11.26-5';
+const APP_VER='04.11.26-6';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -1224,7 +1224,8 @@ async function pullSecDlg(targets){
   const cnt=()=>{ const n=RW.filter(w=>w.on&&w.pick).length; $q('ps_n').textContent=src?`${n} מתוך ${targets.length} סעיפים`:''; $q('ps_go').disabled=!n; };
   $q('ps_src').onchange=async()=>{ src=$q('ps_src').value; C=[]; RW=[]; if(!src){ draw(); return; } $q('ps_body').innerHTML='<div class="hint" style="padding:10px">טוען…</div>';
     if(src.startsWith('self:')){ const b=src.slice(5); SELF=true; srcName='מבנה '+b; C=pullSecCatalog(state,srcName,true).filter(c=>c.b===b); $q('ps_fx').value='keep'; RW=rows(); draw(); return; }
-    SELF=false; try{ $q('ps_body').innerHTML='<div class="hint" style="padding:10px">טוען את הפרויקט…</div>'; const P=await DB.getProject(src); srcName=P.name; C=pullSecCatalog(P.state,P.name); RW=await rowsAsync(); draw(); }catch(e){ toast('טעינה נכשלה: '+e.message); } };
+    SELF=false; let stg='טעינת הפרויקט מהענן'; try{ $q('ps_body').innerHTML='<div class="hint" style="padding:10px">טוען את הפרויקט…</div>'; const P=await DB.getProject(src); srcName=P.name; stg='בניית קטלוג הסעיפים במקור'; C=pullSecCatalog(P.state,P.name); stg='חישוב התאמות'; RW=await rowsAsync(); stg='הצגת הטבלה'; draw(); }
+    catch(e){ console.error('pullSecDlg',stg,e); const B=$q('ps_body'); if(B) B.innerHTML=`<div style="padding:10px;color:#b42318;font-size:13px"><b>הטעינה נכשלה בשלב: ${esc(stg)}</b><br>${esc(String(e&&e.message||e))}<br><span class="mono" style="font-size:11px;opacity:.8">${esc(String(e&&e.stack||'').split('\n').slice(1,3).join(' | '))}</span><br><span class="hint">צלם את ההודעה הזו ושלח</span></div>`; toast('טעינה נכשלה ('+stg+'): '+(e&&e.message||e)); } };
   if(one) $q('ps_f').oninput=e=>{ flt=e.target.value.trim().toLowerCase(); if(C.length) draw(); };
   $q('ps_go').onclick=async()=>{ const rep=document.querySelector('[name="ps_m"]:checked').value==='rep'; const S=RW.filter(w=>w.on&&w.pick); if(!S.length) return;
     try{ if(typeof flushCloud==='function'){ await flushCloud(); await pushCloud(false,'לפני משיכת משאבים מ-'+srcName); } }catch(e){}
