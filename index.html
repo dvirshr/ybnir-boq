@@ -505,7 +505,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='03.11.26-11';
+const APP_VER='04.11.26-1';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -2510,12 +2510,13 @@ document.addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('#f
 /* ---------- ריכוזי כמויות לפי נושא (בטון, ברזל, טפסנות...) – להדפסה ולאקסל ---------- */
 function sumTopicSec(n,ch){ if(n.topic) return n.topic; if(state.topicLock) return 'אחר'; return sumTopicSecAuto(n,ch); }   /* נושא מאושר גובר; בנעילה – רק מאושר */
 function sumTopicSecAuto(n,ch){ const nm=n.name||'', u=UNORM(n.unit);
+  if(u==='מ"ק'&&/כלונס/.test(nm)&&/בטון|יציקת?\s*כלונס/.test(nm)&&!/משאב(ת|ות)|שאיב|קורת\s*ראש|ברזל|קידוח\s*ריק/.test(nm)) return 'בטון כלונסאות';   /* בטון לכלונסאות – פחת נפרד (צריכת יתר CFA) */
   if(u==='מ"ק'&&(ch==='02'||/בטון/.test(nm))&&!/משאב(ת|ות)?\s*(בטון|סטטית)|שאיב|פחת|מבלוק|בלוקי\s*בטון|אדמת\s*גן/.test(nm)&&!(/חפיר|מילוי|מצע|עפר|סומסום/.test(nm)&&!/בטון|ב-?\s*\d{2}\b|מזוין|קיר|עמוד|תקר|יסוד|רפסוד/.test(nm))) return 'בטון'; // "על מצע" בסעיף בטון (ב-30) = בטון
   if((u==='טון'||/ק"?ג/.test(u))&&/זיון|ברזל|פלדה\s*מצולעת|רשת/.test(nm)) return 'ברזל';
   const c=qcAutoCat(n.code,nm); if(c==='ברזל'&&(!/טון|ק"?ג/.test(u)||/הובל|כיפוף|חיתוך|קשירה/.test(nm))) return 'אחר'; /* הובלה מיוחדת לברזל וכו' – לא כמות ברזל */ return c==='בטון'?'אחר':c; }
 /* ---------- נושאי סעיפים: נושא גלוי ומאושר (n.topic). state.topicLock = פחת לפי נושא רק לסעיפים מאושרים ---------- */
-const TOPIC_U={'בטון':/^מ"ק$/,'שאיבה':/^מ"ק$/,'ברזל':/^(טון|ק"?ג)$/,'טפסנות':/^מ"ר$/,'בלוקים':/^מ"ר$/,'ריצוף':/^(מ"ר|מ"א)$/,'חיפוי':/^(מ"ר|מ"א)$/,'איטום':/^(מ"ר|מ"א)$/,'טיח':/^מ"ר$/,'צבע':/^(מ"ר|מ"א)$/};
-const TOPIC_L=()=>[...new Set(['בטון','ברזל','טפסנות','בלוקים','ריצוף','חיפוי','איטום','טיח','צבע','שאיבה',...wRules().filter(r=>r.k==='topic').map(r=>String(r.v||'').trim()).filter(Boolean)])];
+const TOPIC_U={'בטון':/^מ"ק$/,'בטון כלונסאות':/^מ"ק$/,'שאיבה':/^מ"ק$/,'ברזל':/^(טון|ק"?ג)$/,'טפסנות':/^מ"ר$/,'בלוקים':/^מ"ר$/,'ריצוף':/^(מ"ר|מ"א)$/,'חיפוי':/^(מ"ר|מ"א)$/,'איטום':/^(מ"ר|מ"א)$/,'טיח':/^מ"ר$/,'צבע':/^(מ"ר|מ"א)$/};
+const TOPIC_L=()=>[...new Set(['בטון','בטון כלונסאות','ברזל','טפסנות','בלוקים','ריצוף','חיפוי','איטום','טיח','צבע','שאיבה',...wRules().filter(r=>r.k==='topic').map(r=>String(r.v||'').trim()).filter(Boolean)])];
 const TPP=new Map();   /* שינויים שעוד לא אושרו – נשמרים במעבר בין סינונים */
 function topicTab(){ const R=[]; walk(state.tree,(n,p)=>{ if(n.t!=='i'||isPct(n)) return; const c=p[1]||{}; const au=sumTopicSecAuto(n,c.code||''); R.push({n,b:p[0]||{},au,cur:n.topic||'',ok:au!=='אחר'&&TOPIC_U[au]&&TOPIC_U[au].test(UNORM(n.unit))}); });
   const f=window.__tpf||'todo', q=(window.__tpq||'').trim(); const L=TOPIC_L(), nAp=R.filter(r=>r.cur).length, guess=R.filter(r=>!r.cur&&r.au!=='אחר');
@@ -3780,6 +3781,8 @@ async function loadCatalog(){
   if(!DB.getSettings) return;
   try{ const r=await DB.getSettings(); SETTINGS=(r&&r.lists)||{}; GRES=Array.isArray(SETTINGS.res)?SETTINGS.res:null; lsSet('ybnir-boq-gres',JSON.stringify(GRES));
     if(SETTINGS.items&&SETTINGS.items.it) ITEMS=SETTINGS.items;
+    /* פחת קבוע לבטון כלונסאות – כלל ברירת מחדל בטבלת הפחת הכללי (פעם אחת; אפשר לשנות / למחוק בטבלה) */
+    if(!SETTINGS.wPileSeed){ const T=Array.isArray(SETTINGS.wTbl)?SETTINGS.wTbl.slice():[]; if(!T.some(r=>r.k==='topic'&&String(r.v||'').trim()==='בטון כלונסאות')) T.push({k:'topic',v:'בטון כלונסאות',lv:'i',w:'10',note:'צריכת יתר בטון כלונסאות CFA – ברירת מחדל, ניתן לשינוי'}); SETTINGS=Object.assign({},SETTINGS,{wTbl:T,wPileSeed:true}); if(DB.saveSettings) DB.saveSettings(SETTINGS).catch(()=>{}); }
     else if(ITEMS&&ITEMS.it&&Object.keys(ITEMS.it).length&&DB.saveSettings){ SETTINGS=Object.assign({},SETTINGS,{items:ITEMS}); DB.saveSettings(SETTINGS).catch(()=>{}); } }
   catch(e){ try{ GRES=JSON.parse(lsGet('ybnir-boq-gres')||'null'); }catch(_){} console.warn('catalog',e); }
 }
@@ -3844,7 +3847,7 @@ function renderLists(){
     try{ await editRes(c,{n,u,off:false}); window.__lq=c; renderLists(); toast('המשאב נוסף לכל הפרויקטים'); }catch(e){ toast('שגיאה בשמירה בענן: '+e.message); } };
 }
 /* ---------- טבלת פחת כללי (משותפת לכל הפרויקטים) ---------- */
-const WK={code:'מק"ט משאב/פריט',sub:'תת-פרק',ch:'פרק',topic:'נושא'}, WTOPICS=['בטון','ברזל','טפסנות','בלוקים','ריצוף','חיפוי','איטום','טיח','צבע'];
+const WK={code:'מק"ט משאב/פריט',sub:'תת-פרק',ch:'פרק',topic:'נושא'}, WTOPICS=['בטון','בטון כלונסאות','ברזל','טפסנות','בלוקים','ריצוף','חיפוי','איטום','טיח','צבע'];
 function wTblHtml(){ const T=wRules(); let nA=0,nI=0; if(state.wAuto) walk(state.tree,x=>{ if(!wOwn(x)&&wAuto(x)) (x.t==='i'?nI++:nA++); });
   const opt=(o,v)=>Object.entries(o).map(([k,t])=>`<option value="${k}" ${k===v?'selected':''}>${t}</option>`).join('');
   return `<div class="panel" style="grid-column:1/-1"><h3>טבלת פחת כללי (${T.length})</h3>
