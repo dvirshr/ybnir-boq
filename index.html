@@ -505,7 +505,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='04.11.26-6';
+const APP_VER='04.11.26-7';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -712,8 +712,8 @@ function total(n){
   return n.ch.reduce((a,c)=>a+total(c),0);
 }
 function rUnitCost(r){ if(!hasItems(r)) return evalExpr(r.price)||0; const q=rQty(r); return q&&!Number.isNaN(q)?total(r)/q:total(r); }
-const fmt = (v,d=0)=> (v===null||v===undefined||Number.isNaN(v)) ? '' : v.toLocaleString('he-IL',{minimumFractionDigits:d,maximumFractionDigits:d});
-const fmtQ = v => Number.isNaN(v)?'שגיאה':v.toLocaleString('he-IL',{maximumFractionDigits:2});
+const fmt = (v,d=0)=> (v===null||v===undefined||v===''||Number.isNaN(+v)) ? '' : (+v).toLocaleString('he-IL',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtQ = v => (v===null||v===undefined||v==='')?'':Number.isNaN(+v)?'שגיאה':(+v).toLocaleString('he-IL',{maximumFractionDigits:2});
 
 /* ---------- tree helpers ---------- */
 function walk(list, fn, path=[]){ for(const n of list){ fn(n,path); if(n.ch) walk(n.ch,fn,[...path,n]); } }
