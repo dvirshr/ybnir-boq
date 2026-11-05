@@ -133,6 +133,8 @@ tr.L5 td.tot{color:var(--ink)}
 .done-b.on{background:#12b76a;border-color:#12b76a;color:#fff;font-weight:700}
 .done-b.part{border-color:#12b76a;color:#067647;font-weight:600}
 tr.is-done>td{opacity:.55}
+.ib.drg{cursor:grab}.ib.drg:active{cursor:grabbing}
+tr.drop-b>td{box-shadow:inset 0 3px 0 var(--accent)}tr.drop-a>td{box-shadow:inset 0 -3px 0 var(--accent)}
 tr.is-done>td.code{opacity:1}
 .pill{display:inline-block;font:500 11px "Assistant",sans-serif;letter-spacing:.04em;padding:1px 7px;border-radius:99px;background:var(--accent-soft);color:var(--ink);margin-inline-start:6px;vertical-align:1px}
 .pill.demo{background:var(--warn-soft);color:var(--warn)}
@@ -510,7 +512,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='04.11.26-9';
+const APP_VER='05.11.26-1';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -723,6 +725,11 @@ const fmtQ = v => (v===null||v===undefined||v==='')?'':Number.isNaN(+v)?'שגי�
 /* ---------- tree helpers ---------- */
 function walk(list, fn, path=[]){ for(const n of list){ fn(n,path); if(n.ch) walk(n.ch,fn,[...path,n]); } }
 function find(id){ let r=null; walk(state.tree,(n,p)=>{ if(n.id===id) r={n,path:p}; }); return r; }
+/* הזזת שורה בתוך אותה רשימה (מ-i ל-j). סעיפים עם קוד באותה קידומת – הקודים נשארים לפי המיקום (כמו ▲▼), הקוד הקודם נשמר ב-oldCodes */
+function moveSib(l,i,j){ if(i===j) return; const a=Math.min(i,j), b=Math.max(i,j), R=l.slice(a,b+1);
+  const pre=x=>String(x||'').replace(/\.\d+$/,''); const posC=R[0].t==='i'&&R.every(x=>x.t==='i'&&x.code&&pre(x.code)===pre(R[0].code)&&!isPct(x))?R.map(x=>x.code):null;
+  const [m]=l.splice(i,1); l.splice(j,0,m);
+  if(posC) l.slice(a,b+1).forEach((x,k)=>{ if(x.code!==posC[k]){ (x.oldCodes=x.oldCodes||[]).push(x.code); x.code=posC[k]; } }); }
 function parentList(id){ if(state.tree.some(n=>n.id===id)) return state.tree; let r=null; walk(state.tree,n=>{ if(n.ch&&n.ch.some(c=>c.id===id)) r=n.ch; }); return r; }
 function mk(t,extra={}){ state.nid++; return Object.assign({id:state.nid,t,ch:[]},extra); }
 function nextSecCode(sub){
@@ -962,13 +969,25 @@ function rowHtml(n,G){
   if(n.t==='i'||n.t==='r'||n.t==='k') qty=qty.replace(/<\/td>$/,wChip(n)+'</td>');
   const del = pendingDel===n.id
     ? `<span class="confirm">למחוק${n.ch&&n.ch.length?' כולל '+countDesc(n)+' שורות':''}? <button class="btn small" data-act="delyes" data-id="${n.id}">מחק</button><button class="btn small" data-act="delno">ביטול</button></span>`
-    : `${(n.t==='r'&&(parentOf(n.id)||{}).t==='i')||n.t==='k'?(n.lead?`<button class="ib" data-act="qunlink" data-id="${n.id}" title="מוביל – כמות הסעיף נלקחת מכאן. לחיצה = ניתוק" style="color:var(--accent);font-weight:700">★ מוביל</button>`:(!canLead(n)?'':`<button class="ib" data-act="qlink" data-id="${n.id}" title="קבע את הכמות בשורה הזו ככמות הסעיף (מוביל)">☆ לסעיף</button>`)):''}${n.t==='r'&&!hasItems(n)?`<button class="ib" data-act="add" data-id="${n.id}" title="פירוק המשאב למק&quot;טים" style="color:var(--accent);font-weight:600">+ מק"ט</button>`:''}${(n.t==='i'||n.t==='r'||n.t==='k')?`<button class="ib" data-act="form" data-id="${n.id}">טופס</button>`:''}${n.t==='i'?`<button class="ib" data-act="addafter" data-id="${n.id}" title="הוסף סעיף חדש מיד אחרי הסעיף הזה" style="color:var(--accent);font-weight:600">+ אחרי</button><button class="ib" data-act="move" data-id="${n.id}" title="העבר סעיף לתת-פרק / פרק / מבנה אחר">העבר</button>`:''}${n.t==='c'&&n.ch.length?`<button class="ib" data-act="movec" data-id="${n.id}" title="העבר או העתק את הפרק למבנה אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length?`<button class="ib" data-act="move" data-id="${n.id}" title="העבר את כל הסעיפים של תת-הפרק לתת-פרק / פרק אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length>1?`<button class="ib" data-act="renum" data-id="${n.id}" title="מספור מחדש של הסעיפים בתת-פרק לפי הסדר המוצג">מספור</button>`:''}${['i','c','s'].includes(n.t)?`<button class="ib" data-act="att" data-id="${n.id}" title="מסמכים (הצעות מחיר) ובסיס מחיר">📎</button>`:''}${pasteBtns(n)}<button class="ib" data-act="copy" data-id="${n.id}" title="העתק ${NAMES[n.t]} (כולל כל מה שמתחת)">העתק</button><button class="ib" data-act="up" data-id="${n.id}" aria-label="הזז למעלה">▲</button><button class="ib" data-act="down" data-id="${n.id}" aria-label="הזז למטה">▼</button><button class="ib del" data-act="del" data-id="${n.id}" aria-label="מחק">✕</button>`;
+    : `${(n.t==='r'&&(parentOf(n.id)||{}).t==='i')||n.t==='k'?(n.lead?`<button class="ib" data-act="qunlink" data-id="${n.id}" title="מוביל – כמות הסעיף נלקחת מכאן. לחיצה = ניתוק" style="color:var(--accent);font-weight:700">★ מוביל</button>`:(!canLead(n)?'':`<button class="ib" data-act="qlink" data-id="${n.id}" title="קבע את הכמות בשורה הזו ככמות הסעיף (מוביל)">☆ לסעיף</button>`)):''}${n.t==='r'&&!hasItems(n)?`<button class="ib" data-act="add" data-id="${n.id}" title="פירוק המשאב למק&quot;טים" style="color:var(--accent);font-weight:600">+ מק"ט</button>`:''}${(n.t==='i'||n.t==='r'||n.t==='k')?`<button class="ib" data-act="form" data-id="${n.id}">טופס</button>`:''}${n.t==='i'?`<button class="ib" data-act="addafter" data-id="${n.id}" title="הוסף סעיף חדש מיד אחרי הסעיף הזה" style="color:var(--accent);font-weight:600">+ אחרי</button><button class="ib" data-act="move" data-id="${n.id}" title="העבר סעיף לתת-פרק / פרק / מבנה אחר">העבר</button>`:''}${n.t==='c'&&n.ch.length?`<button class="ib" data-act="movec" data-id="${n.id}" title="העבר או העתק את הפרק למבנה אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length?`<button class="ib" data-act="move" data-id="${n.id}" title="העבר את כל הסעיפים של תת-הפרק לתת-פרק / פרק אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length>1?`<button class="ib" data-act="renum" data-id="${n.id}" title="מספור מחדש של הסעיפים בתת-פרק לפי הסדר המוצג">מספור</button>`:''}${['i','c','s'].includes(n.t)?`<button class="ib" data-act="att" data-id="${n.id}" title="מסמכים (הצעות מחיר) ובסיס מחיר">📎</button>`:''}${pasteBtns(n)}<button class="ib" data-act="copy" data-id="${n.id}" title="העתק ${NAMES[n.t]} (כולל כל מה שמתחת)">העתק</button><button class="ib drg" draggable="true" data-drag="${n.id}" title="גרור למיקום אחר (בין שורות באותה רמה)" aria-label="גרור">⠿</button><button class="ib" data-act="top" data-id="${n.id}" title="העבר לראש הרשימה" aria-label="לראש הרשימה">⤒</button><button class="ib" data-act="up" data-id="${n.id}" aria-label="הזז למעלה">▲</button><button class="ib" data-act="down" data-id="${n.id}" aria-label="הזז למטה">▼</button><button class="ib" data-act="bot" data-id="${n.id}" title="העבר לסוף הרשימה" aria-label="לסוף הרשימה">⤓</button><button class="ib del" data-act="del" data-id="${n.id}" aria-label="מחק">✕</button>`;
   return `<tr class="L${L}${n.t==='i'&&n.done?' is-done':''}" data-id="${n.id}">${codeCell(n)}${nameCell(n).replace(/<\/td>$/,attPills(n)+doneBtn(n)+'</td>')}${unit}${qty}${price}${OL?(inOH?`<td class="n num tot" title="מבנה תקורה – העלות מועמסת על הסעיפים הישירים" style="color:var(--muted)">${t?'<s>'+fmt(t)+'</s><div style="font-size:10px">מועמס</div>':''}</td>`:`<td class="n num tot" title="סה&quot;כ מועמס בתקורות ורווח. ישיר: ${fmt(t)}"><span style="${n.t==='b'?'':'color:#6941c6'}">${tl?fmt(tl):''}</span>${tl&&Math.abs(tl-t)>0.5?`<div style="font-size:10px;color:var(--muted);font-weight:400">ישיר ${fmt(t)}</div>`:''}</td>`):`<td class="n num tot">${t?fmt(t):''}</td>`}${mkCell(n)}${share}<td><div class="rowact">${del}</div></td></tr>`;
 }
 function countDesc(n){ let c=0; walk(n.ch,()=>c++); return c; }
 
 /* ---------- events ---------- */
 const tb=document.getElementById('tb');
+let dragId=null;
+tb.addEventListener('dragstart',e=>{ const h=e.target.closest&&e.target.closest('[data-drag]'); if(!h){ return; } dragId=+h.dataset.drag; e.dataTransfer.effectAllowed='move'; try{ e.dataTransfer.setData('text/plain',String(dragId)); const tr=h.closest('tr'); if(tr) e.dataTransfer.setDragImage(tr,20,10); }catch(err){} });
+const dropTr=e=>{ const tr=e.target.closest&&e.target.closest('tr[data-id]'); if(!tr||dragId==null) return null; const id=+tr.dataset.id; if(id===dragId) return null;
+  const l=parentList(dragId); if(!l||!l.some(x=>x.id===id)) return null; return tr; };
+const clrDrop=()=>tb.querySelectorAll('.drop-a,.drop-b').forEach(x=>x.classList.remove('drop-a','drop-b'));
+tb.addEventListener('dragover',e=>{ if(dragId==null) return; const tr=dropTr(e); clrDrop(); if(!tr){ e.dataTransfer.dropEffect='none'; return; } e.preventDefault(); e.dataTransfer.dropEffect='move';
+  const r=tr.getBoundingClientRect(); tr.classList.add(e.clientY<r.top+r.height/2?'drop-b':'drop-a'); });
+tb.addEventListener('dragleave',e=>{ if(!tb.contains(e.relatedTarget)) clrDrop(); });
+tb.addEventListener('drop',e=>{ const tr=dropTr(e); clrDrop(); if(!tr){ dragId=null; return; } e.preventDefault();
+  const r=tr.getBoundingClientRect(), after=e.clientY>=r.top+r.height/2; const l=parentList(dragId), i=l.findIndex(x=>x.id===dragId); let j=l.findIndex(x=>x.id===+tr.dataset.id);
+  if(after) j++; if(j>i) j--; dragId=null; if(j!==i){ moveSib(l,i,j); save(); render(); } });
+tb.addEventListener('dragend',()=>{ dragId=null; clrDrop(); });
 tb.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]'); if(!b) return;
   const id=+b.dataset.id, act=b.dataset.act;
@@ -984,10 +1003,8 @@ tb.addEventListener('click',e=>{
   if(act==='del'){ pendingDel=id; render(); }
   if(act==='delno'){ pendingDel=null; render(); }
   if(act==='delyes'){ const f=find(id); trashNode(f.n,f.path); const l=parentList(id); l.splice(l.findIndex(x=>x.id===id),1); pendingDel=null; save(); render(); toastUndo('נמחק – '+NAMES[f.n.t]+' '+(f.n.code||'')); }
-  if(act==='up'||act==='down'){ const l=parentList(id); const i=l.findIndex(x=>x.id===id); const j=act==='up'?i-1:i+1; if(j>=0&&j<l.length){
-    const A=l[i], B=l[j];
-    if(A.t==='i'&&B.t==='i'&&A.code&&B.code){ const pre=x=>x.replace(/\.\d+$/,''); if(pre(A.code)===pre(B.code)){ (A.oldCodes=A.oldCodes||[]).push(A.code); (B.oldCodes=B.oldCodes||[]).push(B.code); [A.code,B.code]=[B.code,A.code]; } }
-    [l[i],l[j]]=[l[j],l[i]]; save(); render(); } }
+  if(act==='up'||act==='down'||act==='top'||act==='bot'){ const l=parentList(id); const i=l.findIndex(x=>x.id===id); const j=act==='up'?i-1:act==='down'?i+1:act==='top'?0:l.length-1;
+    if(j>=0&&j<l.length&&j!==i){ moveSib(l,i,j); save(); render(); } }
   if(act==='form') openDrawer(id);
   if(act==='att') attDlg(id);
   if(act==='qlink'||act==='qunlink'){ const f=find(id); if(f&&setLead(f.n,act==='qlink')){ save(); render(); toast(act==='qlink'?'כמות הסעיף נלקחת עכשיו מ-'+(f.n.code||''):'נותק – הכמות נשארה כמספר בסעיף'); } }
@@ -2332,7 +2349,7 @@ const pfMix=()=>{ const MB=state.tree.filter(b=>b.t==='b'&&pfRole(b)==='res'), P
   if(MB.length>1&&MB.some(b=>b.mix&&Object.keys(b.mix).length)){ const o={}; PF_MIX.forEach(([k])=>{ o[k]=MB.reduce((a,b)=>a+pfNum((b.mix||{})[k]),0); }); return o; } return P.mix||{}; };   /* תמהיל הפרויקט: לפי קומות › לפי מבנה (ישן) › ברמת פרויקט (ישן) */
 const pfPark=()=>pfV('parkU')+pfV('parkA')||pfV('parking');
 function pfRole(b){ if(b.role) return b.role; const n=b.name||''; if(typeof ohBlds==='function'&&ohBlds().includes(b.code)) return 'oh';
-  if(/עפר|ביסוס|חפיר|דיפון/.test(n)) return 'earth'; if(/מרתף|מרתפ/.test(n)) return 'base'; if(/פיתוח|גינון/.test(n)) return 'dev'; if(/תקור/.test(n)) return 'oh'; return 'res'; }
+  if(/עפר|ביסוס|חפיר|דיפון/.test(n)) return 'earth'; if(String(b.code)==='99'||/כלל|משותף/.test(n)) return 'other'; if(/מרתף|מרתפ/.test(n)) return 'base'; if(/פיתוח|גינון/.test(n)) return 'dev'; if(/תקור/.test(n)) return 'oh'; return 'res'; }
 let pfRendering=false, pfT=null;
 function pfSoon(){ clearTimeout(pfT); pfT=setTimeout(renderProj,0); }
 function pfCharPanel(){ const P=pfP(), C=P.char||{}, S=P.scope||{}, T=P.tender||{}; const cm=chMap();
@@ -2435,7 +2452,7 @@ function renderProj0(){
        <tr><td colspan="2" class="hint" style="margin:0;font-size:11px">שווה-ערך = כל שטח × המקדם שלו (טבלת "מקדמי שווה-ערך"): עיקרי ${fmt(main)}×${C.main} + שירות ${fmt(serv)}×${C.serv} + מרפסות ${fmt(balc)}×${C.balc} + מרתף ${fmt(base)}×${C.base} = ${eq?fmt(eq):'—'}</td></tr></table></div>
      <div><b style="font-size:13px">מגרש ופיתוח (מ"ר)</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px">${PF_X.map(([k,l])=>`<tr><td>${l}</td><td class="n">${inp(`data-pp="${k}"`,P[k])}</td></tr>`).join('')}</table></div>
      <div><b style="font-size:13px">כמויות ומשך</b><table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px"><tr style="font-weight:600"><td title="כל מבנה מגורים = מבנה נפרד בכתב הכמויות (10, 20, 30…) ועמודה בטופס">מבני מגורים</td><td class="n">${inp('data-pnb="1"',MB.length||'',60,'')}</td></tr>${PF_N.map(([k,l])=>`<tr><td>${l}</td><td class="n">${k==='units'?inp('data-pu="1"',state.units,90,projU()?fmt(projU()):''):inp(`data-pp="${k}"`,P[k])}</td></tr>`+(k==='units'&&state.tree.filter(b=>b.t==='b'&&pfRole(b)==='res').length>1?(()=>{ const BB=state.tree.filter(b=>b.t==='b'&&(pfRole(b)==='res'||aptNum(b.units))), su=BB.reduce((a,b)=>a+(aptNum(b.units)||0),0), UU=aptNum(state.units)||projU();
-         return BB.map(b=>`<tr><td style="padding-inline-start:14px;font-size:12px">↳ דירות במבנה ${esc(b.code||'')}</td><td class="n">${inp(`data-bu="${b.id}"`,b.units,70,'')}</td></tr>`).join('')+`<tr><td style="padding-inline-start:14px;font-size:11px" class="hint">סה"כ במבנים (לכמות "דירה" בכל מבנה)</td><td class="n num" style="font-size:12px;${su&&UU&&su!==UU?'color:#d92d20;font-weight:700':''}" title="${su&&UU&&su!==UU?'לא שווה ליח&quot;ד בפרויקט':''}">${su||'—'}</td></tr>`; })():'')).join('')}
+         return BB.map(b=>`<tr><td style="padding-inline-start:14px;font-size:12px">↳ דירות במבנה ${esc(b.code||'')} <button class="ib" data-pnotres="${b.id}" title="המבנה אינו מבנה מגורים – הוצא מהספירה (התפקיד משתנה ל'אחר', הסעיפים נשארים). שינוי חוזר – בשיוך מבנים לתפקיד, למטה" style="font-size:11px;padding:0 5px;border:1px solid var(--line);border-radius:4px;margin-inline-start:4px">לא מגורים</button></td><td class="n">${inp(`data-bu="${b.id}"`,b.units,70,'')}</td></tr>`).join('')+`<tr><td style="padding-inline-start:14px;font-size:11px" class="hint">סה"כ במבנים (לכמות "דירה" בכל מבנה)</td><td class="n num" style="font-size:12px;${su&&UU&&su!==UU?'color:#d92d20;font-weight:700':''}" title="${su&&UU&&su!==UU?'לא שווה ליח&quot;ד בפרויקט':''}">${su||'—'}</td></tr>`; })():'')).join('')}
        <tr><td>שיטת ביצוע</td><td class="n"><select data-pp="method" style="border:1px solid var(--line);border-radius:6px;padding:3px 6px"><option></option>${['ברנוביץ','קונבנציונלי','משולב','טרומי'].map(x=>`<option ${P.method===x?'selected':''}>${x}</option>`).join('')}</select></td></tr></table></div>
      ${MB.length>1?`<div style="grid-column:1/-1"><b style="font-size:13px">נתונים לפי מבנה</b> <span class="hint" style="margin:0;font-size:11px">– שטחים במ"ר. אם מולא, נתוני הפרויקט = סכום המבנים (מרתפים – ברמת הפרויקט)</span>
        <table class="boq plist" style="min-width:0;table-layout:auto;margin-top:4px"><thead><tr><th></th>${MB.map(b=>`<th class="n">${esc(b.code+' '+(b.name||''))}</th>`).join('')}<th class="n">סה"כ</th></tr></thead><tbody>
@@ -2476,7 +2493,9 @@ function pfSetBlds(n){ const MB=state.tree.filter(b=>b.t==='b'&&pfRole(b)==='res
     PMAP=null; save(); render(); pfSoon(); toast(`נוספו ${add.length} מבני מגורים לכתב הכמויות: ${add.join(', ')} (ריקים)`); return; }
   const empty=b=>{ let k=0; walk(b.ch||[],x=>{ if(x.t==='i') k++; }); return !k&&!b.area&&!b.units&&!b.fmix; };
   const del=MB.slice().reverse().filter(empty).slice(0,MB.length-n);
-  if(del.length<MB.length-n){ toast(`אפשר להסיר רק מבני מגורים ריקים (בלי סעיפים ונתוני טופס). ריקים: ${del.map(b=>b.code).join(', ')||'אין'}`); pfSoon(); return; }
+  if(del.length<MB.length-n){ const keep=MB.slice().reverse().filter(b=>!del.includes(b)).slice(0,MB.length-n-del.length);
+    if(!confirm(`${del.length?`מבנים ריקים להסרה: ${del.map(b=>b.code).join(', ')}.\n`:''}מבנים עם סעיפים – לא יימחקו, רק יוצאו ממבני המגורים (תפקיד "אחר", אפשר לשנות בשיוך המבנים): ${keep.map(b=>b.code+' '+(b.name||'')).join(', ')}.\nלהמשיך?`)){ pfSoon(); return; }
+    keep.forEach(b=>b.role='other'); del.forEach(b=>{ const i=state.tree.indexOf(b); if(i>=0) state.tree.splice(i,1); }); PMAP=null; save(); render(); pfSoon(); toast(`מבני מגורים: ${n}${keep.length?` · ${keep.map(b=>b.code).join(', ')} סומנו "אחר"`:''}${del.length?` · הוסרו ${del.length} ריקים`:''}`); return; }
   if(!confirm(`להסיר מכתב הכמויות את מבני המגורים הריקים: ${del.map(b=>b.code+' '+(b.name||'')).join(', ')}?`)){ pfSoon(); return; }
   del.forEach(b=>{ const i=state.tree.indexOf(b); if(i>=0) state.tree.splice(i,1); }); PMAP=null; save(); render(); pfSoon(); toast(`הוסרו ${del.length} מבנים ריקים`); }
 document.addEventListener('change',e=>{ const x=e.target; if(pfRendering||!x.closest||!x.closest('#view-proj')) return;
@@ -2543,6 +2562,7 @@ function finPanel(){
 }
 document.addEventListener('change',e=>{ const x=e.target; if(!x.dataset||!x.dataset.fin) return; state.fin=finRows(); const r=state.fin.find(f=>f.k===x.dataset.fin); if(!r) return;
   if(x.dataset.fk==='pct'||x.dataset.fk==='gr'){ const v=String(x.value).replace('%','').trim(); if(v!==''&&!Number.isFinite(+v)){ toast('מספר לא תקין'); return; } r[x.dataset.fk]=v; } else r.base=x.value; save(); render(); if(typeof pfSoon==='function') pfSoon(); });
+document.addEventListener('click',e=>{ const x=e.target.closest&&e.target.closest('[data-pnotres]'); if(!x) return; const b=state.tree.find(y=>y.id===+x.dataset.pnotres); if(!b) return; b.role='other'; PMAP=null; save(); render(); pfSoon(); toast(`מבנה ${b.code} הוצא ממבני המגורים (תפקיד "אחר")`); });
 document.addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('#fin_move')){ finMove(); if(typeof pfSoon==='function') pfSoon(); } });
 
 /* ---------- ריכוזי כמויות לפי נושא (בטון, ברזל, טפסנות...) – להדפסה ולאקסל ---------- */
