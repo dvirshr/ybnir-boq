@@ -516,7 +516,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='08.11.26-8';
+const APP_VER='08.11.26-9';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -736,6 +736,11 @@ function moveSib(l,i,j){ if(i===j) return; const a=Math.min(i,j), b=Math.max(i,j
   if(posC) l.slice(a,b+1).forEach((x,k)=>{ if(x.code!==posC[k]){ (x.oldCodes=x.oldCodes||[]).push(x.code); x.code=posC[k]; } }); }
 function parentList(id){ if(state.tree.some(n=>n.id===id)) return state.tree; let r=null; walk(state.tree,n=>{ if(n.ch&&n.ch.some(c=>c.id===id)) r=n.ch; }); return r; }
 function mk(t,extra={}){ state.nid++; return Object.assign({id:state.nid,t,ch:[]},extra); }
+/* תיקון קודים שבורים: סעיף עם '??' / ריק בתת-פרק שיש לו קוד תקין – מקבל קוד רץ; הקוד הקודם נשמר */
+function fixBadCodes(){ let n=0; walk(state.tree,(x)=>{ if(x.t!=='s'||!/^\d{2}\.\d{2}$/.test(String(x.code||''))) return;
+  for(const c of x.ch||[]){ if(c.t!=='i') continue; const cc=String(c.code||''); if(cc&&!/\?\?/.test(cc)) continue;
+    const old=cc; c.code=nextSecCode({code:x.code,ch:x.ch.filter(y=>y!==c&&y.code&&String(y.code).startsWith(x.code+'.'))}); if(old) (c.oldCodes=c.oldCodes||[]).push(old); n++; } });
+  return n; }
 function nextSecCode(sub){
   let max=0; for(const c of sub.ch){ const m=/\.(\d+)$/.exec(c.code||''); if(m) max=Math.max(max,+m[1]); }
   return (sub.code||'??')+'.'+String(max+1).padStart(3,'0');
@@ -1094,7 +1099,7 @@ tb.addEventListener('change',e=>{
   if((n.t==='r'||n.t==='k')&&['price','qexpr'].includes(f)) releaseSp(n);
   if(f==='code'&&n.t==='s') n.name='';
   if(f==='price'&&n.t==='k'){ n.pdate=new Date().toISOString().slice(0,10); n.psrc='ידני'; }
-  if(f==='code'&&n.t==='s'){ // renumber child sections that still carry an old prefix
+  if(f==='code'&&n.t==='s'&&/^\d{2}\.\d{2}$/.test(String(n.code||''))){ // renumber child sections that still carry an old prefix (רק כשקוד תת-הפרק תקין)
     for(const c of n.ch){ if(!c.code||!c.code.startsWith(n.code+'.')) c.code=nextSecCode({code:n.code,ch:n.ch.filter(x=>x!==c&&x.code&&x.code.startsWith(n.code+'.'))}); }
   }
   if(f==='code'&&(n.t==='c'||n.t==='s'||n.t==='b')){ const pl=parentList(n.id); if(pl) sortByCode(pl); }
@@ -3714,6 +3719,7 @@ async function openProject(id){
 function setState(st){
   state=st; if(!state.lists) state.lists=LISTS; if(!state.collapsed) state.collapsed={};
   if(mergeCatalog(state)) setTimeout(()=>scheduleCloud(),0);
+  { const fx=fixBadCodes(); if(fx){ setTimeout(()=>{ scheduleCloud(); toast(`תוקנו ${fx} קודי סעיפים שבורים (??) – הקוד הקודם נשמר`); },0); } }
   { const before=JSON.stringify(state.tree.map(b=>(b.ch||[]).map(c=>[c.id,(c.ch||[]).map(x=>x.id)]))); state.tree.sort((x,y)=>(x.code||'\uffff').localeCompare(y.code||'\uffff',undefined,{numeric:true})); state.tree.forEach(b=>{ if(b.t==='b'){ b.ch.sort((x,y)=>(x.code||'\uffff').localeCompare(y.code||'\uffff',undefined,{numeric:true})); b.ch.forEach(c=>{ if(c.t==='c') c.ch.sort((x,y)=>(x.code||'\uffff').localeCompare(y.code||'\uffff',undefined,{numeric:true})); }); } });
     if(JSON.stringify(state.tree.map(b=>(b.ch||[]).map(c=>[c.id,(c.ch||[]).map(x=>x.id)])))!==before) setTimeout(()=>scheduleCloud(),0); }
   SUGG=state.sugg||{}; PMAP=null; pendingDel=null; query=''; $('q').value='';
