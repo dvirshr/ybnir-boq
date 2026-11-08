@@ -512,7 +512,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='08.11.26-2';
+const APP_VER='08.11.26-3';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -3066,7 +3066,7 @@ const PM={p:'שאיבה (משאבה ניידת)',s:'משאבה סטטית',c:'י
 const PUMP_DEF=[{el:'ST',lv:'*',m:'c'},{el:'BL',lv:'*',m:'m'},{el:'S',lv:'*',m:'p'},{el:'F',lv:'*',m:'p'},{el:'V',lv:'-2',m:'p'},{el:'V',lv:'-1',m:'c'},{el:'V',lv:'0+',m:'c'},{el:'H',lv:'*',m:'p'}];
 function pumpRules(){ try{ return (typeof SETTINGS!=='undefined'&&SETTINGS&&Array.isArray(SETTINGS.pumpRules))?SETTINGS.pumpRules:PUMP_DEF; }catch(e){ return PUMP_DEF; } }
 function pumpCls(x){ const t=String(x.name||'').replace(/[‎‏]/g,'');
-  const VW=/קיר|עמוד|גרעין|מעקה|פיר|חגור/, HW=/לוח|תקר|רצפ|מדרג|פודסט|בטון\s*רזה|שיפועים|בטון\s*הגנה|קורות|קורה/;
+  const VW=/קיר|עמוד|גרעין|מעקה|פיר|חגור|אנכי/, HW=/לוח|תקר|רצפ|מדרג|פודסט|בטון\s*רזה|שיפועים|בטון\s*הגנה|קורות|קורה|אופקי/;
   const el=/בטון\s*רזה/.test(t)?'LC':/חגור/.test(t)?'BL':(/מהלכ|פודסט/.test(t)||(/מדרגות/.test(t)&&!/קיר|גרעין/.test(t)))?'ST':/דיפון|כלונס|שוטקריט|סלארי/.test(t)?'S':/יסוד|רפסוד|ראשי\s*כלונס|קור(ות|ת)\s*(יסוד|קשר)|מרצפ/.test(t)?'F':(VW.test(t)&&!/לוח|תקר|רצפ|רפסוד|מהלכ|פודסט/.test(t))?'V':HW.test(t)?'H':VW.test(t)?'V':'?';
   let lv=/(מרתף|מפלס|קומה)\s*-\s*[2-9]|(מרתף|מפלס)\s*[2-9]\s*-|מרתף\s*תחתון/.test(t)?'-2':/(מרתף|מפלס|קומה)\s*-\s*1(?!\d)|(מרתף|מפלס)\s*1\s*-|מרתף\s*עליון/.test(t)?'-1':/קומ(ה|ות)\s*[1-9]|גג/.test(t)?'1+':/קרקע|מסחר|קומה\s*0/.test(t)?'0':'';
   if(!lv){ const f=find(x.id), b=f&&f.path[0]; const ro=b&&typeof pfRole==='function'?pfRole(b):''; lv=(ro==='base'||ro==='earth'||/מרתף/.test(t))?'?':'0+'; }
