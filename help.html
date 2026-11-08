@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>עזרה – כתב כמויות י.ב ניר</title>
+<style>
+:root{--bg:#f7f8f7;--card:#fff;--ink:#1d2421;--muted:#667085;--line:#e3e7e5;--accent:#1f6f5c;--soft:#e8f3ef;--warn:#b54708;--mark:#fff3b0}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121615;--card:#1a201e;--ink:#e6ebe9;--muted:#98a2b3;--line:#2b3431;--accent:#5cc0a8;--soft:#1f2d29;--warn:#f79009;--mark:#5c4d00}}
+:root[data-theme="dark"]{--bg:#121615;--card:#1a201e;--ink:#e6ebe9;--muted:#98a2b3;--line:#2b3431;--accent:#5cc0a8;--soft:#1f2d29;--warn:#f79009;--mark:#5c4d00}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 "Segoe UI",Arial,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+header h1{font-size:18px;margin:0}
+header .v{color:var(--muted);font-size:12px}
+#q{flex:1;min-width:200px;max-width:420px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-size:14px}
+.wrap{display:grid;grid-template-columns:240px 1fr;gap:20px;max-width:1180px;margin:0 auto;padding:16px}
+nav{position:sticky;top:64px;align-self:start;max-height:calc(100vh - 80px);overflow:auto;font-size:14px}
+nav a{display:block;padding:4px 8px;border-radius:6px;color:var(--ink);text-decoration:none}
+nav a:hover{background:var(--soft)}
+main section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 20px;margin-bottom:14px}
+h2{font-size:18px;margin:0 0 8px;color:var(--accent)}
+h3{font-size:15px;margin:14px 0 4px}
+p{margin:6px 0}
+ul,ol{margin:6px 0;padding-inline-start:22px}
+table{border-collapse:collapse;width:100%;margin:8px 0;font-size:14px}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:right;vertical-align:top}
+th{background:var(--soft)}
+code,kbd{background:var(--soft);border-radius:4px;padding:0 5px;font-family:Consolas,monospace;font-size:13px}
+.b{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:0 6px;background:var(--bg);font-size:13px;white-space:nowrap}
+.tip{border-inline-start:3px solid var(--accent);background:var(--soft);padding:6px 10px;border-radius:6px;margin:8px 0}
+.warn{border-inline-start:3px solid var(--warn);padding:6px 10px;margin:8px 0;background:var(--soft);border-radius:6px}
+mark{background:var(--mark);color:inherit}
+.hide{display:none}
+#none{color:var(--muted);display:none}
+@media (max-width:820px){.wrap{grid-template-columns:1fr;padding:12px 16px}#q{min-width:0;width:100%}table{display:block;overflow-x:auto}main section{padding:12px}nav{position:static;max-height:none;display:flex;flex-wrap:wrap;gap:4px}nav a{border:1px solid var(--line)}}
+@media print{header,nav{display:none}.wrap{display:block}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header>
+ <h1>📘 עזרה – כתב כמויות י.ב ניר</h1>
+ <input id="q" type="search" placeholder="חיפוש: פחת, שאיבה, טעינת עריכה, ★ ..." aria-label="חיפוש בעזרה">
+ <span class="v">עודכן 08.11.26</span>
+</header>
+<div class="wrap">
+<nav id="toc"></nav>
+<main id="m">
+<p id="none">לא נמצאו תוצאות.</p>
+
+<section id="s-structure"><h2>מבנה המערכת</h2>
+<p>כתב הכמויות בנוי כעץ. כל רמה מסכמת את מה שמתחתיה:</p>
+<table><tr><th>רמה</th><th>דוגמה</th><th>הערות</th></tr>
+<tr><td>מבנה</td><td><code>10</code> בניין, <code>05</code> מרתף, <code>60</code> תקורות</td><td>לכל מבנה יש תפקיד (מגורים, מרתף, עפר, תקורות, אחר) – משפיע על טופס הפרויקט, יח"ד ובקרות</td></tr>
+<tr><td>פרק</td><td><code>02</code> שלד</td><td>שם הפרק לפי רשימת הפרקים</td></tr>
+<tr><td>תת-פרק</td><td><code>02.01</code></td><td></td></tr>
+<tr><td>סעיף</td><td><code>02.01.005</code> בטון ליסודות</td><td>כמות × מחיר יחידה. מחיר היחידה מחושב מהמשאבים, או מוקלד ידנית</td></tr>
+<tr><td>משאב</td><td>בטון ב-30, קבלן שלד</td><td>כמות (מספר / נוסחה / <code>=Q</code>) × מחיר</td></tr>
+<tr><td>מק"ט</td><td>פירוק משאב לרכיבים</td><td>אופציונלי</td></tr>
+</table>
+<p>לשוניות: <span class="b">כתב כמויות</span> <span class="b">טופס פרויקט</span> <span class="b">דשבורד</span> <span class="b">מחירון</span> <span class="b">רשימות</span>. מספר הגרסה מופיע בתחתית המסך.</p>
+<div class="tip">אחרי עדכון של המערכת: <kbd>Ctrl</kbd>+<kbd>F5</kbd> ובדיקה שמספר הגרסה בתחתית השתנה.</div>
+</section>
+
+<section id="s-projects"><h2>פרויקטים, גיבוי וגרסאות</h2>
+<ul>
+<li><span class="b">☰ פרויקטים</span> – רשימת הפרויקטים: פתיחה, <b>פרויקט חדש ריק</b>, <b>העלאה מהמחשב</b> (אקסל מכרז), <b>ייבוא מקובץ גיבוי</b>, <b>שכפול פרויקט</b> (בסיס למכרז דומה), הסתרה לארכיון.</li>
+<li><span class="b">גיבוי</span> – קובץ JSON של הפרויקט כולו.</li>
+<li><span class="b">גרסאות</span> – כל שמירה בענן נשמרת כגרסה; אפשר לצפות ולשחזר. לפני פעולות גדולות (טעינה, מחיקה מרובה) נשמרת גרסה אוטומטית.</li>
+<li><span class="b">יומן שינויים</span> – מי שינה, מה היה לפני ומה אחרי. אפשר להדפיס.</li>
+<li><span class="b">סל מחזור</span> – שחזור שורות שנמחקו.</li>
+</ul>
+<div class="tip">שינויים שעוד לא הגיעו לענן מסומנים בכותרת. אם הפרויקט לא נפתח – ראו <a href="#s-trouble">תקלות</a>.</div>
+</section>
+
+<section id="s-form"><h2>טופס פרויקט</h2>
+<ul>
+<li><b>נתונים כלליים</b> – שם, מיקום, שטחים, יח"ד, תאריכים, הגשה (<span class="b">📌 רשום הגשה</span> שומר את הסכום ומספר הגרסה ברגע ההגשה).</li>
+<li><b>מבני מגורים</b> – מספר מבנים; כל מבנה מגורים הוא מבנה נפרד בכתב הכמויות (10, 20, 30...) ועמודה בטופס. ליד כל מבנה – דירות במבנה וכפתור <span class="b">לא מגורים</span> שמוציא מבנה מהספירה (הסעיפים נשארים).</li>
+<li><b>הקטנת מספר המבנים</b> – מבנה ריק נמחק; מבנה עם סעיפים לא נמחק, רק מסומן "אחר" (באישור).</li>
+<li><b>שיוך מבנים לתפקיד</b> – בפאנל "ניתוח" ← "לפי תפקיד המבנה בכתב הכמויות" ← שורה מקופלת "שיוך מבנים לתפקיד". מבנה 99 או ששמו כולל "כללי/משותף" מזוהה אוטומטית כ"אחר".</li>
+<li><b>ניתוח</b> – עלות למ"ר / ליח"ד, חלוקה לפי תפקיד מבנה, השוואה לחציוני פרויקטים קודמים.</li>
+</ul>
+</section>
+
+<section id="s-boq"><h2>עבודה בכתב הכמויות</h2>
+<h3>הוספה ועריכה</h3>
+<ul>
+<li><span class="b">+ מבנה</span> בסרגל; בכל שורה – הוספת פרק / תת-פרק / סעיף מתחת או מיד אחרי.</li>
+<li>לחיצה על שם או קוד – עריכה במקום. לחיצה על שורת סעיף – פתיחת <a href="#s-item">טופס הסעיף</a>.</li>
+<li><span class="b">📝 הדבקת סעיפים</span> – הדבקת טקסט (שורה לכל סעיף, מופרד ב-<code>|</code>: מבנה | תת-פרק | תאור | יחידה | כמות | מחיר | הערה), עם מסך בחירה ובדיקת כפילויות.</li>
+</ul>
+<h3>הזזת שורות</h3>
+<table><tr><th>כפתור</th><th>פעולה</th></tr>
+<tr><td>⠿</td><td>גרירה – מחזיקים, גוררים ומשחררים מעל שורה אחרת באותה רמה. קו ירוק מראה לפני/אחרי.</td></tr>
+<tr><td>⤒ / ⤓</td><td>לראש / לסוף הרשימה בלחיצה אחת</td></tr>
+<tr><td>▲ / ▼</td><td>צעד אחד</td></tr>
+</table>
+<p>בסעיפים עם קודים רציפים – הקודים נשארים לפי המיקום והקוד הקודם נשמר (מוצג במעבר עכבר). להעברה לתת-פרק / מבנה אחר – כפתור <b>העבר</b> בשורה.</p>
+<h3>בחירה מרובה והעתקה</h3>
+<ul>
+<li><span class="b">☑ בחירה מרובה</span> – סימון פרקים / תתי-פרקים / סעיפים: העבר / העתק, <b>📋 לפרויקט אחר</b>, מחיקה (לסל המחזור), <b>🧹 הסרת פרקים ריקים</b>.</li>
+<li>העתקה ללוח מפרויקט אחד ← פתיחת פרויקט אחר ← <span class="b">📋 הדבק</span>.</li>
+</ul>
+<h3>סעיפים סגורים</h3>
+<p>✓ בשורה מסמן סעיף / תת-פרק כ"סגור" (טופל). <span class="b">✓ סגורים X/Y</span> בסרגל – מונה, ולחיצה מסתירה / מציגה את הסגורים.</p>
+<h3>מסמכים מצורפים 📎</h3>
+<p>בכל רמה אפשר לצרף קבצים (הצעות מחיר, תכניות), לבחור קובץ קיים מהספרייה, או להוסיף <b>🔗 קישור</b> (למשל מודל תלת-מימד). מסמכים ברמה עליונה מוצגים גם בסעיפים שמתחתיה.</p>
+</section>
+
+<section id="s-item"><h2>טופס סעיף ומשאבים</h2>
+<ul>
+<li><b>משאבים</b> – <span class="b">+ משאב לסעיף</span>; כמות המשאב: מספר, נוסחה, או <code>=Q</code> (= כמות הסעיף). <span class="b">הצמד לכמות הסעיף (=Q)</span> עושה זאת בלחיצה.</li>
+<li><b>משאב מוביל ★</b> – כמות הסעיף נלקחת מהמשאב. לחיצה על ★ = ניתוק (הכמות נשארת כמספר). <span class="b">כמות סעיף ★</span> בסרגל מאתר סעיפים בלי כמות או עם כמות שונה מהמשאב.</li>
+<li><b>מחיר ידני</b> – מחיר יחידה שהוקלד גובר על המשאבים. <span class="b">בטל – חשב לפי משאבים</span> מחזיר לחישוב.</li>
+<li><b>פירוט חישוב כמויות</b> – <span class="b">+ שורת חישוב</span>: מידות × כמות, שורות התאמה, הערות מקור. הכמות מחושבת מהפירוט.</li>
+<li><b>כמות אוטומטית</b> – סעיפים לפי יח"ד / שטח מטופס הפרויקט. הקלדת כמות = דריסה; מחיקתה מחזירה לאוטומטי.</li>
+<li><b>כמות לפי בטון</b> – סעיף ברזל: ק"ג/מ"ק × בטון כולל פחת; סעיף שאיבה בתקורות: מקדם 1 (ראו <a href="#s-pump">שאיבה</a>).</li>
+<li><b>הערות</b> – הערה לסעיף ולמשאב; מוצגות בהדפסה ובייצוא.</li>
+</ul>
+</section>
+
+<section id="s-waste"><h2>פחת</h2>
+<h3>סדר עדיפויות</h3>
+<ol>
+<li><b>פחת ידני</b> בשורה (סעיף או משאב) – גובר על הכול.</li>
+<li><b>"ללא פחת כללי"</b> בשורה – מבטל את טבלת הפחת לשורה.</li>
+<li><b>טבלת פחת כללי</b> (לשונית <span class="b">רשימות</span>) – כללים לפי: מק"ט ← תת-פרק ← פרק ← נושא. הכלל הספציפי ביותר קובע.</li>
+</ol>
+<table><tr><th>רמת החלה</th><th>מה קורה</th></tr>
+<tr><td>חומר (משאב)</td><td>כמות הסעיף לא משתנה; עלות המשאב גדלה</td></tr>
+<tr><td>כמות סעיף</td><td>לבטון: כמות הסעיף גדלה, ועוברת הלאה לשאיבה ולברזל לפי בטון</td></tr>
+</table>
+<ul>
+<li>הטבלה משותפת לכל הפרויקטים. כל פרויקט חדש מפעיל אותה אוטומטית; בפרויקטים ישנים – הפעלה בטופס הפרויקט.</li>
+<li>משאבים בסעיף שיש לו פחת בסעיף – לא מקבלים פחת כללי (אין כפל).</li>
+<li>נושא "בטון כלונסאות" (מ"ק + "כלונס" + "בטון") מקבל פחת קבוע.</li>
+</ul>
+<div class="tip"><span class="b">בקרה</span> ← לשונית <b>פחת</b>: כל שורה שמקבלת פחת, סימון שכבות כפולות (סעיף + ★ מוביל + משאב + בטון מקושר), הסרה מרוכזת וביטול.</div>
+</section>
+
+<section id="s-pump"><h2>שאיבת בטון ושיטת יציקה</h2>
+<p>לסעיף בטון <b>לא</b> נוצר סעיף שאיבה משלו. כמות השאיבה מחושבת אוטומטית בסעיפי השאיבה בתקורות.</p>
+<h3>איפה מגדירים</h3>
+<p><span class="b">בקרה</span> (בסרגל) ← לשונית <b>שאיבה</b>:</p>
+<ol>
+<li><b>כללי שיטת יציקה</b> (מקופל למעלה, משותף לכל הפרויקטים) – סוג אלמנט + מפלס ← שיטה. הכלל הראשון שמתאים קובע.</li>
+<li><b>שלב 1</b> – לכל סעיף שאיבה בתקורות (מ"ק, "משאבות/שאיבת בטון" בשם) רושמים את קודי המבנים שהוא משרת. הכמות מתמלאת אוטומטית.</li>
+<li><b>שיטה לפי תת-פרק</b> (מקופל) – דריסה לכל סעיפי הבטון בתת-פרק.</li>
+<li><b>טבלת הסעיפים</b> – בחירת שיטה לסעיף בודד ("אוטו'" = לפי הכללים).</li>
+</ol>
+<h3>שיטות</h3>
+<table><tr><th>שיטה</th><th>נספר בשאיבה בתקורות?</th></tr>
+<tr><td>שאיבה (משאבה ניידת)</td><td>כן – לפי מ"ק</td></tr>
+<tr><td>משאבה סטטית</td><td>לא – העלות בסעיף המשאבה הסטטית (השכרה / קומפ')</td></tr>
+<tr><td>יציקה עם מנוף / ידנית</td><td>לא</td></tr>
+</table>
+<p>מפלסים בכללים: מרתף ‎-2 ומטה · מרתף ‎-1 · קרקע / מסחר · קומה 1 ומעלה + גג · קרקע ומעלה (=הכול מעל המרתפים). המערכת מזהה מהתאור: "מרתף 3-", "מרתף ‎-3", "קומה 5", "קומות 3-13", "גג", "קרקע", "מסחר".</p>
+<div class="tip">דוגמה – משאבה סטטית מקומה 1: כלל חדש <i>אופקי – תקרות / רצפות · קומה 1 ומעלה + גג · משאבה סטטית</i>, <b>מעל</b> הכלל הכללי של תקרות.</div>
+<h3>סטטוסים</h3>
+<p>✅ שאיבה בסעיף · 🔗 בתקורות · 🏗 סטטית · ⬜ מנוף · ✋ ידני · ❌ בשאיבה ולא מכוסה · ❓ לא מסווג · ⛔ כפל (משאב שאיבה בסעיף וגם בתקורות). בקרה: כלל 1 (שאיבה ≤ בטון) וכלל 22 (כיסוי שאיבה).</p>
+</section>
+
+<section id="s-prices"><h2>מחירים ומחירון</h2>
+<ul>
+<li>לשונית <span class="b">מחירון</span> – מחירון החברה לפי מק"ט ויחידה, עם תאריך ומקור. מחיר ישן משנה מסומן.</li>
+<li>במחיר שונה מהמחירון מופיע סימון – לחיצה מחליפה במחיר המחירון.</li>
+<li><b>📥 משיכה לסעיף</b> – חיפוש סעיף מקביל בפרויקט אחר / במחירון, דירוג לפי דמיון, בחירה והעתקת משאבים (כולל כמויות קבועות – לפי בחירה).</li>
+<li><b>עדכון מחירון מכתב הכמויות</b> – העברת מחירי משאבים מהפרויקט למחירון, עם מסך בחירה.</li>
+</ul>
+</section>
+
+<section id="s-oh"><h2>תקורות</h2>
+<ul>
+<li><span class="b">🏗 מבנה תקורות</span> – תבנית קבועה לתקורות והתארגנות: שמירת המבנה מהפרויקט כתבנית, והחלה על פרויקט אחר עם מסך בחירה.</li>
+<li><span class="b">העמסת תקורות</span> – פיזור עלות התקורה (כולל רווח) על מחירי הסעיפים הישירים, יחסית לחלקם. <b>תצוגה בלבד</b> – לא משנה נתונים ולא את ייצוא פריוריטי. אפשר לשייך ברמת סעיף / תת-פרק / פרק, כולל פרקי תקורה בתוך מבנה.</li>
+<li><b>סעיפי אחוז</b> – סעיף שמחושב כאחוז מישיר / ישיר + תקורות.</li>
+</ul>
+</section>
+
+<section id="s-qc"><h2>בקרה וריכוזים</h2>
+<ul>
+<li><span class="b">בקרה</span> – לשוניות: <b>ממצאים</b> (כללי בקרה: שאיבה ≤ בטון, ריצוף/חיפוי מול שטח, פחת חריג, יחידות, סעיפים בלי עלות, קישור ברזל ↔ בטון, השוואה לפרויקטים קודמים...), <b>סיווג משאבים</b>, <b>שאיבה</b>, <b>נושאי סעיפים</b>, <b>פחת</b>. ממצא שנבדק – "סמן תקין".</li>
+<li><span class="b">ריכוזים</span> – ריכוז כמויות לפי נושא (בטון, ברזל, טפסנות, ריצוף...) להדפסה ולאקסל.</li>
+<li><span class="b">כמות סעיף ★</span> – סעיפים בלי כמות או עם כמות שונה מהמשאב המוביל.</li>
+<li><b>דשבורד</b> ו-<b>⚖ השוואת פרויקטים</b> – נתונים עיקריים בין פרויקטים, מוצמדים למדד, עם חריגים ואומדן מהיר.</li>
+</ul>
+</section>
+
+<section id="s-excel"><h2>עריכה באקסל וטעינה</h2>
+<ol>
+<li><span class="b">אקסל לעריכה</span> – מוריד קובץ עם כל השורות (מבנה, קוד, רמה, תאור, יחידה, כמות, מחיר, פחת, הערה, עמודת <b>פעולה</b>).</li>
+<li>עורכים באקסל: שינוי ערכים, שורות חדשות, ועמודת פעולה:
+ <ul><li><code>מחק</code> / <code>x</code> – מחיקה</li><li>פעולה שמסתיימת ב-<code>?</code> – שינוי לבחירה (לא מסומן בברירת מחדל)</li><li><code>תיקון</code> / <code>התאמה</code> – שורת התאמה בפירוט החישוב</li></ul></li>
+<li>משאב חדש: רמה <code>משאב</code>, מק"ט, כמות (<code>=Q</code> כטקסט = כמות הסעיף), מחיר יחידה.</li>
+<li><span class="b">טעינת עריכה</span> – מסך תצוגה מקדימה: כל שינוי עם ✓, בחירה ואישור. לפני הטעינה נשמרת גרסה.</li>
+</ol>
+<div class="warn">תא מחיר ריק – לא משנה מחיר. תא מחיר עם נוסחה – לא נטען. מחיר למשאב משחרר מחיר ידני של הסעיף.</div>
+</section>
+
+<section id="s-export"><h2>ייצוא והדפסה</h2>
+<table><tr><th>כפתור</th><th>מה יוצא</th></tr>
+<tr><td>ייצוא לפריוריטי</td><td>קובץ לטעינה בפריוריטי (ללא העמסת תקורות)</td></tr>
+<tr><td>ייצוא לאקסל</td><td>כתב הכמויות המלא</td></tr>
+<tr><td>ייצוא לאפי</td><td>כתב כמויות נקי ברמת סעיף; DataSheet: כמות כוללת פחת (ברירת מחדל) או נטו, + גיליון "פחת" לבדיקה</td></tr>
+<tr><td>הצעת מחיר ללקוח</td><td>ברמת סה"כ / מבנה / פרק / תת-פרק / סעיף, קיבוץ, שינוי שמות, התאמות ועיגול; שמירה כתבנית; הדפסה / אקסל</td></tr>
+<tr><td>הדפסה / PDF</td><td>כתב הכמויות לפי הרמה הפתוחה</td></tr>
+</table>
+</section>
+
+<section id="s-lists"><h2>רשימות</h2>
+<p>לשונית <span class="b">רשימות</span>: פרקים ותתי-פרקים, טבלת מק"טים, טבלת פחת כללי, ועדכון רשימות מקובץ אקסל. הרשימות משותפות לכל הפרויקטים.</p>
+</section>
+
+<section id="s-trouble"><h2>תקלות נפוצות</h2>
+<table><tr><th>תסמין</th><th>מה עושים</th></tr>
+<tr><td>שינוי שהועלה לא מופיע</td><td><kbd>Ctrl</kbd>+<kbd>F5</kbd>, ובדיקת מספר הגרסה בתחתית</td></tr>
+<tr><td>פרויקט לא נפתח / שגיאה בפתיחה</td><td>לוח העתקה פגום בדפדפן: F12 ← Console ← <code>localStorage.removeItem('ybnir-boq-clip')</code> ← רענון</td></tr>
+<tr><td>"שינויים שלא נשמרו בענן"</td><td>לא לסגור את הדפדפן; לבדוק חיבור ולשמור שוב</td></tr>
+<tr><td>כמות סעיף לא מתעדכנת</td><td>לבדוק משאב מוביל ★ / דריסה ידנית / פירוט חישוב</td></tr>
+<tr><td>שאיבה לא תואמת לבטון</td><td>בקרה ← שאיבה: שלב 1 (מבנים לסעיף השאיבה), ❓ לא מסווג, ⛔ כפל</td></tr>
+</table>
+</section>
+</main>
+</div>
+<script>
+(function(){
+ var secs=[].slice.call(document.querySelectorAll('main section')), toc=document.getElementById('toc');
+ secs.forEach(function(s){ var a=document.createElement('a'); a.href='#'+s.id; a.textContent=s.querySelector('h2').textContent; toc.appendChild(a); });
+ var orig=secs.map(function(s){return s.innerHTML;}), q=document.getElementById('q'), none=document.getElementById('none');
+ function esc(t){return t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+ q.addEventListener('input',function(){
+  var v=q.value.trim(), n=0;
+  secs.forEach(function(s,i){
+   s.innerHTML=orig[i];
+   if(!v){ s.classList.remove('hide'); n++; return; }
+   var hit=s.textContent.indexOf(v)>=0; s.classList.toggle('hide',!hit);
+   if(hit){ n++; var w=document.createTreeWalker(s,NodeFilter.SHOW_TEXT,null), L=[], x; while((x=w.nextNode())) if(x.nodeValue.indexOf(v)>=0) L.push(x);
+    L.forEach(function(t){ var sp=document.createElement('span'); sp.innerHTML=t.nodeValue.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(new RegExp(esc(v),'g'),'<mark>$&</mark>'); t.parentNode.replaceChild(sp,t); }); }
+  });
+  none.style.display=n?'none':'block';
+ });
+})();
+</script>
+</body>
+</html>
