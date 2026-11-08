@@ -512,7 +512,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='08.11.26-6';
+const APP_VER='08.11.26-7';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -3076,9 +3076,10 @@ function pumpCls(x){ const t=String(x.name||'').replace(/[‎‏]/g,'');
   else if(/מרתף\s*תחתון/.test(t)) n=-9; else if(/מרתף\s*עליון/.test(t)) n=-1;
   else if((m=t.match(/קומ(?:ה|ות)\s*(\d+)/))&&+m[1]>0) n=+m[1];
   else if(/גג/.test(t)) n=99; else if(/קרקע|מסחר|קומה\s*0/.test(t)) n=0;
+  else if(/מרתף/.test(t)||lv==='?') n=-1;   // מרתף לא ממוספר / מבנה מרתף-עפר – נחשב מתחת לקרקע
   else if(lv==='0+') n=1;
   return {el,lv,n}; }
-function pumpLvTxt(c){ const n=c&&c.n; return n===null||n===undefined?(c&&c.lv==='0+'?'מעל הקרקע (משוער)':'לא מזוהה'):n===99?'גג':n===0?'קרקע / מסחר':n<0?(n===-9?'מרתף תחתון':'מרתף ‎'+n):'קומה '+n; }
+function pumpLvTxt(c){ const n=c&&c.n; return n===null||n===undefined?'לא מזוהה':n===99?'גג':n===0?'קרקע / מסחר':n<0?(n===-9?'מרתף תחתון':(c.lv==='?'||!/\d/.test(c.lv)?'מרתף (לא ממוספר, ‎-1)':'מרתף ‎'+n)):(c.lv==='0+'&&n===1?'מעל הקרקע (משוער, 1)':'קומה '+n); }
 const LV2R={'-2':['','-2'],'-1':['-1','-1'],'0+':['0',''],'0':['0','0'],'1+':['1',''],'*':['','']};
 function pumpRuleRange(r){ if(r.lo!==undefined||r.hi!==undefined) return [r.lo===undefined?'':String(r.lo),r.hi===undefined?'':String(r.hi)]; return LV2R[r.lv]||['','']; }
 function pumpMeth(x){ if(x.pmp==='p'||x.pmp==='n') return {m:'p',src:'סעיף'}; if(x.pmp==='c'||x.pmp==='m'||x.pmp==='s'||x.pmp==='x') return {m:x.pmp,src:'סעיף'};
