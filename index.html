@@ -113,6 +113,9 @@ main{padding-block:16px 60px;padding-inline:clamp(6px,1.2vw,1.5cm);max-width:non
 @media (min-width:1100px){ #view-boq .tablewrap{overflow:clip;overflow-clip-margin:0} #view-boq>.toolbar{position:sticky;top:var(--toph,0px);z-index:15;background:var(--bg);margin-block-end:0;padding-block:8px 10px;box-shadow:0 1px 0 var(--line)} #view-boq .boq thead th{top:calc(var(--toph,0px) + var(--tbh,0px))} }
 @media (max-width:1099.98px){ .top{position:static} #view-boq .tablewrap{overflow:auto;max-height:calc(100dvh - 130px)} }
 @media print{ #view-boq .boq thead th{position:static} }
+#crumb{flex-basis:100%;display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:13px;margin-top:6px;min-height:22px}
+#crumb a{color:var(--ink);text-decoration:none;padding:1px 8px;border-radius:999px;background:var(--surface);border:1px solid var(--line);cursor:pointer;white-space:nowrap;max-width:320px;overflow:hidden;text-overflow:ellipsis}
+#crumb a:hover{border-color:var(--accent)}#crumb .sep{color:var(--muted)}#crumb .lbl{color:var(--muted);font-size:12px}
 table.boq{border-collapse:collapse;width:100%;min-width:980px;table-layout:fixed}
 .boq th{position:sticky;top:0;z-index:6;background:var(--surface);font-size:12px;letter-spacing:.04em;color:var(--muted);font-weight:600;text-align:start;padding:8px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 .boq td{padding:4px 8px;border-bottom:1px solid var(--line2);vertical-align:middle}
@@ -309,7 +312,7 @@ table.boq.plist{min-width:0!important;width:100%}
     <button class="btn" id="btnPrint">הדפסה / PDF</button>
     <button class="btn" id="btnBackup">גיבוי</button>
     <button class="btn" id="btnVersions">גרסאות</button>
-    <button class="btn" id="btnLog" title="מי שינה / הוסיף / מחק – ומה היה לפני">יומן שינויים</button><a class="btn" id="btnHelp" href="help.html" target="_blank" rel="noopener" title="מדריך למשתמש – חיפוש לפי נושא" style="text-decoration:none">❓ עזרה</a>
+    <button class="btn" id="btnLog" title="מי שינה / הוסיף / מחק – ומה היה לפני">יומן שינויים</button><a class="btn" id="btnHelp" href="help.html" target="_blank" rel="noopener" title="מדריך למשתמש – חיפוש לפי נושא" style="text-decoration:none;color:inherit">❓ עזרה</a>
     <span class="cloud" id="cloudState">לא מחובר</span>
     <span class="save" id="saveState" hidden></span>
   </div>
@@ -336,6 +339,7 @@ table.boq.plist{min-width:0!important;width:100%}
       <button class="btn" id="btnQC" title="בקרת כמויות: שאיבה מול בטון, ריצוף מול שטח, פחת, יחידות, סעיפים בלי עלות">בקרה</button>
       <button class="btn" id="btnSugg" hidden>הצעת משאבים לסעיפים</button>
       <span id="suggState"></span>
+      <div id="crumb" class="crumb" aria-live="polite" hidden></div>
     </div>
     <div class="tablewrap">
       <table class="boq">
@@ -512,7 +516,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='08.11.26-7';
+const APP_VER='08.11.26-8';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -977,6 +981,24 @@ function countDesc(n){ let c=0; walk(n.ch,()=>c++); return c; }
 /* ---------- events ---------- */
 const tb=document.getElementById('tb');
 let dragId=null;
+/* פירורי לחם: מבנה › פרק › תת-פרק של השורה העליונה בטבלה – מתעדכן בגלילה */
+(function(){ const cr=document.getElementById('crumb'); if(!cr) return; let raf=0, last='';
+  const NM={b:'מבנה',c:'פרק',s:'תת-פרק'};
+  function upd(){ raf=0; const view=document.getElementById('view-boq'); if(!view||view.hidden||!tb.rows.length){ cr.hidden=true; return; }
+    const th=view.querySelector('.boq thead th'); const y=th?th.getBoundingClientRect().bottom:0;
+    let row=null; for(const r of tb.querySelectorAll('tr[data-id]')){ const b=r.getBoundingClientRect(); if(b.bottom>y+2){ row=r; break; } }
+    if(!row){ cr.hidden=true; return; }
+    const f=find(+row.dataset.id); if(!f){ cr.hidden=true; return; }
+    const chain=(f.path||[]).filter(x=>NM[x.t]).concat(NM[f.n.t]?[f.n]:[]);
+    const key=chain.map(x=>x.id).join('>'); if(key===last&&!cr.hidden) return; last=key;
+    if(!chain.length){ cr.hidden=true; return; }
+    cr.innerHTML='<span class="lbl">📍</span>'+chain.map(x=>`<a data-cid="${x.id}" title="${NM[x.t]} ${esc(x.code||'')} – קפיצה לשורה">${NM[x.t]} ${esc(x.code||'')} ${esc((nodeName(x)||'').slice(0,40))}</a>`).join('<span class="sep">›</span>');
+    cr.hidden=false; }
+  const ask=()=>{ if(!raf) raf=requestAnimationFrame(upd); };
+  window.addEventListener('scroll',ask,{passive:true,capture:true}); window.addEventListener('resize',ask);
+  new MutationObserver(ask).observe(tb,{childList:true});
+  cr.addEventListener('click',e=>{ const a=e.target.closest('[data-cid]'); if(!a) return; const r=tb.querySelector(`tr[data-id="${a.dataset.cid}"]`); if(r){ const view=document.getElementById('view-boq'), th=view.querySelector('.boq thead th'); r.scrollIntoView({block:'start'}); const off=(th?th.getBoundingClientRect().bottom:0)-r.getBoundingClientRect().top; if(off>0) window.scrollBy(0,-off-4); } });
+  setTimeout(ask,300); })();
 tb.addEventListener('dragstart',e=>{ const h=e.target.closest&&e.target.closest('[data-drag]'); if(!h){ return; } dragId=+h.dataset.drag; e.dataTransfer.effectAllowed='move'; try{ e.dataTransfer.setData('text/plain',String(dragId)); const tr=h.closest('tr'); if(tr) e.dataTransfer.setDragImage(tr,20,10); }catch(err){} });
 const dropTr=e=>{ const tr=e.target.closest&&e.target.closest('tr[data-id]'); if(!tr||dragId==null) return null; const id=+tr.dataset.id; if(id===dragId) return null;
   const l=parentList(dragId); if(!l||!l.some(x=>x.id===id)) return null; return tr; };
