@@ -166,6 +166,7 @@ tr:hover .rowact,tr:focus-within .rowact{opacity:1}
 tr.L1 .share i{background:var(--lv1-ink);opacity:.7}
 .confirm{display:inline-flex;gap:4px;align-items:center;font-size:13px}
 .confirm .btn{padding:1px 8px}
+.qhl{padding:4px 6px;white-space:pre-wrap;cursor:text;border:1px dashed transparent;border-radius:6px;line-height:1.45;flex:1;min-width:0}.qhl:hover{border-color:var(--line)}mark.qm{background:#fde047;color:#111;padding:0 1px;border-radius:2px}
 .noterow td{font-size:13px;color:var(--ink2);background:var(--warn-soft);padding-block:4px 6px;border-bottom:1px solid var(--line2);white-space:pre-wrap}
 .pill.note{background:var(--line2);color:var(--ink2);cursor:pointer;border:none}
 .pill.warn{background:var(--warn-soft);color:var(--warn);cursor:pointer;border:none}
@@ -326,7 +327,8 @@ table.boq.plist{min-width:0!important;width:100%}
       <div class="seg" id="levelSeg">
         <button data-lv="1">מבנה</button><button data-lv="2">פרק</button><button data-lv="3">תת-פרק</button><button data-lv="4">סעיף</button><button data-lv="5">משאב</button><button data-lv="6">מק"ט</button>
       </div>
-      <input class="search" id="q" type="search" placeholder="חיפוש: תאור, קוד, מק&quot;ט, הערה">
+      <input class="search" id="q" type="search" placeholder="חיפוש: תאור, קוד, מק&quot;ט · &quot;ביטוי מדויק&quot;" title="כל מילה מתחילת מילה, בכל סדר (בלוק ← בלוקים). &quot;במירכאות&quot; = ביטוי מדויק. קוד: 02.04 = כל מה שמתחיל ב-02.04">
+      <select id="qScope" class="search" style="width:auto;min-width:0" title="איפה לחפש"><option value="s">חיפוש: סעיפים ומבנה</option><option value="r">+ משאבים ומק"טים</option><option value="all">+ משאבים + הערות</option></select><span class="label" id="qCount" style="min-width:0"></span>
       <select id="qf" class="search" style="width:auto;min-width:170px" title="סינון שורות"><option value="">סינון: הכל</option></select>
       <label class="label" style="display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="showNotes"> הצג הערות</label>
       <button class="btn" id="btnAddB">+ מבנה</button>
@@ -516,7 +518,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='08.11.26-9';
+const APP_VER='09.11.26-1';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -750,8 +752,29 @@ function nextSecCode(sub){
 const caretSvg='<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
-/* חיפוש: רצף מדויק, או כל המילים בכל סדר (מתעלם ממרכאות/גרש, ומאות-יחס בתחילת מילה) */
-function selfMatch(n){ const q=query.toLowerCase(); const T=[n.code,nodeName(n),n.note||'',wVal(n)?'פחת':''].join(' ').toLowerCase(); return T.includes(q)||wordScore(q,T)===1; }
+/* חיפוש מדויק: כל מילה חייבת להופיע בתחילת מילה (בלוק → בלוקים, לא "טון" בתוך "בטון"), בכל סדר.
+   "ביטוי במירכאות" = רצף מדויק. קוד/מספר = התאמה בתחילת קוד/מספר. הערות – רק כשמסומן "כולל הערות". */
+let qScope='s', QP=null, QPk='';
+const Q_SEP='["\'״׳`]?';
+function qEsc(t){ return t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+function qPat(w){ const c=[...w].map(qEsc); if(c.length>=4&&/[\u0590-\u05FF]/.test(w)&&c[c.length-1]==='ה') c[c.length-1]='[הת]'; return c.join(Q_SEP); }
+function qParse(){ if(QPk===query&&QP) return QP; QPk=query; const ph=[]; let q=query.replace(/"([^"]+)"|״([^״]+)״/g,(m,a,b)=>{ ph.push((a||b).trim()); return ' '; });
+  const W=q.split(/[\s,;]+/).map(w=>w.replace(/^["'״׳]+|["'״׳]+$/g,'')).filter(Boolean);
+  const res=[];
+  for(const w of W){ const code=/^[\d.\-\/]+$/.test(w); const heb=/[֐-׿]/.test(w);
+    const pre=heb&&w.replace(/["'״׳]/g,'').length>=4?'(?:[והבלמשכ]'+Q_SEP+'){0,2}':'';
+    res.push(code?new RegExp('(^|[^\\d])('+qEsc(w)+')','g'):new RegExp('(^|[^\\p{L}\\p{N}])'+pre+'('+qPat(w)+')','giu')); }
+  for(const p of ph) res.push(new RegExp('()('+p.split(/\s+/).map(qPat).join('\\s+')+')','giu'));
+  QP=res; return res; }
+function qText(n,withNote){ const nm=n.t==='c'?(chMap()[n.code]||nodeName(n)||''):n.t==='s'?(nodeName(n)||''):n.t==='i'||n.t==='b'?(n.name||''):(nodeName(n)||''); return [n.code||'',nm,withNote?(n.note||''):''].join('   '); }
+function selfMatch(n){ const P=qParse(); if(!P.length) return true; const T=(qScope==='s'&&(n.t==='r'||n.t==='k'))?(n.code||''):qText(n,qScope==='all'); return P.every(re=>{ re.lastIndex=0; return re.test(T); }); }
+function qHl(text){ const t=String(text??''); if(!query) return esc(t); const P=qParse(); const R=[];
+  for(const re of P){ re.lastIndex=0; let m; while((m=re.exec(t))){ const st=m.index+m[1].length; const en=st+m[2].length; if(en>st) R.push([st,en]); if(re.lastIndex===m.index) re.lastIndex++; } }
+  if(!R.length) return esc(t); R.sort((a,b)=>a[0]-b[0]); const M=[]; for(const r of R){ const l=M[M.length-1]; if(l&&r[0]<=l[1]) l[1]=Math.max(l[1],r[1]); else M.push(r.slice()); }
+  let o='', i=0; for(const [a,b] of M){ o+=esc(t.slice(i,a))+'<mark class="qm">'+esc(t.slice(a,b))+'</mark>'; i=b; } return o+esc(t.slice(i)); }
+function qMark(n,html){ if(!query||!['b','c','s','i','r','k'].includes(n.t)||!selfMatch(n)) return html;
+  const nm=qText(n,false).split('   ')[1]; const hl=qHl(nm); if(!/class="qm"/.test(hl)) return html;
+  return html.replace(/<(textarea|input)(\s[^>]*?data-f="(?:name|subpick|chpick|item|res)"[^>]*)>/,(m,tag,attrs)=>`<div class="qhl" data-qe="${n.id}" title="לחיצה לעריכה">${hl}</div><${tag} style="display:none" data-qhid="1"${attrs}>`); }
 let qf='';
 const QF={noq:'סעיפים ללא כמות',nop:'סעיפים ללא מחיר (0 ₪)',resnop:'משאבים / מק"טים ללא מחיר',w:'שורות עם פחת',lead:'סעיפים עם משאב מוביל ★'};
 function fMatch(n){
@@ -786,13 +809,14 @@ function render(){
       if(!pm && !matches(n)) continue;
       if(state.hideDone&&['c','s','i'].includes(n.t)){ const dc=doneCnt(n); if(dc.a&&dc.d===dc.a) continue; }
       rows.push(rowHtml(n,G,parent));
-      if(n.t==='i' && n.note && state.showNotes) rows.push(`<tr class="noterow"><td></td><td colspan="8">${esc(n.note)}</td></tr>`);
+      if(n.t==='i' && n.note && (state.showNotes||(query&&qScope==='all'&&selfMatch(n)&&/class="qm"/.test(qHl(n.note))))) rows.push(`<tr class="noterow"><td></td><td colspan="8">${query?qHl(n.note):esc(n.note)}</td></tr>`);
       const act=query||qf; const open=!state.collapsed[n.id] || act;
       if(n.ch && open) addRows(n.ch,n,pm||(act&&(n.t==='r'||n.t==='i')&&selfOK(n)));
       if(n.t!=='k' && open && !act && (n.t!=='r'||hasItems(n))) rows.push(addRowHtml(n));
     }
   };
   addRows(state.tree,null);
+  { const qc=document.getElementById('qCount'); if(qc){ if(query){ let k=0; walk(state.tree,x=>{ if(['c','s','i','r','k'].includes(x.t)&&selfMatch(x)) k++; }); qc.innerHTML=`<b style="color:${k?'var(--accent)':'#d92d20'}">${k}</b> התאמות`; } else qc.textContent=''; } }
   document.getElementById('tb').innerHTML = rows.join('') || '<tr><td colspan="9" class="empty">'+((query||qf)?'אין שורות שתואמות לחיפוש / לסינון.':'אין שורות. הוסף מבנה ראשון.')+'</td></tr>';
   if(typeof qcSoon==='function') qcSoon();
   if(typeof updDoneBtn==='function') updDoneBtn();
@@ -979,7 +1003,7 @@ function rowHtml(n,G){
   const del = pendingDel===n.id
     ? `<span class="confirm">למחוק${n.ch&&n.ch.length?' כולל '+countDesc(n)+' שורות':''}? <button class="btn small" data-act="delyes" data-id="${n.id}">מחק</button><button class="btn small" data-act="delno">ביטול</button></span>`
     : `${(n.t==='r'&&(parentOf(n.id)||{}).t==='i')||n.t==='k'?(n.lead?`<button class="ib" data-act="qunlink" data-id="${n.id}" title="מוביל – כמות הסעיף נלקחת מכאן. לחיצה = ניתוק" style="color:var(--accent);font-weight:700">★ מוביל</button>`:(!canLead(n)?'':`<button class="ib" data-act="qlink" data-id="${n.id}" title="קבע את הכמות בשורה הזו ככמות הסעיף (מוביל)">☆ לסעיף</button>`)):''}${n.t==='r'&&!hasItems(n)?`<button class="ib" data-act="add" data-id="${n.id}" title="פירוק המשאב למק&quot;טים" style="color:var(--accent);font-weight:600">+ מק"ט</button>`:''}${(n.t==='i'||n.t==='r'||n.t==='k')?`<button class="ib" data-act="form" data-id="${n.id}">טופס</button>`:''}${n.t==='i'?`<button class="ib" data-act="addafter" data-id="${n.id}" title="הוסף סעיף חדש מיד אחרי הסעיף הזה" style="color:var(--accent);font-weight:600">+ אחרי</button><button class="ib" data-act="move" data-id="${n.id}" title="העבר סעיף לתת-פרק / פרק / מבנה אחר">העבר</button>`:''}${n.t==='c'&&n.ch.length?`<button class="ib" data-act="movec" data-id="${n.id}" title="העבר או העתק את הפרק למבנה אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length?`<button class="ib" data-act="move" data-id="${n.id}" title="העבר את כל הסעיפים של תת-הפרק לתת-פרק / פרק אחר">העבר</button>`:''}${n.t==='s'&&n.ch.length>1?`<button class="ib" data-act="renum" data-id="${n.id}" title="מספור מחדש של הסעיפים בתת-פרק לפי הסדר המוצג">מספור</button>`:''}${['i','c','s'].includes(n.t)?`<button class="ib" data-act="att" data-id="${n.id}" title="מסמכים (הצעות מחיר) ובסיס מחיר">📎</button>`:''}${pasteBtns(n)}<button class="ib" data-act="copy" data-id="${n.id}" title="העתק ${NAMES[n.t]} (כולל כל מה שמתחת)">העתק</button><button class="ib drg" draggable="true" data-drag="${n.id}" title="גרור למיקום אחר (בין שורות באותה רמה)" aria-label="גרור">⠿</button><button class="ib" data-act="top" data-id="${n.id}" title="העבר לראש הרשימה" aria-label="לראש הרשימה">⤒</button><button class="ib" data-act="up" data-id="${n.id}" aria-label="הזז למעלה">▲</button><button class="ib" data-act="down" data-id="${n.id}" aria-label="הזז למטה">▼</button><button class="ib" data-act="bot" data-id="${n.id}" title="העבר לסוף הרשימה" aria-label="לסוף הרשימה">⤓</button><button class="ib del" data-act="del" data-id="${n.id}" aria-label="מחק">✕</button>`;
-  return `<tr class="L${L}${n.t==='i'&&n.done?' is-done':''}" data-id="${n.id}">${codeCell(n)}${nameCell(n).replace(/<\/td>$/,attPills(n)+doneBtn(n)+'</td>')}${unit}${qty}${price}${OL?(inOH?`<td class="n num tot" title="מבנה תקורה – העלות מועמסת על הסעיפים הישירים" style="color:var(--muted)">${t?'<s>'+fmt(t)+'</s><div style="font-size:10px">מועמס</div>':''}</td>`:`<td class="n num tot" title="סה&quot;כ מועמס בתקורות ורווח. ישיר: ${fmt(t)}"><span style="${n.t==='b'?'':'color:#6941c6'}">${tl?fmt(tl):''}</span>${tl&&Math.abs(tl-t)>0.5?`<div style="font-size:10px;color:var(--muted);font-weight:400">ישיר ${fmt(t)}</div>`:''}</td>`):`<td class="n num tot">${t?fmt(t):''}</td>`}${mkCell(n)}${share}<td><div class="rowact">${del}</div></td></tr>`;
+  return `<tr class="L${L}${n.t==='i'&&n.done?' is-done':''}" data-id="${n.id}">${query&&n.code&&['i','r','k'].includes(n.t)&&selfMatch(n)?codeCell(n).replace('>'+esc(n.code)+'</span>','>'+qHl(n.code)+'</span>'):codeCell(n)}${qMark(n,nameCell(n)).replace(/<\/td>$/,attPills(n)+doneBtn(n)+'</td>')}${unit}${qty}${price}${OL?(inOH?`<td class="n num tot" title="מבנה תקורה – העלות מועמסת על הסעיפים הישירים" style="color:var(--muted)">${t?'<s>'+fmt(t)+'</s><div style="font-size:10px">מועמס</div>':''}</td>`:`<td class="n num tot" title="סה&quot;כ מועמס בתקורות ורווח. ישיר: ${fmt(t)}"><span style="${n.t==='b'?'':'color:#6941c6'}">${tl?fmt(tl):''}</span>${tl&&Math.abs(tl-t)>0.5?`<div style="font-size:10px;color:var(--muted);font-weight:400">ישיר ${fmt(t)}</div>`:''}</td>`):`<td class="n num tot">${t?fmt(t):''}</td>`}${mkCell(n)}${share}<td><div class="rowact">${del}</div></td></tr>`;
 }
 function countDesc(n){ let c=0; walk(n.ch,()=>c++); return c; }
 
@@ -1509,7 +1533,9 @@ document.getElementById('levelSeg').onclick=e=>{
   walk(state.tree,n=>{ if(n.t!=='k') state.collapsed[n.id]= LV[n.t]>=lv; });
   save(); render();
 };
-document.getElementById('q').oninput=e=>{ query=e.target.value.trim(); render(); };
+document.getElementById('q').oninput=e=>{ query=e.target.value.trim(); QP=null; render(); };
+document.getElementById('qScope').onchange=e=>{ qScope=e.target.value; render(); };
+document.getElementById('tb').addEventListener('click',e=>{ const d=e.target.closest&&e.target.closest('.qhl'); if(!d) return; const c=d.nextElementSibling; if(!c) return; d.remove(); c.style.display=''; c.focus(); if(c.setSelectionRange){ try{ const L=c.value.length; c.setSelectionRange(L,L); }catch(_){} } });
 document.getElementById('qf').onchange=e=>{ qf=e.target.value; render(); };
 const sn=document.getElementById('showNotes'); sn.checked=!!state.showNotes; sn.onchange=()=>{ state.showNotes=sn.checked; save(); render(); };
 const pn=document.getElementById('projName'); pn.value=state.project||''; pn.oninput=()=>{ state.project=pn.value; save(); };
