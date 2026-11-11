@@ -518,7 +518,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='10.11.26-2';
+const APP_VER='11.11.26-1';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -2988,29 +2988,7 @@ document.getElementById('btnOH').onclick=ohDlg;
 function qcRun(){
   const S=qcSet(), F=[]; const add=(o)=>F.push(o);
   const secs=[]; walk(state.tree,(n,p)=>{ if(n.t==='i') secs.push({n,b:p[0],p}); });
-  // ---- כלל 1: שאיבה ≤ בטון (לפי קבוצת מבנים) ----
-  const conc={}, concSrc={}, allow={}; const pumps=[]; const unq=[];
-  for(const {n,b} of secs){
-    const nm=n.name||''; const isPumpSec=/משאב(ת|ות)?\s*בטון|שאיבת?\s*בטון|משאבה\s*סטטית/.test(nm);
-    if(!isPumpSec&&UNORM(n.unit)==='מ"ק'&&(/בטון|רפסוד|יסוד|קיר|תקר|רצפ|עמוד|קור|כלונס/.test(nm)||(n.code||'').startsWith('02'))&&!/חפיר|מילוי|מצע|עפר|סומסום/.test(nm)){
-      const q=secQty(n)||0; conc[b.code]=(conc[b.code]||0)+q; (concSrc[b.code]=concSrc[b.code]||[]).push({id:n.id,code:n.code,name:nm,q}); }
-    if(n.isW&&UNORM(n.unit)==='מ"ק') allow[b.code]=(allow[b.code]||0)+(secQty(n)||0);
-    walk(n.ch,(x)=>{ if(x.t!=='r'&&x.t!=='k') return;
-      if(/פחת/.test(nodeName(x)||'')&&/בטון/.test(nodeName(x)||'')&&UNORM(x.unit)==='מ"ק'){ allow[b.code]=(allow[b.code]||0)+(qcQ(x)||0); return; }
-      if(qcCat(x)!=='שאיבה') return; if(x.t==='r'&&hasItems(x)) return;
-      const v=qcPumpVol(x); if(v===null){ if(qcQ(x)) unq.push({x,n,b}); return; }
-      pumps.push({x,n,b,v,serves:qcServes(n,b)}); });
-  }
-  const groups={}; for(const pm of pumps){ const k=pm.serves.slice().sort().join('+'); (groups[k]=groups[k]||{bl:pm.serves.slice().sort(),items:[]}).items.push(pm); }
-  for(const [k,g] of Object.entries(groups)){
-    const pv=g.items.reduce((a,x)=>a+x.v,0), cv=g.bl.reduce((a,c)=>a+(conc[c]||0),0), al=g.bl.reduce((a,c)=>a+(allow[c]||0),0);
-    const lim=cv*(1+S.pumpTol/100)+al;
-    const src=g.items.map(x=>({id:x.x.id,t:`${x.b.code} · ${x.n.code} · ${(nodeName(x.x)||'').slice(0,36)}: ${fmtQ(x.v)} מ"ק`}));
-    const csrc=g.bl.map(c=>({id:(concSrc[c]&&concSrc[c][0]||{}).id,t:`בטון מבנה ${c}: ${fmtQ(conc[c]||0)} מ"ק (${(concSrc[c]||[]).length} סעיפים)`}));
-    if(pv>lim+0.01) add({rule:1,sev:'err',msg:`שאיבה ${fmtQ(pv)} מ"ק > בטון ${fmtQ(cv)} מ"ק${al?` + פחת ${fmtQ(al)}`:''} + ${S.pumpTol}% במבנים ${g.bl.join(' + ')}. פער ${fmtQ(pv-lim)} מ"ק`,src:src.concat(csrc),gap:pv-lim});
-    else add({rule:1,sev:'ok',msg:`מבנים ${g.bl.join(' + ')}: שאיבה ${fmtQ(pv)} ≤ בטון ${fmtQ(cv)} מ"ק (${cv?fmt(pv/cv*100,0):'—'}%)`,src:src.concat(csrc)});
-  }
-  for(const u of unq) add({rule:1,sev:'info',msg:`שורת שאיבה בלי נפח במ"ק – לא נכללה בהשוואה: ${u.n.code} · ${(nodeName(u.x)||'').slice(0,40)} (${fmtQ(qcQ(u.x))} ${u.x.unit||''})`,src:[{id:u.x.id,t:u.b.code+' · '+u.n.code}]});
+  // ---- כלל 1 (שאיבה ≤ בטון) הוסר 11.11.26 – כפול לכלל 22 "כיסוי שאיבה" ----
   // ---- כלל 2: ריצוף / חיפוי – שורת מ"ר לא גדולה משטח הסעיף + פחת ----
   for(const {n,b} of secs){ const nm=n.name||''; if(UNORM(n.unit)!=='מ"ר'||!/ריצוף|חיפוי|אריח|פורצלן|קרמיק/.test(nm)) continue; const q=secQty(n); if(!q) continue;
     walk(n.ch,(x)=>{ if(x.t!=='r'&&x.t!=='k') return; if(x.t==='r'&&hasItems(x)) return; if(UNORM(x.unit)!=='מ"ר') return; const c=qcCat(x); if(c!=='ריצוף'&&c!=='חיפוי') return;
@@ -3080,7 +3058,7 @@ function qcRun(){
     for(const b in B){ const L=B[b], q=L.reduce((a,r)=>a+r.q,0); add({rule:22,sev:'warn',msg:`מבנה ${b}: ${fmtQ(Math.round(q))} מ"ק בטון ב-${L.length} סעיפים בלי שאיבה (בשאיבה ולא מכוסים, או לא מסווגים) – לשונית שאיבה`,src:L.slice(0,12).map(r=>({id:r.x.id,t:r.x.code}))}); } } }catch(e){}
   return F;
 }
-const QC_RULES={18:'תוקף הצעות מחיר ומחירים ישנים',20:'חריגה מפרויקטים קודמים',17:'קישור ברזל ↔ בטון',1:'שאיבה ≤ בטון',2:'ריצוף / חיפוי מול שטח',15:'סעיפי אחוז (רווח / ביטוח / בצ"מ)',16:'מחיר חריג – חשד להקלדה',12:'סעיף בלי עלות / בלי כמות',13:'יחידות סעיף ↔ מוביל',14:'פחת',21:'פחת מצטבר (כמה שכבות על אותה שורה)',22:'כיסוי שאיבה – בטון בלי שאיבה / שאיבה כפולה'};
+const QC_RULES={18:'תוקף הצעות מחיר ומחירים ישנים',20:'חריגה מפרויקטים קודמים',17:'קישור ברזל ↔ בטון',2:'ריצוף / חיפוי מול שטח',15:'סעיפי אחוז (רווח / ביטוח / בצ"מ)',16:'מחיר חריג – חשד להקלדה',12:'סעיף בלי עלות / בלי כמות',13:'יחידות סעיף ↔ מוביל',14:'פחת',21:'פחת מצטבר (כמה שכבות על אותה שורה)',22:'כיסוי שאיבה – בטון בלי שאיבה / שאיבה כפולה'};
 function qcGo(id){ const f=find(+id); if(!f) return; f.path.forEach(p=>state.collapsed[p.id]=false); if(query){ query=''; const q=document.getElementById('q'); if(q) q.value=''; }
   document.getElementById('printDlgHost').innerHTML=''; render();
   setTimeout(()=>{ const tr=document.querySelector(`tr[data-id="${f.n.id}"]`); if(tr){ tr.scrollIntoView({block:'center'}); tr.style.outline='2px solid #d92d20'; setTimeout(()=>tr.style.outline='',3000); } },60); }
@@ -3350,7 +3328,7 @@ function qcDlg(tab){
         ${LL.filter(x=>x.sev==='err'||x.sev==='warn').length>1?`<div style="padding:4px 0"><button class="btn small" data-qaall="${r}">✓ סמן את כל ${LL.filter(x=>x.sev==='err'||x.sev==='warn').length} הממצאים כאן כתקינים</button></div>`:''}
         ${L.map(x=>{ const ak=qcAcked(x), k=qcKey(x); return `<div style="padding:5px 0;border-top:1px solid var(--line);${ak?'opacity:.55':''}">${x.sev==='err'||x.sev==='warn'||ak?`<label style="float:inline-end;font-size:11px;white-space:nowrap;margin-inline-start:8px" title="נבדק – מתאים לי"><input type="checkbox" data-qa="${esc(k)}" ${ak?'checked':''}> ✓ תקין</label>`:''}<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${ak?'#12b76a':SEV[x.sev][0]};margin-inline-end:6px" title="${ak?'סומן תקין '+esc(state.qcAck[k]||''):SEV[x.sev][1]}"></span>${esc(x.msg)}
           ${(x.src||[]).filter(s=>s.id).length?`<div style="margin:3px 18px 0;display:flex;flex-wrap:wrap;gap:4px">${x.src.filter(s=>s.id).map(s=>`<button class="ib" data-go="${s.id}" style="font-size:11px;border:1px solid var(--line);border-radius:6px;padding:1px 6px">${esc(s.t)}</button>`).join('')}</div>`:''}</div>`; }).join('')}</details>`; }).join('');
-    body+=`<div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px;align-items:center"><span class="label">ספים:</span>${[['pumpTol','שאיבה מעל בטון %'],['tileTol','ריצוף מעל שטח %'],['wConc','פחת בטון %'],['wTile','פחת ריצוף %'],['wSteel','פחת ברזל %'],['wDef','פחת אחר %'],['pctBaseTol','בסיס אחוז – פער %'],['pctMax','אחוז מקסימלי'],['priceX','מחיר חריג פי']].map(([k,l])=>`<label class="hint" style="margin:0;display:inline-flex;gap:4px;align-items:center">${l}<input data-qs="${k}" value="${S[k]}" style="width:46px;border:1px solid var(--line);border-radius:6px;padding:2px 4px" inputmode="decimal"></label>`).join('')}</div>
+    body+=`<div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px;align-items:center"><span class="label">ספים:</span>${[['tileTol','ריצוף מעל שטח %'],['wConc','פחת בטון %'],['wTile','פחת ריצוף %'],['wSteel','פחת ברזל %'],['wDef','פחת אחר %'],['pctBaseTol','בסיס אחוז – פער %'],['pctMax','אחוז מקסימלי'],['priceX','מחיר חריג פי']].map(([k,l])=>`<label class="hint" style="margin:0;display:inline-flex;gap:4px;align-items:center">${l}<input data-qs="${k}" value="${S[k]}" style="width:46px;border:1px solid var(--line);border-radius:6px;padding:2px 4px" inputmode="decimal"></label>`).join('')}</div>
       <p class="hint" style="margin:6px 0 0">כלל 1 משווה לפי קבוצת מבנים: סעיף שאיבה משויך למבנים שבשדה "משרת מבנים" בטופס הסעיף, או לפי השם ("מבנים 01 + 05"), אחרת למבנה שלו. בטון = סעיפים ביחידת מ"ק (פרק 02 / "בטון" בשם). פחת בטון (סעיף מסומן "סעיף פחת" או שורה "פחת בטון") נוסף לסבולת.</p>`; }
   else if(tab==='w'){ body=wTab(); }
   else if(tab==='t'){ body=topicTab(); }
