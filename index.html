@@ -518,7 +518,7 @@ function pctBase(n){
   return (n&&n.pctB==='d')?PCTB.d:PCTB.do; }
 const pctDefB=n=>/ביטוח|בצ"?מ|בנ"?מ|בדק/.test(n.name||'')?'d':'do';
 
-const APP_VER='12.11.26-1';
+const APP_VER='12.11.26-2';
 /* גרירת חלונות קופצים לפי שורת הכותרת (h2 הראשון בחלון) */
 document.addEventListener('pointerdown',e=>{ const h=e.target.closest&&e.target.closest('.pdlg .box>h2'); if(!h||e.button!==0) return; const box=h.parentElement; if(h!==box.querySelector(':scope>h2')) return;
   const m=/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(box.style.transform||''); const ox=m?+m[1]:0, oy=m?+m[2]:0, sx=e.clientX, sy=e.clientY;
@@ -1947,6 +1947,13 @@ function xbFinish(ws,ncol,hdr,W,boxes){ const L=new Array(ncol+1).fill(3); const
       if(x.span) continue; L[c]=Math.max(L[c],Math.min(s.length,(W&&W[c-1]&&W[c-1].max)||60)); } }
   for(let c=1;c<=ncol;c++){ const w=W&&W[c-1]||{}; ws.getColumn(c).width=Math.max(w.min||5,Math.min(w.max||60,L[c]+1.5)); } }
 /* SUMPRODUCT עם השוואת טקסט מדויקת ("05" ≠ 5) על גיליון מקור */
+/* ExcelJS מסמן collapsed="1" על שורות/עמודות פתוחות → כפתורי הקיבוץ באקסל מתבלבלים. מנקים, ומסמנים collapsed רק על עמודת הסיכום של קבוצה מוסתרת */
+function xbOutlineFix(buf,hiddenColSum){ const cfb=XLSX.CFB.read(new Uint8Array(buf),{type:'array'}); const td=new TextDecoder(), te=new TextEncoder();
+  cfb.FullPaths.forEach((p,i)=>{ const m=p.match(/xl\/worksheets\/sheet(\d+)\.xml$/); if(!m) return; const e=cfb.FileIndex[i]; let x=td.decode(new Uint8Array(e.content));
+    x=x.replace(/<row ([^>]*?) collapsed="1"/g,'<row $1').replace(/<col ([^>]*?) collapsed="1"/g,'<col $1');
+    const c=(hiddenColSum||{})[+m[1]]; if(c) x=x.replace(new RegExp(`<col min="${c}" max="${c}" ([^>]*?)/>`),`<col min="${c}" max="${c}" $1 collapsed="1"/>`);
+    e.content=te.encode(x); });
+  return new Uint8Array(XLSX.CFB.write(cfb,{type:'array',fileType:'zip'})); }
 function xbSP(sh,r0,r1,conds,vcol){ const rg=c=>`'${sh}'!$${c}$${r0}:$${c}$${Math.max(r0,r1)}`; return `SUMPRODUCT(${conds.filter(([,v])=>v!=null).map(([c,v])=>`(${rg(c)}="${String(v).replace(/"/g,'""')}")*`).join('')}${rg(vcol)})`; }
 
 /* "כולל: …" – סעיף שהמשאבים / המק"טים שלו מסתכמים בדיוק לסכום הסעיף (לא מחיר ידני) */
@@ -1993,7 +2000,7 @@ async function effiBook(o){
       ws.getRow(cr).outlineLevel=1; bt+=ct; });
     xbPut(ws,br,1,b,{b:1,fill:XB.b}); xbPut(ws,br,4,`מבנה ${b} ${g.bn||''}`.trim(),{b:1,fill:XB.b}); xbPut(ws,br,10,R2(bt),{f:`SUBTOTAL(9,J${br+1}:J${row-1})`,b:1,fill:XB.b}); xbPut(ws,br,17,'מבנה');
     for(let k=1;k<=18;k++) if(!ws.getCell(br,k)._xb) ws.getCell(br,k)._xb={b:true,fill:XB.b}; tot+=bt; });
-  const lastItem=row-1; ws.autoFilter={from:{row:HR,column:1},to:{row:lastItem,column:18}}; ws.properties.outlineLevelRow=2; ws.properties.outlineLevelCol=2;
+  const lastItem=row-1; ws.autoFilter={from:{row:HR,column:1},to:{row:lastItem,column:18}}; ws.properties.outlineLevelRow=2; ws.properties.outlineLevelCol=1;
   const T1=row++; const tt=(r,txt)=>{ xbPut(ws,r,4,txt,{b:1,fill:XB.t}); for(let k=1;k<=18;k++) if(!ws.getCell(r,k)._xb) ws.getCell(r,k)._xb={b:true,fill:XB.t}; xbPut(ws,r,17,'סה"כ',{fill:XB.t}); };
   tt(T1,'סך הכל כתב כמויות'+(o.oh?' (מועמס)':'')); xbPut(ws,T1,10,R2(tot),{f:`SUBTOTAL(9,J${HR+1}:J${lastItem})`,b:1,fill:XB.t});
   const dirF=dRows.length?dRows.map(r=>'J'+r).join('+'):'0'; let prev=`J${T1}`, profCell='', fsum=0; const FINC={};
@@ -2003,7 +2010,7 @@ async function effiBook(o){
   let TF=T1; if(FR.length){ TF=row++; tt(TF,'סה"כ כולל עלויות כלכליות'); xbPut(ws,TF,10,R2(tot+fsum),{f:`J${T1}+SUM(J${T1+1}:J${TF-1})`,b:1,fill:XB.t}); }
   const U=pfV('units')||projU(), eq=pfEq(), gross=pfGross();
   /* עמודות משניות ניתנות לכיווץ: מקור/הערות, רכש/גורם, טכני (מוסתר) */
-  [11,12].forEach(c=>ws.getColumn(c).outlineLevel=1); [13,14].forEach(c=>ws.getColumn(c).outlineLevel=1); [16,17,18].forEach(c=>{ ws.getColumn(c).outlineLevel=2; ws.getColumn(c).hidden=true; });
+  [11,12].forEach(c=>ws.getColumn(c).outlineLevel=1); [13,14].forEach(c=>ws.getColumn(c).outlineLevel=1); [16,17,18].forEach(c=>{ ws.getColumn(c).outlineLevel=1; ws.getColumn(c).hidden=true; });
   xbFinish(ws,18,[[HR,18]],[{max:5},{max:5},{min:12,max:14},{min:30,max:55},{max:7},{max:10},{max:7},{max:10},{max:10},{max:12},{min:9,max:14},{min:20,max:45},{max:7},{max:18},{min:14,max:24},{max:12},{max:8},{max:7}],[[HR,row-1,18]]);
 
   /* ===== 2. סיכום: לפי מבנה וסוג עלות + עלויות כלכליות + מדדים – הכל נוסחאות מול "תמחור עבודות" ===== */
@@ -2078,7 +2085,7 @@ async function effiBook(o){
     xbFinish(s5,PD[0].length,[1],[{min:16,max:26},{max:22},...MB.map(()=>({max:16})),{max:60}],[[1,PD.length,PD[0].length]]); }catch(e){ console.warn('pf',e); }
 
   try{ secSheet(wb); }catch(e){ console.warn('sec',e); }
-  const buf=await wb.xlsx.writeBuffer(); const d=new Date(); const stamp=`${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`;
+  let buf=await wb.xlsx.writeBuffer(); try{ buf=xbOutlineFix(buf,{1:15}); }catch(e){ console.warn('outline',e); } const d=new Date(); const stamp=`${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getFullYear()).slice(2)}`;
   const name=`לאפי ${state.project||''} ${stamp}${o.oh?' (מועמס)':''}.xlsx`.replace(/\s+/g,' ');
   if(o.ret) return {buf,name};
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
